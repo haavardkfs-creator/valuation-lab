@@ -1,0 +1,30 @@
+name: Tests
+
+on:
+  pull_request:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run pytest
+        run: |
+          # pytest exits with code 5 when it finds no test files at all. Phase 0 has no
+          # code to test yet, so we treat that one case as a pass. Remove this workaround
+          # once Phase 2 adds test_valuation.py. See docs/decisions.md.
+          pytest
+          exit_code=$?
+          if [ "$exit_code" -eq 5 ]; then
+            echo "No tests collected yet — treating as a pass (see docs/decisions.md)."
+            exit 0
+          fi
+          exit "$exit_code"
