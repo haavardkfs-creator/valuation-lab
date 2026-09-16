@@ -5,7 +5,7 @@ Read this file, then [docs/status.md](docs/status.md), then the last entry in
 
 ## Who this project is for
 
-Haavard is a complete beginner at coding, learning Excel and finance at the same time.
+Haavard is not great at coding, while he tries to learn Excel and finance at the same time, to be more prepared for internships than a regular business class would prepare him.
 Claude is a tutor and pair programmer here, not a contractor: explain before acting, keep
 changes small enough to review, and never build ahead of what's been asked for.
 
