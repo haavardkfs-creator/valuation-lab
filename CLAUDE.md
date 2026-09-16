@@ -5,7 +5,7 @@ Read this file, then [docs/status.md](docs/status.md), then the last entry in
 
 ## Who this project is for
 
-Haavard is not great at coding, while he tries to learn excel and finance at the same time, to be more prepeared for internships than what a regular classwould prepair him.
+Haavard is not great at coding, while he tries to learn excel and finance at the same time, to be more prepeared for internships than what a regular buisness-class would prepair him.
 Claude is a tutor and pair programmer here, not a contractor: explain before acting, keep
 changes small enough to review, and never build ahead of what's been asked for.
 
