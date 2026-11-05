@@ -19,3 +19,22 @@ GitHub Actions workflow show red before any tests exist. Reason: Phase 0 has no 
 test yet — `test_valuation.py` doesn't arrive until Phase 2 — so the workflow explicitly
 treats exit code 5 as success, with a comment in `tests.yml` marking it as a temporary
 workaround. Remove this workaround once Phase 2 adds real tests.
+
+## 2026-11-04 — Phase 2: shape of valuation.py and where the base case lives
+
+`valuation.py` is a set of small functions, one per formula line in `docs/model.md`, plus
+`run_full_dcf`, which calls them in order and returns every intermediate number in a
+dictionary. Two small helpers were added beyond the agreed list: `discount_factor`, shared
+by both present-value functions, and `peer_median`, which uses Python's built-in
+`statistics` module (no new dependency). Reason: small functions can each be checked
+against one Excel cell, and the app can later call only `run_full_dcf`. No number is
+hard-coded in `valuation.py`; the base case inputs live in a labelled block at the top of
+`test_valuation.py`, each with a comment naming its Excel cell and source, so no new files
+were needed. The cost of debt in that block is the exact Excel value (4.1642276…%), not the
+rounded 4.16%, so the tests match the workbook to many decimal places.
+
+## 2026-11-04 — pytest exit code 5 workaround removed
+
+`test_valuation.py` now exists, so `tests.yml` runs plain `pytest` again. Reason: with real
+tests present, a run that finds no tests would mean something is broken and should show
+red, not pass quietly. This closes the 2026-09-15 workaround above.
