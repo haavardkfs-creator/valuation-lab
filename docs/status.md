@@ -4,11 +4,14 @@
 - Done: Phase 1 — the Excel model (`excel/valuation-lab.xlsx`) is built for Adobe, every
   formula is written up in `docs/model.md`, and the base case gives an implied share price
   of $305.60.
-- Done (in the open pull request): Phase 2 — `valuation.py` holds all the valuation maths
-  and `test_valuation.py` has 26 tests that match the Excel model's exact values, including
-  the $305.60 implied price, WACC 10.9266% and the three multiples prices. The pytest
-  exit-code-5 workaround is removed from `tests.yml`.
-- Next: Phase 3 — `data.py`, built so the data source can be swapped later.
+- Done: Phase 2 — `valuation.py` holds all the valuation maths and `test_valuation.py` has
+  26 tests that match the Excel model's exact values, including the $305.60 implied price,
+  WACC 10.9266% and the three multiples prices. Merged, and CI passes on Python 3.12.
+- Done (in the open pull request): Phase 3 — `data.py` supplies Adobe's figures from a
+  frozen snapshot of the Excel model's numbers, through a source that can be swapped.
+  `test_data.py` checks every figure against Excel and proves that data fed into
+  `valuation.py` still gives $305.60 and the three multiples prices.
+- Next: Phase 4 — the smallest possible Streamlit app, deployed early.
 - Open:
   - `docs/model.md`, `docs/glossary.md` and `LEARNING.md` still have their old Phase 0
     placeholder text above the real content (e.g. "It is empty for now"). Haavard's call
@@ -18,5 +21,12 @@
     to decide which one it matches.
   - `run_full_dcf` covers the DCF only. The multiples are separate function calls; a
     single "run everything" function may be wanted for the app in Phase 4 or 5.
-  - Tests have so far been run locally on Python 3.9 and pytest 8.4; CI uses Python 3.12
-    and pytest 9.1.1, so the first pull request run is the first check on those.
+  - The assumptions (growth, margins, tax rate, D&A %, capex %, working capital %, terminal
+    growth) currently live only in `test_valuation.py`. The app needs them in one named
+    place of its own, with their source, before Phase 4.
+  - A live data source is not built yet. Plan: its own pull request, starting with share
+    price and beta, then plugged into `SOURCES` in `data.py`. Risk-free rate and equity
+    risk premium (Damodaran) have no simple feed and stay typed in by hand.
+  - The snapshot stores debt and cash as finished totals because `data.py` cannot add.
+    A live source reading the 10-K's separate lines would need a small adding function in
+    `valuation.py`.
