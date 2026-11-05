@@ -30,4 +30,7 @@ Today I learned that the CAPM (Capital Asset Pricing Model) is used to estimate 
 | Implied price | $305.60 |
 | Market price | $251.47 |
 | Multiples range | $334 to $464 (median $421) |
-  
+
+Equity value > enterprise value because Adobe has more cash than debt (not buybacks).
+Multiples differ because of growth and risk, not size.
+WACC is the most sensitive input because it discounts everything.
