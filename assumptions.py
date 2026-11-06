@@ -36,6 +36,10 @@ TERMINAL_GROWTH_RATE = 0.025
 # Starting point for other companies). Excel: starting point C13.
 STARTING_POINT_YEARS = 5
 
+# The company the hand-chosen forecast assumptions above were made for. The page uses them
+# only for this company; any other ticker gets a starting point from its own last year.
+BASE_CASE_TICKER = "ADBE"
+
 
 # ---------------------------------------------------------------------------
 # Slider ranges for the app (Phase 5). These are not forecasts, only how far each slider
@@ -95,3 +99,6 @@ WACC_SLIDER_START = 0.11
 # The name of each forecast year, in the same order as the five-year lists above. The base
 # year is FY2025 (Adobe's last reported year, 10-K), so the forecast runs FY2026-FY2030.
 FORECAST_YEAR_LABELS = ["FY2026", "FY2027", "FY2028", "FY2029", "FY2030"]
+
+# Other companies have other fiscal year-ends, so their forecast years are simply numbered.
+GENERIC_YEAR_LABELS = [f"Year {number}" for number in range(1, STARTING_POINT_YEARS + 1)]

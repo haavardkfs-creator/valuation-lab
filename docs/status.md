@@ -68,23 +68,28 @@
 - Done: the cost of debt for other companies. Haavard added rows 24-27 to the `starting
   point` sheet (interest expense 263 / debt 6,210 = 4.24%), `estimate_pre_tax_cost_of_debt`
   in `valuation.py` matches C27, and `.gitignore` ignores Excel's `~$` lock files. Merged.
-- Done (in the open pull request): a `"yahoo"` data source in `data.py` that builds the whole
-  package for any company from Yahoo's statements (`fetch_yahoo_statements`, `yahoo_source`).
-  `interest_expense` joins the package; the 10-K cost of debt and the peer multiples become
-  `OPTIONAL_FIELDS`. `valuation.financial_debt` adds current and long-term debt. The
-  risk-free rate and equity risk premium are now named constants in `data.py`, dated 1 Nov
-  2026. 18 new tests with fake Yahoo replies; 215 tests pass. Checked once on real data:
-  Adobe through Yahoo reproduces the sheet's six ratios and the 4.24% cost of debt, and
-  Microsoft works. The page is unchanged.
-- Next: Haavard's call. A ticker box in the app, using the `"yahoo"` source for any company
-  other than Adobe, the starting point for the assumptions, the DCF only (no multiples), and
-  the warnings the page must show. Other candidate: the optional Phase 7 (saving via
-  Supabase).
+- Done: a `"yahoo"` data source in `data.py` that builds the whole package for any company
+  from Yahoo's statements (`fetch_yahoo_statements`, `yahoo_source`). `interest_expense` joins
+  the package; the 10-K cost of debt and the peer multiples are `OPTIONAL_FIELDS`;
+  `valuation.financial_debt` adds current and long-term debt; the risk-free rate and equity
+  risk premium are named constants dated 1 Nov 2026. Merged.
+- Done (in the open pull request): the ticker box. A "Company ticker" box in the sidebar
+  (opens on ADBE). Adobe is unchanged. Any other company gets the starting point from its own
+  last year, the estimated cost of debt, numbered years ("Year 1-5"), no peer multiples, and a
+  yellow "starting point, not a forecast" warning. A ticker Yahoo does not know, a company with
+  no pre-tax profit, or a WACC at or below terminal growth shows a plain red error and the
+  footer. New `test_app.py` (14 tests) runs the page with fake Yahoo data. 230 tests pass.
+  Run for real on Adobe, Microsoft and a nonsense ticker.
+- Next: Haavard's call. Options: look at the Microsoft result below and decide whether the
+  starting point needs a capex slider or a fade, a way to choose peers so other companies get
+  multiples, or the optional Phase 7 (saving via Supabase).
 - Open:
-  - Decided, maths and data built, not yet on the page: for a company other than Adobe, the
-    forecast assumptions start from that company's own last reported year (see
-    `docs/decisions.md`, the 2026-11-06 entries), and the page must warn that a DCF suits
-    stable, cash-generating companies.
+  - The starting point is mechanical, and Microsoft shows it. On 6 Nov 2026 the page gives
+    Microsoft a DCF price of $109.88 against a market price of $532.49 (-79%). Last year its
+    capex was about 35% of revenue (against D&A of about 12%), and the starting point holds
+    that for ever, so free cash flow stays small. That is the rule working as designed, not
+    an error, and it is why the page says "not a forecast". Ideas, none built: a capex
+    slider, or fading capex towards D&A the way growth fades.
   - The interest expense shortcut can overstate the cost of debt. For Microsoft on 6 Nov
     2026 it gives 7.6% (interest 3,051 / debt 40,294), because Yahoo's interest expense may
     include interest on leases while the debt figure leaves leases out. Adobe gives 4.24%

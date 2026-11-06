@@ -253,6 +253,11 @@ def yahoo_source(ticker, fetch_statements=fetch_yahoo_statements):
         raise ValueError("Could not get figures from Yahoo Finance: %s" % error) from error
 
     missing = [name for name in YAHOO_REQUIRED if statements.get(name) is None]
+    if len(missing) == len(YAHOO_REQUIRED):
+        raise ValueError(
+            "Yahoo Finance has no figures for %s. Check that the ticker is right; "
+            "US-listed companies work best." % ticker
+        )
     if missing:
         raise ValueError("Yahoo Finance did not supply, for %s: %s." % (ticker, ", ".join(missing)))
     if statements["share_price"] <= 0 or statements["shares"] <= 0:

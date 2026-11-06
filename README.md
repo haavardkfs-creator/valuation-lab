@@ -11,7 +11,15 @@ This is a learning project, not investment advice.
 
 ## What it does today
 
-The app values **Adobe (ADBE)**. The share price and beta are live from Yahoo Finance
+The app opens on **Adobe (ADBE)**, and a **Company ticker** box in the sidebar lets you value
+any other US-listed company. Adobe's forecast is hand-chosen and checked against the Excel
+model. For any other company, every figure comes from Yahoo Finance's latest annual statements
+and the forecast is only a **starting point, not a forecast**: revenue growth fades in equal
+steps to the terminal growth rate, and margins, tax rate, D&A, capex and working capital
+stay at last year's level. Other companies get the DCF only (no peer multiples), and a DCF
+suits stable, cash-generating companies, not banks, loss-making or early-stage ones.
+
+For Adobe, the share price and beta are live from Yahoo Finance
 (remembered for 15 minutes); if Yahoo cannot be reached, the page says so and uses a frozen
 snapshot instead. Every other figure comes from the snapshot of the Excel model (dated
 4 Nov 2026; sources are in `data.py` and `docs/model.md`). With the snapshot's price and beta
@@ -48,10 +56,7 @@ so they fail if the two ever drift apart.
 
 ## Planned
 
-- Live figures beyond share price and beta, so you could type a ticker and value companies
-  other than Adobe. Today the app only knows Adobe. For other companies the forecast would
-  start from the company's own last reported year and be shown clearly as a starting point,
-  not a forecast.
+- A way to choose peer companies, so other companies can get a multiples comparison too.
 - Optionally, saving a user's assumptions.
 
 ## How it is built
