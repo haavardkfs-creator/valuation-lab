@@ -290,12 +290,22 @@ def draw_heatmap(company, dcf_inputs, base_wacc):
     """Draw the sensitivity heatmap: the implied share price at different WACCs (down the
     side) and terminal growth rates (along the top), coloured against the market price.
     """
-    table = valuation.sensitivity_table(
-        dcf_inputs,
-        base_wacc,
-        assumptions.HEATMAP_WACC_OFFSETS,
-        assumptions.HEATMAP_TERMINAL_GROWTH_RATES,
-    )
+    st.subheader("Sensitivity: price at different WACC and terminal growth")
+    try:
+        table = valuation.sensitivity_table(
+            dcf_inputs,
+            base_wacc,
+            assumptions.HEATMAP_WACC_OFFSETS,
+            assumptions.HEATMAP_TERMINAL_GROWTH_RATES,
+        )
+    except ValueError:
+        # A low WACC (for a company with a low beta) can sit within a point of the highest
+        # terminal growth rate, where the formula has no answer. The headline DCF is fine.
+        st.caption(
+            f"This table cannot be drawn: this company's WACC ({percent(base_wacc)}) is too close to "
+            "the terminal growth rates in the table for the formula to give an answer."
+        )
+        return
     prices = pd.DataFrame(
         table["prices"],
         index=pd.Index([precise_percent(rate) for rate in table["wacc_rates"]], name="WACC"),
@@ -312,7 +322,6 @@ def draw_heatmap(company, dcf_inputs, base_wacc):
         styles.iloc[base_row, base_column] += "; font-weight: bold"
         return styles
 
-    st.subheader("Sensitivity: price at different WACC and terminal growth")
     st.dataframe(
         prices.style.apply(style_cells, axis=None).format(dollars),
         width="stretch",
@@ -365,6 +374,28 @@ def draw_ticker_box():
     return typed.strip().upper() or DEFAULT_TICKER
 
 
+def currency_note(company):
+    """Say in one line which currency the figures were converted from, and at what rate.
+
+    Returns None for a company that reports and trades in US dollars, so there is nothing
+    to say.
+    """
+    statements = company.get("statement_currency")
+    price = company.get("price_currency")
+    if statements in (None, "USD") and price in (None, "USD"):
+        return None
+    statement_rate = f"1 {statements} = ${company['usd_per_statement_unit']:.4g}"
+    price_rate = f"1 {price} = ${company['usd_per_price_unit']:.4g}"
+    if statements == price:
+        return f"Converted from {statements} to US dollars at today's exchange rate ({statement_rate})."
+    parts = []
+    if statements != "USD":
+        parts.append(f"the statements from {statements} ({statement_rate})")
+    if price != "USD":
+        parts.append(f"the share price from {price} ({price_rate})")
+    return "Converted to US dollars at today's exchange rates: " + " and ".join(parts) + "."
+
+
 def draw_source_note(company, source_used):
     """Tell the reader where the figures came from and, for any company other than Adobe,
     that this is a starting point and not a forecast.
@@ -375,6 +406,9 @@ def draw_source_note(company, source_used):
     """
     if source_used == "yahoo":
         st.caption("All figures are from Yahoo Finance's latest annual statements.")
+        conversion = currency_note(company)
+        if conversion:
+            st.caption(conversion)
         st.warning(
             f"Starting point, not a forecast: this starts from {company['company_name']}'s own "
             "last reported year and holds its margins flat. A DCF suits stable, cash-generating "

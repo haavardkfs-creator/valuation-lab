@@ -5,8 +5,9 @@ source hands back the same "package" of named figures (see PACKAGE_FIELDS), so a
 can be plugged in later without touching valuation.py or the app.
 
 Conventions: money is in $ millions, shares are in millions, and rates are decimals
-(0.05 means 5%). Turning Yahoo's dollars into millions, or its negative capex into a
-positive amount, is tidying the units, not maths. Adding two reported debt lines together is
+(0.05 means 5%). Every figure is in US dollars: a company that reports or trades in another
+currency is converted at today's exchange rate. Turning Yahoo's dollars into millions, or its
+negative capex into a positive amount, is tidying the units, not maths. Adding two reported debt lines together is
 maths, so it is done by valuation.financial_debt, not here.
 """
 
@@ -50,6 +51,10 @@ OPTIONAL_FIELDS = {
     "peer_ev_sales": "Each peer's EV/Sales multiple",
     "peer_ev_ebitda": "Each peer's EV/EBITDA multiple",
     "peer_pe": "Each peer's P/E multiple",
+    "statement_currency": "Currency the company reports in, before conversion to US dollars, for example NOK",
+    "price_currency": "Currency the share trades in, before conversion to US dollars, for example NOK or GBp (pence)",
+    "usd_per_statement_unit": "US dollars one unit of the statement currency was worth when the figures were fetched",
+    "usd_per_price_unit": "US dollars one unit of the price currency was worth when the figures were fetched",
 }
 
 
@@ -183,13 +188,31 @@ def _statement_line(frame, names, column):
     return None
 
 
+def _fetch_usd_per_unit(currency):
+    """Ask Yahoo how many US dollars one unit of a currency is worth.
+
+    Returns 1 for dollars and None if Yahoo has no rate. Yahoo quotes London shares in pence
+    ("GBp"), a hundredth of a pound.
+    """
+    import yfinance
+
+    if currency == "USD":
+        return 1.0
+    if currency == "GBp":
+        pounds = _fetch_usd_per_unit("GBP")
+        return None if pounds is None else pounds / 100
+    quote = yfinance.Ticker(currency + "USD=X").info
+    return quote.get("regularMarketPrice") or quote.get("previousClose")
+
+
 def fetch_yahoo_statements(ticker):
     """Ask Yahoo Finance for a company's latest two annual statements and its quote.
 
-    Returns a dictionary of figures in the package's units ($ millions, shares in millions);
-    a figure Yahoo does not have comes back as None. Capex and interest expense come back as
-    positive amounts. Debt comes back as two separate lines. This is the only function in
-    this source that touches the internet.
+    Returns a dictionary of figures in the company's own currency, in millions (shares in
+    millions); a figure Yahoo does not have comes back as None. Capex and interest expense
+    come back as positive amounts. Debt comes back as two separate lines. The currencies the
+    statements and the share price are in come back too, with the exchange rate to US dollars
+    for each. This is the only function in this source that touches the internet.
     """
     # Imported here, not at the top, so the other sources work even without yfinance.
     import yfinance
@@ -205,8 +228,14 @@ def fetch_yahoo_statements(ticker):
         return abs(value) if positive else value
 
     shares = info.get("sharesOutstanding")
+    statement_currency = info.get("financialCurrency")
+    price_currency = info.get("currency")
     return {
         "company_name": info.get("longName") or info.get("shortName"),
+        "statement_currency": statement_currency,
+        "price_currency": price_currency,
+        "usd_per_statement_unit": None if statement_currency is None else _fetch_usd_per_unit(statement_currency),
+        "usd_per_price_unit": None if price_currency is None else _fetch_usd_per_unit(price_currency),
         "revenue": millions(income, ["Total Revenue"]),
         "prior_year_revenue": millions(income, ["Total Revenue"], column=1),
         "ebit": millions(income, ["Operating Income"]),
@@ -231,21 +260,33 @@ def fetch_yahoo_statements(ticker):
 # Figures Yahoo must supply for a company to be valued. Current debt is the one exception:
 # Yahoo leaves it out when a company has none, so a missing one counts as 0.
 YAHOO_REQUIRED = [
-    "company_name", "revenue", "prior_year_revenue", "ebit", "net_income", "income_tax",
+    "company_name", "statement_currency", "price_currency", "usd_per_statement_unit",
+    "usd_per_price_unit", "revenue", "prior_year_revenue", "ebit", "net_income", "income_tax",
     "income_before_tax", "interest_expense", "depreciation_and_amortisation", "capex",
     "cash_from_working_capital", "long_term_debt", "cash_and_investments", "shares",
     "share_price", "beta",
 ]
 
 
-def yahoo_source(ticker, fetch_statements=fetch_yahoo_statements):
-    """Return a company's figures from Yahoo Finance's financial statements, for any company.
+# The company's money figures, which Yahoo gives in the currency the company reports in.
+YAHOO_MONEY_FIELDS = [
+    "revenue", "prior_year_revenue", "ebit", "net_income", "income_tax", "income_before_tax",
+    "interest_expense", "depreciation_and_amortisation", "capex", "cash_from_working_capital",
+    "cash_and_investments",
+]
 
-    The risk-free rate and equity risk premium are the market-wide figures typed in above.
-    The package has no cost of debt from the debt notes and no peer multiples, because Yahoo
-    cannot supply them. Stops with a plain error naming any figure Yahoo did not supply, or if
-    Yahoo cannot be reached. `fetch_statements` can be swapped, which is how the tests run
-    without the internet.
+
+def yahoo_source(ticker, fetch_statements=fetch_yahoo_statements):
+    """Return a company's figures from Yahoo Finance's financial statements, for any company,
+    all in US dollars.
+
+    A company that reports or trades in another currency (kroner, pence, ...) is converted at
+    the exchange rate Yahoo gives today: the statement figures at the statement currency's
+    rate, and the share price at the price currency's rate. The risk-free rate and equity risk
+    premium are the market-wide figures typed in above. The package has no cost of debt from
+    the debt notes and no peer multiples, because Yahoo cannot supply them. Stops with a plain
+    error naming any figure Yahoo did not supply, or if Yahoo cannot be reached.
+    `fetch_statements` can be swapped, which is how the tests run without the internet.
     """
     try:
         statements = fetch_statements(ticker)
@@ -258,36 +299,44 @@ def yahoo_source(ticker, fetch_statements=fetch_yahoo_statements):
             "Yahoo Finance has no figures for %s. Check that the ticker is right; "
             "US-listed companies work best." % ticker
         )
+    for currency_name, rate_name in (
+        ("statement_currency", "usd_per_statement_unit"),
+        ("price_currency", "usd_per_price_unit"),
+    ):
+        if statements.get(currency_name) is not None and statements.get(rate_name) is None:
+            raise ValueError(
+                "Yahoo Finance has no exchange rate for %s, so the figures for %s cannot be "
+                "converted to US dollars." % (statements[currency_name], ticker)
+            )
     if missing:
         raise ValueError("Yahoo Finance did not supply, for %s: %s." % (ticker, ", ".join(missing)))
     if statements["share_price"] <= 0 or statements["shares"] <= 0:
         raise ValueError("Yahoo Finance gave a share price or share count of zero or less for %s." % ticker)
 
+    to_usd = valuation.convert_currency
+    statement_rate = statements["usd_per_statement_unit"]
     current_debt = statements.get("current_debt")
     if current_debt is None:
         current_debt = 0
 
-    return {
-        "company_name": statements["company_name"],
-        "ticker": ticker,
-        "revenue": statements["revenue"],
-        "ebit": statements["ebit"],
-        "depreciation_and_amortisation": statements["depreciation_and_amortisation"],
-        "net_income": statements["net_income"],
-        "prior_year_revenue": statements["prior_year_revenue"],
-        "income_tax": statements["income_tax"],
-        "income_before_tax": statements["income_before_tax"],
-        "interest_expense": statements["interest_expense"],
-        "capex": statements["capex"],
-        "cash_from_working_capital": statements["cash_from_working_capital"],
-        "debt": valuation.financial_debt(current_debt, statements["long_term_debt"]),
-        "cash_and_investments": statements["cash_and_investments"],
-        "shares": statements["shares"],
-        "share_price": statements["share_price"],
-        "beta": statements["beta"],
-        "risk_free_rate": RISK_FREE_RATE,
-        "equity_risk_premium": EQUITY_RISK_PREMIUM,
-    }
+    package = {name: to_usd(statements[name], statement_rate) for name in YAHOO_MONEY_FIELDS}
+    package.update(
+        company_name=statements["company_name"],
+        ticker=ticker,
+        debt=valuation.financial_debt(
+            to_usd(current_debt, statement_rate), to_usd(statements["long_term_debt"], statement_rate)
+        ),
+        shares=statements["shares"],
+        share_price=to_usd(statements["share_price"], statements["usd_per_price_unit"]),
+        beta=statements["beta"],
+        risk_free_rate=RISK_FREE_RATE,
+        equity_risk_premium=EQUITY_RISK_PREMIUM,
+        statement_currency=statements["statement_currency"],
+        price_currency=statements["price_currency"],
+        usd_per_statement_unit=statement_rate,
+        usd_per_price_unit=statements["usd_per_price_unit"],
+    )
+    return package
 
 
 # ---------------------------------------------------------------------------

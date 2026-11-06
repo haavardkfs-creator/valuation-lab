@@ -85,15 +85,23 @@
   (Adobe's 0.75% against D&A of 3.44% stays flat); `starting_point_assumptions` uses it. 5 new
   tests against the sheet's cells; 235 tests pass. On real data Microsoft moves from a DCF price
   79% below the market to 48% below.
-- Next: Haavard's call. Two problems the real companies showed (see Open): working capital held
-  forever, and companies without an interest expense line. Other options: a way to choose peers
+- Done (in the open pull request): working capital fades to zero, and currency. Aker ASA (AKER.OL) showed kroner with dollar
+  signs, and Novo Nordisk and Shell mixed currencies (statements in DKK with a USD price;
+  statements in USD with a price in pence). The `"yahoo"` source now asks Yahoo for the
+  statement currency, the price currency and the exchange rate for each, and converts every
+  money figure and the share price to US dollars (`valuation.convert_currency`); pence go
+  through pounds. The page says what was converted and at what rate. Ratios do not change.
+  Also fixed: a low-WACC company could crash the page through the heatmap; it now says why the
+  table is missing. New tests for kroner, DKK/USD, pence, a missing rate and the low-WACC page.
+  Working capital: Haavard changed row 22 of the `starting point` sheet so it fades to zero
+  over the five years (replacing "hold at last year's level"), and `fade_working_capital_pcts`
+  in `valuation.py` matches it. On real data (6 Nov 2026): Coca-Cola goes from a DCF price 74%
+  below the market to 28% below, Aker from 31% below to 2% above. Adobe's page is unchanged.
+  251 tests pass.
+- Next: Haavard's call. Problems the real companies showed (see Open): companies without an
+  interest expense line, and very low WACCs. Other options: a way to choose peers
   so other companies get multiples, or the optional Phase 7 (saving via Supabase).
 - Open:
-  - Working capital held at last year's level can sink a company. Coca-Cola on 6 Nov 2026:
-    cash from working capital was -7,208 (-15% of revenue), probably a one-off, and the starting
-    point holds that outflow for ever; with that, the DCF price is $25 against a market price of
-    $96 (-74%). Haavard chose to hold working capital (decisions, 6 Nov); this is the downside
-    of that choice. Options, none built: fade it to zero like capex fades, or cap it.
   - Apple cannot be valued: Yahoo has no interest expense at all for it (every interest line
     is empty), so the cost of debt cannot be estimated and the page shows a plain error. Needs
     a decision: a fallback cost of debt (for example the risk-free rate plus a spread), or

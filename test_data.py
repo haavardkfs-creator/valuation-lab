@@ -44,8 +44,12 @@ EXPECTED_SNAPSHOT = {
 }
 
 
+CURRENCY_FIELDS = {"statement_currency", "price_currency", "usd_per_statement_unit", "usd_per_price_unit"}
+
+
 def test_expected_snapshot_lists_every_package_field():
-    assert set(EXPECTED_SNAPSHOT) == set(data.PACKAGE_FIELDS) | set(data.OPTIONAL_FIELDS)
+    # Adobe reports and trades in dollars, so its snapshot has no currency fields.
+    assert set(EXPECTED_SNAPSHOT) == set(data.PACKAGE_FIELDS) | (set(data.OPTIONAL_FIELDS) - CURRENCY_FIELDS)
 
 
 def test_required_and_optional_fields_do_not_overlap():
@@ -366,16 +370,24 @@ ADOBE_YAHOO_BALANCE = {
 }
 ADOBE_YAHOO_INFO = {
     "longName": "Adobe Inc.",
+    "financialCurrency": "USD",
+    "currency": "USD",
     "sharesOutstanding": 389_200_000,
     "currentPrice": 240.74,
     "beta": 1.383,
 }
 
 
-def fake_statements_ticker(income=None, cash_flow=None, balance=None, info=None):
-    """Return a stand-in for yfinance.Ticker that serves these statements (Adobe's by default)."""
+def fake_statements_ticker(income=None, cash_flow=None, balance=None, info=None, fx_rates=None):
+    """Return a stand-in for yfinance.Ticker that serves these statements (Adobe's by default).
+
+    `fx_rates` maps an exchange-rate ticker such as "NOKUSD=X" to the rate Yahoo would quote.
+    """
     class FakeTicker:
         def __init__(self, ticker):
+            if fx_rates and ticker in fx_rates:
+                self.info = {"regularMarketPrice": fx_rates[ticker]}
+                return
             self.income_stmt = statement(ADOBE_YAHOO_INCOME if income is None else income)
             self.cashflow = statement(ADOBE_YAHOO_CASH_FLOW if cash_flow is None else cash_flow)
             self.balance_sheet = statement(ADOBE_YAHOO_BALANCE if balance is None else balance)
@@ -438,11 +450,11 @@ def test_yahoo_reply_for_adobe_gives_the_same_figures_as_the_10k_snapshot(monkey
         assert package[field] == pytest.approx(EXPECTED_SNAPSHOT[field]), field
 
 
-def test_the_yahoo_package_is_complete_and_has_no_optional_fields(monkeypatch):
+def test_the_yahoo_package_is_complete_and_has_no_adobe_only_fields(monkeypatch):
     monkeypatch.setattr("yfinance.Ticker", fake_statements_ticker())
     package = data.get_company_data("ADBE", source="yahoo")     # runs check_package
-    assert set(package) == set(data.PACKAGE_FIELDS)
-    assert not set(package) & set(data.OPTIONAL_FIELDS)
+    assert set(package) == set(data.PACKAGE_FIELDS) | CURRENCY_FIELDS
+    assert not {"pre_tax_cost_of_debt", "peer_tickers"} & set(package)      # Yahoo cannot supply these
 
 
 def test_the_yahoo_package_uses_the_market_wide_rates_and_yahoos_quote(monkeypatch):
@@ -524,3 +536,92 @@ def test_yahoo_package_through_the_starting_point_gives_the_sheet_numbers(monkey
         assert ratios[name] == pytest.approx(expected, rel=1e-9)
     cost_of_debt = v.estimate_pre_tax_cost_of_debt(d["interest_expense"], d["debt"])
     assert cost_of_debt == pytest.approx(0.04235104669887278, rel=1e-9)     # starting point C27
+
+
+# ---------------------------------------------------------------------------
+# Currency: everything from the yahoo source is in US dollars
+# ---------------------------------------------------------------------------
+
+def foreign_company(statement_currency, price_currency, fx_rates):
+    """A stand-in Yahoo reply with Adobe's figures, as if they were in another currency."""
+    info = dict(ADOBE_YAHOO_INFO, financialCurrency=statement_currency, currency=price_currency)
+    return fake_statements_ticker(info=info, fx_rates=fx_rates)
+
+
+def test_a_dollar_company_is_not_changed_by_the_conversion(monkeypatch):
+    monkeypatch.setattr("yfinance.Ticker", fake_statements_ticker())
+    package = data.get_company_data("ADBE", source="yahoo")
+    assert package["usd_per_statement_unit"] == 1.0
+    assert package["usd_per_price_unit"] == 1.0
+    assert package["statement_currency"] == "USD" and package["price_currency"] == "USD"
+    assert package["revenue"] == pytest.approx(23769)
+    assert package["share_price"] == 240.74
+
+
+def test_a_krone_company_is_converted_to_dollars_at_todays_rate(monkeypatch):
+    # Reports and trades in NOK, like Aker. Pretend one krone is 10 US cents.
+    monkeypatch.setattr("yfinance.Ticker", foreign_company("NOK", "NOK", {"NOKUSD=X": 0.10}))
+    package = data.get_company_data("AKER.OL", source="yahoo")
+    assert package["revenue"] == pytest.approx(2376.9)              # 23,769 NOK million
+    assert package["prior_year_revenue"] == pytest.approx(2150.5)
+    assert package["debt"] == pytest.approx(621.0)                  # long-term debt converted, then added
+    assert package["cash_and_investments"] == pytest.approx(659.5)
+    assert package["capex"] == pytest.approx(17.9)
+    assert package["share_price"] == pytest.approx(24.074)          # 240.74 NOK a share
+    assert package["shares"] == pytest.approx(389.2)                # a count, not money: unchanged
+    assert package["beta"] == 1.383                                 # not money either
+    assert package["statement_currency"] == "NOK" and package["usd_per_statement_unit"] == 0.10
+    assert package["price_currency"] == "NOK" and package["usd_per_price_unit"] == 0.10
+
+
+def test_converting_does_not_change_the_ratios(monkeypatch):
+    # Growth, margins and the other ratios are shares of revenue, so they must not move.
+    monkeypatch.setattr("yfinance.Ticker", foreign_company("NOK", "NOK", {"NOKUSD=X": 0.10}))
+    d = data.get_company_data("AKER.OL", source="yahoo")
+    ratios = v.last_year_ratios(
+        revenue=d["revenue"],
+        prior_revenue=d["prior_year_revenue"],
+        ebit=d["ebit"],
+        income_tax=d["income_tax"],
+        income_before_tax=d["income_before_tax"],
+        depreciation_and_amortisation=d["depreciation_and_amortisation"],
+        capex=d["capex"],
+        cash_from_working_capital=d["cash_from_working_capital"],
+    )
+    for name, expected in base.STARTING_POINT_RATIOS.items():       # starting point C5:C10
+        assert ratios[name] == pytest.approx(expected, rel=1e-9)
+    assert v.estimate_pre_tax_cost_of_debt(d["interest_expense"], d["debt"]) == pytest.approx(
+        0.04235104669887278, rel=1e-9                               # starting point C27
+    )
+
+
+def test_statements_and_share_price_in_different_currencies_each_use_their_own_rate(monkeypatch):
+    # Like Novo Nordisk: reports in DKK, but the shares trade in the US in dollars.
+    monkeypatch.setattr("yfinance.Ticker", foreign_company("DKK", "USD", {"DKKUSD=X": 0.15}))
+    package = data.get_company_data("NVO", source="yahoo")
+    assert package["revenue"] == pytest.approx(23769 * 0.15)        # statements converted
+    assert package["share_price"] == 240.74                         # already dollars: not converted
+
+
+def test_a_price_quoted_in_pence_is_converted_through_pounds(monkeypatch):
+    # Like Shell in London: statements in dollars, the price in pence (hundredths of a pound).
+    monkeypatch.setattr("yfinance.Ticker", foreign_company("USD", "GBp", {"GBPUSD=X": 1.30}))
+    package = data.get_company_data("SHEL.L", source="yahoo")
+    assert package["revenue"] == pytest.approx(23769)               # dollars: unchanged
+    assert package["share_price"] == pytest.approx(240.74 * 1.30 / 100)
+    assert package["usd_per_price_unit"] == pytest.approx(0.013)
+
+
+def test_a_missing_exchange_rate_stops_with_a_plain_error(monkeypatch):
+    monkeypatch.setattr("yfinance.Ticker", foreign_company("NOK", "NOK", {}))     # Yahoo has no NOK rate
+    with pytest.raises(ValueError, match="no exchange rate for NOK"):
+        data.get_company_data("AKER.OL", source="yahoo")
+
+
+def test_fetch_yahoo_statements_returns_the_currencies_and_rates(monkeypatch):
+    monkeypatch.setattr("yfinance.Ticker", foreign_company("DKK", "USD", {"DKKUSD=X": 0.15}))
+    got = data.fetch_yahoo_statements("NVO")
+    assert (got["statement_currency"], got["price_currency"]) == ("DKK", "USD")
+    assert got["usd_per_statement_unit"] == 0.15
+    assert got["usd_per_price_unit"] == 1.0
+    assert got["revenue"] == pytest.approx(23769)                   # still in kroner here: the source converts

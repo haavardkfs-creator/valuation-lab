@@ -430,3 +430,44 @@ to 48% below. Real companies also showed two further problems, recorded in `docs
 and not fixed here: working capital held at last year's level sinks Coca-Cola (a -15% of
 revenue outflow held for ever), and Apple has no interest expense on Yahoo at all, so it cannot
 be valued. No new files.
+
+## 2026-11-06 — Every figure from the yahoo source is in US dollars
+
+Aker ASA (AKER.OL) showed Norwegian kroner with dollar signs, and checking Yahoo showed worse:
+Novo Nordisk reports in DKK but its shares trade in the US in dollars, and Shell reports in
+dollars but its London shares are quoted in pence, so the page mixed currencies and gave
+nonsense. Decided with Haavard: convert everything to US dollars, not show each company in its
+own currency. The reason is that the model's discount-rate inputs (risk-free rate 5.29%,
+equity risk premium 4.41%) are US dollar figures, and discounting krone cash flows with them
+would be inconsistent; converting also fixes the mixed cases. `fetch_yahoo_statements` now
+returns the statement currency, the price currency and Yahoo's exchange rate to dollars for
+each (a London price in "GBp" goes through pounds, a hundredth of a pound), and `yahoo_source`
+multiplies every money figure by the statements' rate and the share price by the price's rate
+using the new `valuation.convert_currency`. Counts (shares) and ratios (beta, growth,
+margins) are not converted, and converting does not change any ratio, which a test checks. If
+Yahoo has no rate, the page stops with a plain error naming the currency. The four currency
+fields are optional package fields (Adobe's snapshot is in dollars and has none), and the page
+shows one line saying what was converted and at what rate. Limits, recorded in status: one
+rate for all of last year's statements, and ADR share ratios are not checked. While running
+real companies a latent crash was found and fixed: a low WACC (a very low beta) could sit
+within a point of the highest terminal growth rate in the heatmap, where the formula has no
+answer, and the error was raised outside the page's error handling. The heatmap now says why it
+cannot be drawn and the rest of the page stays; a test guards it. No new files.
+
+## 2026-11-06 — Working capital now fades to zero (replacing "hold at last year's level")
+
+Haavard's earlier choice for the starting point was to hold working capital at last year's
+share of revenue, because it seemed more realistic. Real companies showed its downside: Coca-Cola's
+last year was a cash outflow of 15% of revenue, probably a one-off, and holding it for ever put its
+DCF price 74% below the market; Adobe's inflow of 2.5%, held for ever, flatters it. Comparing three
+rules on 6 Nov 2026 (hold, fade to zero, set to zero) gave Coca-Cola $25, $69 and $72 against a
+market price of $96, so fading to zero was recommended and Haavard chose it. The reasoning is
+the same as for growth and capex: a number that is unusual this year drifts towards a steady
+state over the forecast, because a company cannot keep gaining or losing a large share of its
+revenue in working capital every year. It is symmetric: an inflow and an outflow both fade to
+zero. Built Excel first: `starting point` row 22 uses `=C22-$C$22/$C$13`; `fade_working_capital_pcts`
+matches D22:H22 (Adobe: 2.55%, 2.04%, 1.53%, 1.02%, 0.51%, 0%). Adobe's page still uses its
+hand-chosen 1% a year, so it is unchanged. The starting point now has four moving parts (growth,
+capex and working capital fade; margin, tax rate and D&A are held), all following the sheet.
+Result on real data: Coca-Cola from 74% below the market to 28% below, Aker from 31% below to 2%
+above. No new files.
