@@ -28,16 +28,18 @@ def percent(rate):
     return f"{rate:.1%}"
 
 
-def run_valuation(company):
+def run_valuation(company, growth_shift, margin_shift, terminal_growth_rate):
     """Run the DCF and the multiples comparison for one company's figures.
 
-    Returns the DCF results and the multiples results, each as a dictionary of named
-    numbers. The multiples need the DCF's net debt and implied price, so the DCF runs first.
+    The growth and margin shifts move every forecast year by the same amount (0 means the
+    base case). Returns the DCF results and the multiples results, each as a dictionary of
+    named numbers. The multiples need the DCF's net debt and implied price, so the DCF
+    runs first.
     """
     dcf = valuation.run_full_dcf(
         base_revenue=company["revenue"],
-        growth_rates=assumptions.GROWTH_RATES,
-        operating_margins=assumptions.OPERATING_MARGINS,
+        growth_rates=valuation.shift_rates(assumptions.GROWTH_RATES, growth_shift),
+        operating_margins=valuation.shift_rates(assumptions.OPERATING_MARGINS, margin_shift),
         tax_rate=assumptions.TAX_RATE,
         da_pcts=assumptions.DA_PCTS,
         capex_pcts=assumptions.CAPEX_PCTS,
@@ -50,7 +52,7 @@ def run_valuation(company):
         shares=company["shares"],
         debt=company["debt"],
         cash_and_investments=company["cash_and_investments"],
-        terminal_growth_rate=assumptions.TERMINAL_GROWTH_RATE,
+        terminal_growth_rate=terminal_growth_rate,
     )
     multiples = valuation.run_multiples(
         revenue=company["revenue"],
@@ -65,6 +67,41 @@ def run_valuation(company):
         dcf_price=dcf["implied_share_price"],
     )
     return dcf, multiples
+
+
+def draw_sliders():
+    """Draw the three sliders in the sidebar and return what they are set to: the growth
+    shift, the margin shift and the terminal growth rate. Each starts at the base case.
+    """
+    st.sidebar.header("Change the assumptions")
+    growth_shift = st.sidebar.slider(
+        "Revenue growth, every year",
+        min_value=assumptions.GROWTH_SHIFT_MIN,
+        max_value=assumptions.GROWTH_SHIFT_MAX,
+        value=0.0,
+        step=assumptions.GROWTH_SHIFT_STEP,
+        format="percent",
+        help="Moves every forecast year's growth up or down by the same amount. 0% is the base case.",
+    )
+    margin_shift = st.sidebar.slider(
+        "Operating margin, every year",
+        min_value=assumptions.MARGIN_SHIFT_MIN,
+        max_value=assumptions.MARGIN_SHIFT_MAX,
+        value=0.0,
+        step=assumptions.MARGIN_SHIFT_STEP,
+        format="percent",
+        help="Moves every forecast year's operating margin up or down by the same amount. 0% is the base case.",
+    )
+    terminal_growth_rate = st.sidebar.slider(
+        "Terminal growth",
+        min_value=assumptions.TERMINAL_GROWTH_MIN,
+        max_value=assumptions.TERMINAL_GROWTH_MAX,
+        value=assumptions.TERMINAL_GROWTH_RATE,
+        step=assumptions.TERMINAL_GROWTH_STEP,
+        format="percent",
+        help="How fast cash flow is assumed to grow forever after year 5. The base case is 2.5%.",
+    )
+    return growth_shift, margin_shift, terminal_growth_rate
 
 
 def draw_dcf(company, dcf):
@@ -92,9 +129,10 @@ def draw_multiples(multiples):
 
 
 def draw_page():
-    """Draw the whole page: title, DCF section, multiples section and the footer."""
+    """Draw the whole page: sliders, title, DCF section, multiples section and the footer."""
     company = data.get_company_data(TICKER)
-    dcf, multiples = run_valuation(company)
+    growth_shift, margin_shift, terminal_growth_rate = draw_sliders()
+    dcf, multiples = run_valuation(company, growth_shift, margin_shift, terminal_growth_rate)
 
     st.title("Valuation Lab")
     st.write(f"{company['company_name']} ({company['ticker']})")

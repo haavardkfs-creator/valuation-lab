@@ -30,3 +30,26 @@ WC_PCTS = [0.01, 0.01, 0.01, 0.01, 0.01]
 # Growth of free cash flow after year 5, forever. Roughly long-run inflation plus a little
 # real growth (see docs/model.md, Terminal value). Excel: valuation C17.
 TERMINAL_GROWTH_RATE = 0.025
+
+
+# ---------------------------------------------------------------------------
+# Slider ranges for the app (Phase 5). These are not forecasts, only how far each slider
+# can move. All are decimals shown as percentages, and the starting position of every
+# slider is the base case above (a shift of 0, and a terminal growth of 2.5%).
+# ---------------------------------------------------------------------------
+
+# How far the growth and margin sliders can shift every forecast year, up or down.
+# Chosen for Phase 5 as wide enough to see a big effect: +/-5 percentage points.
+GROWTH_SHIFT_MIN = -0.05
+GROWTH_SHIFT_MAX = 0.05
+GROWTH_SHIFT_STEP = 0.005
+MARGIN_SHIFT_MIN = -0.05
+MARGIN_SHIFT_MAX = 0.05
+MARGIN_SHIFT_STEP = 0.005
+
+# Terminal growth slider. The top is capped at 4% because the Gordon growth formula needs
+# terminal growth to stay well below the WACC (10.93%), and long-run growth above the
+# economy's own growth is not realistic. Chosen for Phase 5.
+TERMINAL_GROWTH_MIN = 0.0
+TERMINAL_GROWTH_MAX = 0.04
+TERMINAL_GROWTH_STEP = 0.0025
