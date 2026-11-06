@@ -64,9 +64,6 @@
     live app can crash with an `AttributeError` because the server still holds the old copy
     in memory. This happened after the WACC slider merge. Fix: Manage app, the three dots,
     Reboot app. It is not a code bug.
-  - `docs/model.md`, `docs/glossary.md` and `LEARNING.md` still have their old Phase 0
-    placeholder text above the real content (e.g. "It is empty for now"). Haavard's call
-    whether to tidy this.
   - The workbook's sensitivity table (valuation sheet, rows 34–38) uses a rounded WACC of
     10.93% in its middle row, so it shows $305.48, not $305.60. Decided (see
     `docs/decisions.md`): the Phase 5 heatmap uses the exact WACC, so its centre cell is
@@ -74,8 +71,8 @@
   - The live source covers share price and beta only. Risk-free rate and equity risk
     premium (Damodaran) have no simple feed and stay typed in by hand, and the 10-K figures
     and peer multiples still come from the snapshot. `yfinance` is an unofficial Yahoo
-    wrapper, so it can break or be rate-limited without warning: the app needs the
-    snapshot fallback before it relies on it.
+    wrapper, so it can break or be rate-limited without warning. If that happens the app
+    falls back to the snapshot and shows a yellow warning under the title.
   - The snapshot stores debt and cash as finished totals because `data.py` cannot add.
     A live source reading the 10-K's separate lines would need a small adding function in
     `valuation.py`.
