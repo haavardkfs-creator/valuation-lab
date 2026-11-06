@@ -110,3 +110,18 @@ useful when profits are low or negative, or when companies have very different m
 A test that shows how the valuation changes when key assumptions change. In this model, the
 share price is recalculated for different WACC and terminal growth rates to see which
 assumptions matter most.
+Upside vs market
+How much higher (or lower) a stock’s expected return is compared with the overall market. A positive upside vs market suggests the stock may outperform if the assumptions are correct.
+
+Revenue growth
+The rate at which a company’s sales increase over time. Higher revenue growth often signals stronger demand for the company’s products or services.
+
+Operating margin
+Operating income divided by revenue. It shows how much profit a company keeps from its core business operations before interest and taxes.
+
+Peer median
+The middle value of a metric for a group of comparable companies. It is often used as a benchmark when evaluating a company’s valuation or performance.
+
+DCF vs multiples
+Two common valuation methods. DCF estimates value based on expected future cash flows, while multiples compare a company’s valuation ratios with similar companies.
+
