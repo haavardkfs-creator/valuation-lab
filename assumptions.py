@@ -81,3 +81,12 @@ WACC_SLIDER_STEP = 0.0025
 
 # Where the slider starts when first ticked: close to the model's own 10.93%.
 WACC_SLIDER_START = 0.11
+
+
+# ---------------------------------------------------------------------------
+# Chart labels (Phase 5)
+# ---------------------------------------------------------------------------
+
+# The name of each forecast year, in the same order as the five-year lists above. The base
+# year is FY2025 (Adobe's last reported year, 10-K), so the forecast runs FY2026-FY2030.
+FORECAST_YEAR_LABELS = ["FY2026", "FY2027", "FY2028", "FY2029", "FY2030"]

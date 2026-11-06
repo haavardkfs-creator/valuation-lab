@@ -23,6 +23,10 @@ HEATMAP_RED = (192, 57, 43)
 HEATMAP_FULL_TINT_GAP = 0.5
 HEATMAP_STRONGEST_TINT = 0.7        # below 1 so the numbers stay easy to read on top
 
+# Chart colours: the theme blue from .streamlit/config.toml, and a lighter blue to sit beside it.
+CHART_BLUE = "#2E5077"
+CHART_LIGHT_BLUE = "#8FB0D1"
+
 # Guard rail 13: the footer every page of the app must show.
 FOOTER_TEXT = "Valuation Lab is a learning project, not investment advice."
 
@@ -174,6 +178,45 @@ def tint(price, market_price):
     return f"background-color: rgb({red}, {green}, {blue}); color: #262730"
 
 
+def draw_charts(dcf):
+    """Draw the two charts behind the headline price: the five-year forecast of revenue and
+    free cash flow, and the two parts that enterprise value is built from.
+    """
+    st.subheader("Behind the number")
+    forecast_column, build_column = st.columns([3, 2])
+
+    forecast = pd.DataFrame(
+        {"Revenue": dcf["revenues"], "Free cash flow": dcf["free_cash_flows"]},
+        index=assumptions.FORECAST_YEAR_LABELS,
+    )
+    forecast_column.markdown("**Forecast: revenue and free cash flow**")
+    forecast_column.bar_chart(
+        forecast,
+        stack=False,
+        color=[CHART_BLUE, CHART_LIGHT_BLUE],
+        y_label="$ millions",
+    )
+
+    build = pd.DataFrame(
+        {"Present value ($ millions)": [dcf["pv_of_forecast"], dcf["pv_of_terminal_value"]]},
+        index=["Years 1-5", "Terminal"],
+    )
+    build_column.markdown("**What the company is worth today**")
+    build_column.bar_chart(
+        build,
+        sort=False,
+        color=CHART_BLUE,
+        y_label="$ millions",
+    )
+    # Each dollar sign is escaped with a backslash, because Streamlit reads text between two
+    # unescaped dollar signs as a maths formula.
+    st.caption(
+        f"Enterprise value of \\${dcf['enterprise_value']:,.0f} million is the five forecast "
+        f"years (\\${dcf['pv_of_forecast']:,.0f} million) plus everything after year 5, the "
+        f"terminal value (\\${dcf['pv_of_terminal_value']:,.0f} million), both discounted to today."
+    )
+
+
 def draw_heatmap(company, dcf_inputs, base_wacc):
     """Draw the sensitivity heatmap: the implied share price at different WACCs (down the
     side) and terminal growth rates (along the top), coloured against the market price.
@@ -226,7 +269,7 @@ def draw_multiples(multiples):
 
 
 def draw_page():
-    """Draw the whole page: sliders, title, DCF section, heatmap, multiples section and footer."""
+    """Draw the whole page: sliders, title, DCF section, charts, heatmap, multiples and footer."""
     company = data.get_company_data(TICKER)
     growth_shift, margin_shift, terminal_growth_rate, wacc_override = draw_sliders()
     dcf_inputs = build_dcf_inputs(company, growth_shift, margin_shift)
@@ -235,6 +278,7 @@ def draw_page():
     st.title("Valuation Lab")
     st.write(f"{company['company_name']} ({company['ticker']})")
     draw_dcf(company, dcf, wacc_override is not None)
+    draw_charts(dcf)
     draw_heatmap(company, dcf_inputs, model_wacc(dcf_inputs))
     draw_multiples(multiples)
     st.divider()
