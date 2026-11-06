@@ -79,3 +79,17 @@ the chaining and returns every number in a dictionary, the same way `run_full_dc
 the DCF. Reason: the app calls one function per part of the valuation and only draws what
 comes back. It is its own pull request ahead of the app, one idea per pull request. No new
 files: the tests went into `test_valuation.py`, which already holds the base case.
+
+## 2026-11-05 — Phase 4: the first app shows Adobe's DCF and multiples, nothing else
+
+`app.py` fetches Adobe's figures with `data.get_company_data`, takes the assumptions from
+`assumptions.py`, calls `run_full_dcf` and `run_multiples`, and shows the results as number
+tiles under two headings, with the "learning project, not investment advice" footer
+(guard rail 13). Its only own functions are two display formatters (`dollars`, `percent`),
+`run_valuation` (which calls `valuation.py` in the right order and does no maths) and three
+drawing functions. Left out on purpose and left for Phase 5: sliders, charts, the
+sensitivity heatmap, explanation panels, and a ticker box. The company is a named constant
+(`TICKER = "ADBE"`) because the snapshot only holds Adobe. No test file for `app.py` was
+added: the numbers it shows come from functions that are already tested against Excel, and
+a page test would be a new file outside CLAUDE.md's folder table. Deployment to Streamlit
+Community Cloud is done by Haavard after this is merged.
