@@ -205,3 +205,17 @@ the panels cannot drift from his wording), that no text contains a digit, `$` or
 that every term is used. Still to come as a follow-up pull request, once Haavard has written
 the glossary entries: Upside vs market, Revenue growth, Operating margin, Peer median and
 DCF vs multiples.
+
+## 2026-11-05 — Five more terms added to the boxes: Phase 5 is complete
+
+The five glossary entries Haavard wrote (Upside vs market, Revenue growth, Operating margin,
+Peer median, DCF vs multiples) are added to `explanations.py`, word for word, bringing it to
+seventeen terms. Claude checked them for accuracy first: two were sent back, because the first
+version of Upside vs market described a stock's return against the stock market (it is the
+DCF price against the stock's own market price), and DCF vs multiples named the two methods
+without saying what the percentage means. Both were rewritten by Haavard. Placement:
+Upside vs market in the DCF box; Revenue growth and Operating margin in the "Behind the
+number" box, next to the forecast chart they drive; Peer median and DCF vs multiples in the
+multiples box. `test_explanations.py` already checks each text against the glossary, so it
+covered the new ones with no change. With this, every part of Phase 5 in CLAUDE.md is built:
+sliders, sensitivity heatmap, charts, and a plain-language panel under every metric.

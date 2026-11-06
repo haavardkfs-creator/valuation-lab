@@ -35,13 +35,15 @@
 - Done: Phase 5, step 6 — a "Behind the number" section with two charts: revenue and free
   cash flow for FY2026-30, and the two parts of enterprise value (five forecast years and
   terminal value). Merged and live.
-- Done (in the open pull request): Phase 5, step 7 — `explanations.py` and a closed "What do
-  these terms mean?" box under each of the four sections, using Haavard's glossary wording
-  word for word (definition sentences only). `test_explanations.py` checks the wording
-  against `docs/glossary.md`.
-- Next: Haavard writes five glossary entries (Upside vs market, Revenue growth, Operating
-  margin, Peer median, DCF vs multiples); then a small pull request adds them to the boxes.
-  After that Phase 5 is complete and Phase 6 gives the README the live link.
+- Done: Phase 5, step 7 — `explanations.py` and a closed "What do these terms mean?" box
+  under each of the four sections, using Haavard's glossary wording word for word
+  (definition sentences only). `test_explanations.py` checks the wording against
+  `docs/glossary.md`. Merged and live.
+- Done (in the open pull request): Phase 5, step 8 — the five new glossary entries (Upside vs
+  market, Revenue growth, Operating margin, Peer median, DCF vs multiples) added to the
+  boxes. Phase 5 is then complete.
+- Next: Phase 6 — the README gets the live link (https://valuation-l3b.streamlit.app) and a
+  rewrite of its old Phase 0 text. Phase 7 (saving via Supabase) is optional.
 - Open:
   - After a deploy that changes a file the app imports (for example `assumptions.py`), the
     live app can crash with an `AttributeError` because the server still holds the old copy

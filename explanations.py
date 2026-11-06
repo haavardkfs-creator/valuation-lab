@@ -76,12 +76,45 @@ EXPLANATIONS = {
         "Earnings are after interest, so P/E is paired with the share price (equity value), "
         "not enterprise value.",
     ),
+    "upside_vs_market": (
+        "Upside vs market",
+        "The percentage difference between the DCF price and the current market price. A "
+        "positive value means the model estimates the stock is worth more than its current "
+        "market price, suggesting potential undervaluation.",
+    ),
+    "revenue_growth": (
+        "Revenue growth",
+        "The rate at which a company’s sales increase over time. Higher revenue growth often "
+        "signals stronger demand for the company’s products or services.",
+    ),
+    "operating_margin": (
+        "Operating margin",
+        "Operating income divided by revenue. It shows how much profit a company keeps from "
+        "its core business operations before interest and taxes.",
+    ),
+    "peer_median": (
+        "Peer median",
+        "The middle value of a metric for a group of comparable companies. It is often used "
+        "as a benchmark when evaluating a company’s valuation or performance.",
+    ),
+    "dcf_vs_multiples": (
+        "DCF vs multiples",
+        "The percentage difference between the DCF price and the price implied by peer "
+        "valuation multiples. A negative value means the DCF valuation is lower than the "
+        "multiples-based valuation, while a positive value means it is higher.",
+    ),
 }
 
 # Which terms go in the box under which section of the page, in the order they are shown.
 SECTION_TERMS = {
-    "dcf": ["dcf", "implied_share_price", "wacc", "discount_rate"],
-    "behind_the_number": ["free_cash_flow", "enterprise_value", "terminal_value"],
+    "dcf": ["dcf", "implied_share_price", "upside_vs_market", "wacc", "discount_rate"],
+    "behind_the_number": [
+        "revenue_growth",
+        "operating_margin",
+        "free_cash_flow",
+        "enterprise_value",
+        "terminal_value",
+    ],
     "sensitivity": ["sensitivity_analysis", "terminal_growth_rate", "wacc"],
-    "multiples": ["ev_sales", "ev_ebitda", "pe"],
+    "multiples": ["ev_sales", "ev_ebitda", "pe", "peer_median", "dcf_vs_multiples"],
 }
