@@ -117,3 +117,42 @@ def test_the_most_extreme_sliders_still_give_a_price():
                     terminal_growth_rate=terminal_growth,
                 )
                 assert result["implied_share_price"] > 0
+
+
+# ---------------------------------------------------------------------------
+# WACC slider range (Phase 5). Not Excel cells; they check the range is sensible.
+# ---------------------------------------------------------------------------
+
+def test_wacc_slider_starts_inside_its_range_with_a_positive_step():
+    assert a.WACC_SLIDER_MIN <= a.WACC_SLIDER_START <= a.WACC_SLIDER_MAX
+    assert 0 < a.WACC_SLIDER_STEP < a.WACC_SLIDER_MAX - a.WACC_SLIDER_MIN
+
+
+def test_wacc_slider_never_drops_to_the_terminal_growth_ceiling():
+    assert a.WACC_SLIDER_MIN > a.TERMINAL_GROWTH_MAX
+
+
+def test_the_most_extreme_wacc_and_terminal_growth_still_give_a_price():
+    company = data.get_company_data("ADBE")
+    for wacc_rate in (a.WACC_SLIDER_MIN, a.WACC_SLIDER_MAX):
+        for terminal_growth in (a.TERMINAL_GROWTH_MIN, a.TERMINAL_GROWTH_MAX):
+            result = v.run_full_dcf(
+                base_revenue=company["revenue"],
+                growth_rates=a.GROWTH_RATES,
+                operating_margins=a.OPERATING_MARGINS,
+                tax_rate=a.TAX_RATE,
+                da_pcts=a.DA_PCTS,
+                capex_pcts=a.CAPEX_PCTS,
+                wc_pcts=a.WC_PCTS,
+                risk_free_rate=company["risk_free_rate"],
+                beta=company["beta"],
+                equity_risk_premium=company["equity_risk_premium"],
+                pre_tax_cost_of_debt=company["pre_tax_cost_of_debt"],
+                share_price=company["share_price"],
+                shares=company["shares"],
+                debt=company["debt"],
+                cash_and_investments=company["cash_and_investments"],
+                terminal_growth_rate=terminal_growth,
+                wacc_override=wacc_rate,
+            )
+            assert result["implied_share_price"] > 0

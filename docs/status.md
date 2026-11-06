@@ -25,12 +25,16 @@
   terminal growth), ranges in `assumptions.py`, four range tests. Merged and live.
 - Done: Phase 5, step 3 — `run_full_dcf` accepts an optional `wacc_override`, checked
   against all 25 cells of the workbook's sensitivity table. Merged.
-- Done (in the open pull request): Phase 5, step 4 — the sensitivity heatmap: a 5x5 table of
-  prices by WACC and terminal growth, tinted against the market price, centred on the exact
-  WACC so its middle cell is $305.60. `sensitivity_table` in `valuation.py`, checked against
-  the workbook table. `pandas==3.1.1` pinned in `requirements.txt`.
-- Next: Phase 5, as separate pull requests: a WACC slider, the charts, and the plain-language
-  panel under every metric.
+- Done: Phase 5, step 4 — the sensitivity heatmap: a 5x5 table of prices by WACC and
+  terminal growth, tinted against the market price, centred on the exact WACC so its middle
+  cell is $305.60. `sensitivity_table` in `valuation.py`, checked against the workbook
+  table. `pandas==3.1.1` pinned in `requirements.txt`. Merged and live.
+- Done (in the open pull request): Phase 5, step 5 — a "Set the WACC myself" tick box and
+  WACC slider in the sidebar. Unticked, the model's exact WACC is used. The heatmap stays
+  centred on the model's WACC. Checked in real Streamlit: 11% gives $302.88.
+- Next: Phase 5, as separate pull requests: the charts (revenue and free cash flow forecast,
+  how the price is built), then the plain-language panel under every metric
+  (`explanations.py`, drafted from `docs/glossary.md`, Haavard reviews the wording).
 - Open:
   - `README.md` still says "Phase 0 ... No valuation or app code exists yet" and "Nothing to
     run yet". It gets the live link and a rewrite in Phase 6.
