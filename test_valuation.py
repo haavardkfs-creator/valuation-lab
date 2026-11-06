@@ -453,3 +453,59 @@ def test_overriding_with_the_exact_wacc_gives_the_same_price_as_not_overriding()
 
 def test_a_higher_wacc_gives_a_lower_price():
     assert run_base_case_with_wacc(0.12)["implied_share_price"] < run_base_case_with_wacc(0.10)["implied_share_price"]
+
+
+# ---------------------------------------------------------------------------
+# The sensitivity table function, checked against the same workbook table
+# ---------------------------------------------------------------------------
+
+BASE_DCF_INPUTS = dict(
+    base_revenue=BASE_REVENUE,
+    growth_rates=GROWTH_RATES,
+    operating_margins=OPERATING_MARGINS,
+    tax_rate=TAX_RATE,
+    da_pcts=DA_PCTS,
+    capex_pcts=CAPEX_PCTS,
+    wc_pcts=WC_PCTS,
+    risk_free_rate=RISK_FREE_RATE,
+    beta=BETA,
+    equity_risk_premium=EQUITY_RISK_PREMIUM,
+    pre_tax_cost_of_debt=PRE_TAX_COST_OF_DEBT,
+    share_price=SHARE_PRICE,
+    shares=SHARES,
+    debt=DEBT,
+    cash_and_investments=CASH_AND_INVESTMENTS,
+)
+
+WORKBOOK_WACC_OFFSETS = [-0.01, -0.005, 0.0, 0.005, 0.01]       # valuation C34:C38 around 10.93%
+WORKBOOK_GROWTH_RATES = [0.015, 0.02, 0.025, 0.03, 0.035]       # valuation D33:H33
+
+
+def test_sensitivity_table_matches_the_whole_excel_table():
+    table = v.sensitivity_table(BASE_DCF_INPUTS, 0.1093, WORKBOOK_WACC_OFFSETS, WORKBOOK_GROWTH_RATES)
+    for row, wacc_rate in zip(table["prices"], table["wacc_rates"]):
+        for price, growth_rate in zip(row, table["terminal_growth_rates"]):
+            expected = SENSITIVITY_TABLE[(round(wacc_rate, 4), growth_rate)]
+            assert price == close(expected)
+
+
+def test_sensitivity_table_lists_the_waccs_and_growth_rates_it_used():
+    table = v.sensitivity_table(BASE_DCF_INPUTS, 0.1093, WORKBOOK_WACC_OFFSETS, WORKBOOK_GROWTH_RATES)
+    assert table["wacc_rates"] == [close(0.0993), close(0.1043), close(0.1093), close(0.1143), close(0.1193)]
+    assert table["terminal_growth_rates"] == WORKBOOK_GROWTH_RATES
+    assert len(table["prices"]) == 5
+    assert all(len(row) == 5 for row in table["prices"])
+
+
+def test_sensitivity_table_centred_on_the_exact_wacc_gives_305_60_in_the_middle():
+    exact_wacc = run_base_case()["wacc"]
+    table = v.sensitivity_table(BASE_DCF_INPUTS, exact_wacc, WORKBOOK_WACC_OFFSETS, WORKBOOK_GROWTH_RATES)
+    assert table["prices"][2][2] == close(305.60201673218938)        # middle cell = the headline price
+
+
+def test_sensitivity_table_prices_fall_as_wacc_rises_and_rise_with_growth():
+    table = v.sensitivity_table(BASE_DCF_INPUTS, 0.1093, WORKBOOK_WACC_OFFSETS, WORKBOOK_GROWTH_RATES)
+    for row in table["prices"]:
+        assert row == sorted(row)                                    # more growth, higher price
+    for column in zip(*table["prices"]):
+        assert list(column) == sorted(column, reverse=True)          # higher WACC, lower price

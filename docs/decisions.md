@@ -144,3 +144,20 @@ cannot be moved. The change is one `if` and no new function. It is checked again
 cells of the workbook's sensitivity table (valuation D34:H38), which uses the rounded WACCs
 9.93% to 11.93%; that is only to prove the override matches Excel. The heatmap itself will
 still be centred on the exact WACC (see the decision above). No new files.
+
+## 2026-11-05 — Phase 5: the sensitivity heatmap, and pandas becomes a listed dependency
+
+`valuation.py` gets `sensitivity_table`, which runs the DCF at every pairing of a WACC and a
+terminal growth rate and returns the grid of prices; `app.py` draws it as a 5x5 table under
+the DCF, WACC down the side (the model's exact WACC plus or minus 0.5 and 1 point) and
+terminal growth along the top (1.5% to 3.5%), so the middle cell is the headline $305.60.
+Each cell is tinted against the market price: white at it, greener above, redder below, so
+the table says something at a glance. The growth and margin sliders move the whole table;
+the terminal growth slider does not, because terminal growth is one of the table's axes.
+Checked against the whole workbook table by giving it the workbook's rounded WACC.
+`pandas==3.1.1` is added to `requirements.txt`: Streamlit already installs it, and the
+styled table needs it, so this only lists and pins what was already there (guard rail 7,
+agreed with Haavard). `matplotlib` is not needed because the colours are picked by a small
+function in `app.py`. The table's pandas styling cannot draw a cell outline, so the base case
+is shown in bold. Done as one pull request, not two, because the function and the table are
+one idea and Haavard was short on time. No new files.
