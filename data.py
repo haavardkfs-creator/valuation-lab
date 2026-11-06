@@ -22,6 +22,11 @@ PACKAGE_FIELDS = {
     "ebit": "Latest full-year operating income (EBIT), $ millions",
     "depreciation_and_amortisation": "Latest full-year depreciation and amortisation, $ millions",
     "net_income": "Latest full-year net income, $ millions",
+    "prior_year_revenue": "Total revenue of the full year before the latest one, $ millions",
+    "income_tax": "Latest full-year income tax expense (provision for income taxes), $ millions",
+    "income_before_tax": "Latest full-year income before income taxes, $ millions",
+    "capex": "Latest full-year capital spending, as a positive amount, $ millions",
+    "cash_from_working_capital": "Latest full-year cash from working capital, positive when cash comes in, $ millions",
     "debt": "Financial debt: current portion plus long-term debt, leases excluded, $ millions",
     "cash_and_investments": "Cash and cash equivalents plus short-term investments, $ millions",
     "shares": "Shares outstanding, millions",
@@ -51,6 +56,13 @@ ADOBE_SNAPSHOT = {
     "ebit": 8706,                           # Income statement, p. 48: operating income
     "depreciation_and_amortisation": 818,   # Cash flow statement, p. 51: depreciation, amortization and accretion
     "net_income": 7130,                     # Income statement, p. 48
+    "prior_year_revenue": 21505,            # Income statement, p. 48: FY2024 total revenue (Inputs F11)
+    "income_tax": 1604,                     # Income statement, p. 48: provision for income taxes
+    "income_before_tax": 8734,              # Income statement, p. 48: income before income taxes
+    "capex": 179,                           # Cash flow statement, p. 51: purchases of property and equipment (shown as -179 there)
+    # Cash flow statement, p. 51: the six working capital lines added together (receivables,
+    # prepaid expenses, payables, accrued expenses, income taxes payable, deferred revenue).
+    "cash_from_working_capital": 605,
     "debt": 6210,                           # Balance sheet, p. 47: current portion 0 + long-term debt 6,210
     "cash_and_investments": 6595,           # Balance sheet, p. 47: cash 5,431 + short-term investments 1,164
     "shares": 413,                          # FY2025 10-K cover page: year-end count after buybacks

@@ -317,3 +317,20 @@ point fed through `run_full_dcf`) only checks that the shapes fit and a price co
 check that the tests can fail: changing the step to divide by years + 1 made five of them
 fail. Not built yet, on purpose: getting last year's figures into `data.py` and putting any of
 this on the page. No new files.
+
+## 2026-11-06 — Last year's figures join the data package (Adobe only so far)
+
+The package every data source must supply (`PACKAGE_FIELDS` in `data.py`) grows by five
+figures, the ones `last_year_ratios` needs and the package did not yet hold:
+`prior_year_revenue`, `income_tax`, `income_before_tax`, `capex` and
+`cash_from_working_capital`. The snapshot fills them in for Adobe from the 10-K (pages 48 and
+51), the same figures as the workbook: 21,505, 1,604, 8,734, 179 and 605. Capex is stored as a
+positive amount of spending (the 10-K shows it as -179) and cash from working capital as
+positive when cash comes in, as on the `Projection` sheet; working capital is the six cash
+flow lines added together, because the package holds finished totals and `data.py` does not
+compute (see the earlier note on debt and cash). `live_source` builds on the snapshot, so it
+carries the new fields without any change. Because `check_package` insists on every field, any
+future source must supply all five. Two new tests run Adobe's snapshot through
+`last_year_ratios` and `starting_point_assumptions` and expect the `starting point` sheet's
+cells. Not done on purpose: getting these figures for other companies from Yahoo, and
+anything on the page. No new files.
