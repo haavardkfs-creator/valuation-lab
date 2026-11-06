@@ -174,3 +174,17 @@ WACC whether or not the slider is used, so it always shows the same base case; o
 headline moves. The slider's bottom is 6% so it always stays above the 4% top of the terminal
 growth slider. Ranges are named constants in `assumptions.py` with tests. No new files and
 no change to `valuation.py`: this reuses `wacc_override` from the earlier pull request.
+
+## 2026-11-05 — Phase 5: two charts under the headline, using Streamlit's own bar chart
+
+A "Behind the number" section sits between the DCF tiles and the heatmap. The left chart
+shows revenue and free cash flow for FY2026-30 as paired bars, and moves with the growth and
+margin sliders. The right chart shows the two parts of enterprise value, the five forecast
+years and the terminal value, with a caption giving the dollar amounts. It uses Streamlit's
+built-in `st.bar_chart` (with the `pandas` already pinned), so there is no new dependency, and
+`valuation.py` does not change: every number was already returned by `run_full_dcf`. The year
+labels are a named constant, `FORECAST_YEAR_LABELS`, in `assumptions.py` with a test, so
+`app.py` does no year arithmetic. Two things found while checking in a real browser: the
+dollar signs in the caption must be escaped (`\$`), because Streamlit reads text between two
+dollar signs as a maths formula; and the charts zoom if the mouse wheel is turned over
+them, which is a Streamlit feature, not a bug. No new files.

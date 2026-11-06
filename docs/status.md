@@ -29,13 +29,19 @@
   terminal growth, tinted against the market price, centred on the exact WACC so its middle
   cell is $305.60. `sensitivity_table` in `valuation.py`, checked against the workbook
   table. `pandas==3.1.1` pinned in `requirements.txt`. Merged and live.
-- Done (in the open pull request): Phase 5, step 5 — a "Set the WACC myself" tick box and
-  WACC slider in the sidebar. Unticked, the model's exact WACC is used. The heatmap stays
-  centred on the model's WACC. Checked in real Streamlit: 11% gives $302.88.
-- Next: Phase 5, as separate pull requests: the charts (revenue and free cash flow forecast,
-  how the price is built), then the plain-language panel under every metric
-  (`explanations.py`, drafted from `docs/glossary.md`, Haavard reviews the wording).
+- Done: Phase 5, step 5 — a "Set the WACC myself" tick box and WACC slider in the sidebar.
+  Unticked, the model's exact WACC is used. The heatmap stays centred on the model's WACC.
+  Merged and live.
+- Done (in the open pull request): Phase 5, step 6 — a "Behind the number" section with two
+  charts: revenue and free cash flow for FY2026-30, and the two parts of enterprise value
+  (five forecast years and terminal value). Checked in real Streamlit.
+- Next: Phase 5, last piece: the plain-language panel under every metric
+  (`explanations.py`, drafted from `docs/glossary.md`; Haavard reviews the wording).
 - Open:
+  - After a deploy that changes a file the app imports (for example `assumptions.py`), the
+    live app can crash with an `AttributeError` because the server still holds the old copy
+    in memory. This happened after the WACC slider merge. Fix: Manage app, the three dots,
+    Reboot app. It is not a code bug.
   - `README.md` still says "Phase 0 ... No valuation or app code exists yet" and "Nothing to
     run yet". It gets the live link and a rewrite in Phase 6.
   - `docs/model.md`, `docs/glossary.md` and `LEARNING.md` still have their old Phase 0

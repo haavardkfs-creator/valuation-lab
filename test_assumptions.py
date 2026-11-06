@@ -156,3 +156,13 @@ def test_the_most_extreme_wacc_and_terminal_growth_still_give_a_price():
                 wacc_override=wacc_rate,
             )
             assert result["implied_share_price"] > 0
+
+
+# ---------------------------------------------------------------------------
+# Chart labels (Phase 5)
+# ---------------------------------------------------------------------------
+
+def test_there_is_one_year_label_for_every_forecast_year():
+    assert len(a.FORECAST_YEAR_LABELS) == len(a.GROWTH_RATES) == 5
+    assert a.FORECAST_YEAR_LABELS[0] == "FY2026"           # the year after the FY2025 base year
+    assert a.FORECAST_YEAR_LABELS[-1] == "FY2030"          # Projection H:L, five forecast years
