@@ -53,3 +53,15 @@ MARGIN_SHIFT_STEP = 0.005
 TERMINAL_GROWTH_MIN = 0.0
 TERMINAL_GROWTH_MAX = 0.04
 TERMINAL_GROWTH_STEP = 0.0025
+
+
+# ---------------------------------------------------------------------------
+# The sensitivity heatmap (Phase 5)
+# ---------------------------------------------------------------------------
+
+# How far above and below the model's own WACC each row of the heatmap sits. Same spacing as
+# the workbook's sensitivity table (valuation C34:C38): half a percentage point a row.
+HEATMAP_WACC_OFFSETS = [-0.01, -0.005, 0.0, 0.005, 0.01]
+
+# The terminal growth rate of each column of the heatmap. Excel: valuation D33:H33.
+HEATMAP_TERMINAL_GROWTH_RATES = [0.015, 0.02, 0.025, 0.03, 0.035]

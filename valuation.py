@@ -333,3 +333,32 @@ def run_multiples(
         "median_price": median_price,
         "dcf_vs_multiples": dcf_vs_multiples(dcf_price, median_price),
     }
+
+
+# ---------------------------------------------------------------------------
+# The sensitivity table: price at many WACCs and terminal growth rates
+# ---------------------------------------------------------------------------
+
+def sensitivity_table(dcf_inputs, base_wacc, wacc_offsets, terminal_growth_rates):
+    """Work out the implied share price for every pairing of a WACC and a terminal growth rate.
+
+    dcf_inputs holds every input run_full_dcf needs except the terminal growth rate and the
+    WACC. The WACCs tried are the base WACC plus each offset (an offset of 0 is the base
+    WACC itself). Returns the WACCs, the growth rates and the prices, one row of prices
+    per WACC and one column per growth rate.
+    """
+    wacc_rates = [base_wacc + offset for offset in wacc_offsets]
+    prices = [
+        [
+            run_full_dcf(
+                **dcf_inputs, terminal_growth_rate=growth_rate, wacc_override=wacc_rate
+            )["implied_share_price"]
+            for growth_rate in terminal_growth_rates
+        ]
+        for wacc_rate in wacc_rates
+    ]
+    return {
+        "wacc_rates": wacc_rates,
+        "terminal_growth_rates": list(terminal_growth_rates),
+        "prices": prices,
+    }

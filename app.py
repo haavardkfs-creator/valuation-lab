@@ -5,6 +5,7 @@ assumptions.py, hands both to valuation.py, and puts what comes back on the page
 rail 5). Run it with: streamlit run app.py
 """
 
+import pandas as pd
 import streamlit as st
 
 import assumptions
@@ -13,6 +14,14 @@ import valuation
 
 # The company on the page. Phase 4 shows one company; choosing a ticker comes later.
 TICKER = "ADBE"
+
+# Heatmap colours, as red/green/blue numbers. Chosen for a calm, professional look: a price
+# at the market price is white, and the further above it the greener, the further below it
+# the redder. Prices 50% or more away from the market price get the full tint.
+HEATMAP_GREEN = (46, 139, 87)
+HEATMAP_RED = (192, 57, 43)
+HEATMAP_FULL_TINT_GAP = 0.5
+HEATMAP_STRONGEST_TINT = 0.7        # below 1 so the numbers stay easy to read on top
 
 # Guard rail 13: the footer every page of the app must show.
 FOOTER_TEXT = "Valuation Lab is a learning project, not investment advice."
@@ -28,15 +37,18 @@ def percent(rate):
     return f"{rate:.1%}"
 
 
-def run_valuation(company, growth_shift, margin_shift, terminal_growth_rate):
-    """Run the DCF and the multiples comparison for one company's figures.
+def precise_percent(rate):
+    """Write a decimal rate as a percentage with two decimals, for example 0.1093 as 10.93%."""
+    return f"{rate:.2%}"
+
+
+def build_dcf_inputs(company, growth_shift, margin_shift):
+    """Gather every input the DCF needs except the terminal growth rate and the WACC.
 
     The growth and margin shifts move every forecast year by the same amount (0 means the
-    base case). Returns the DCF results and the multiples results, each as a dictionary of
-    named numbers. The multiples need the DCF's net debt and implied price, so the DCF
-    runs first.
+    base case). The same inputs feed both the headline DCF and the heatmap.
     """
-    dcf = valuation.run_full_dcf(
+    return dict(
         base_revenue=company["revenue"],
         growth_rates=valuation.shift_rates(assumptions.GROWTH_RATES, growth_shift),
         operating_margins=valuation.shift_rates(assumptions.OPERATING_MARGINS, margin_shift),
@@ -52,8 +64,16 @@ def run_valuation(company, growth_shift, margin_shift, terminal_growth_rate):
         shares=company["shares"],
         debt=company["debt"],
         cash_and_investments=company["cash_and_investments"],
-        terminal_growth_rate=terminal_growth_rate,
     )
+
+
+def run_valuation(company, dcf_inputs, terminal_growth_rate):
+    """Run the DCF and the multiples comparison for one company's figures.
+
+    Returns the DCF results and the multiples results, each as a dictionary of named
+    numbers. The multiples need the DCF's net debt and implied price, so the DCF runs first.
+    """
+    dcf = valuation.run_full_dcf(**dcf_inputs, terminal_growth_rate=terminal_growth_rate)
     multiples = valuation.run_multiples(
         revenue=company["revenue"],
         ebit=company["ebit"],
@@ -114,6 +134,54 @@ def draw_dcf(company, dcf):
     wacc_column.metric("WACC", percent(dcf["wacc"]))
 
 
+def tint(price, market_price):
+    """Pick a background colour for one heatmap cell: white at the market price, greener the
+    further above it, redder the further below it.
+    """
+    gap = (price - market_price) / market_price
+    strength = min(abs(gap) / HEATMAP_FULL_TINT_GAP, 1) * HEATMAP_STRONGEST_TINT
+    target = HEATMAP_GREEN if gap >= 0 else HEATMAP_RED
+    red, green, blue = (round(255 + (colour - 255) * strength) for colour in target)
+    return f"background-color: rgb({red}, {green}, {blue}); color: #262730"
+
+
+def draw_heatmap(company, dcf_inputs, base_wacc):
+    """Draw the sensitivity heatmap: the implied share price at different WACCs (down the
+    side) and terminal growth rates (along the top), coloured against the market price.
+    """
+    table = valuation.sensitivity_table(
+        dcf_inputs,
+        base_wacc,
+        assumptions.HEATMAP_WACC_OFFSETS,
+        assumptions.HEATMAP_TERMINAL_GROWTH_RATES,
+    )
+    prices = pd.DataFrame(
+        table["prices"],
+        index=pd.Index([precise_percent(rate) for rate in table["wacc_rates"]], name="WACC"),
+        columns=pd.Index(
+            [percent(rate) for rate in table["terminal_growth_rates"]], name="Terminal growth"
+        ),
+    )
+    base_row = assumptions.HEATMAP_WACC_OFFSETS.index(0.0)
+    base_column = assumptions.HEATMAP_TERMINAL_GROWTH_RATES.index(assumptions.TERMINAL_GROWTH_RATE)
+
+    def style_cells(values):
+        """Colour every cell and put the base case in bold."""
+        styles = values.map(lambda price: tint(price, company["share_price"]))
+        styles.iloc[base_row, base_column] += "; font-weight: bold"
+        return styles
+
+    st.subheader("Sensitivity: price at different WACC and terminal growth")
+    st.dataframe(
+        prices.style.apply(style_cells, axis=None).format(dollars),
+        width="stretch",
+    )
+    st.caption(
+        f"Green means above today's market price of {dollars(company['share_price'])}, red below it. "
+        "The bold price is the base case. The growth and margin sliders move the whole table."
+    )
+
+
 def draw_multiples(multiples):
     """Draw the multiples section: the price each peer multiple gives, their middle value,
     and how far the DCF price is from it.
@@ -129,14 +197,16 @@ def draw_multiples(multiples):
 
 
 def draw_page():
-    """Draw the whole page: sliders, title, DCF section, multiples section and the footer."""
+    """Draw the whole page: sliders, title, DCF section, heatmap, multiples section and footer."""
     company = data.get_company_data(TICKER)
     growth_shift, margin_shift, terminal_growth_rate = draw_sliders()
-    dcf, multiples = run_valuation(company, growth_shift, margin_shift, terminal_growth_rate)
+    dcf_inputs = build_dcf_inputs(company, growth_shift, margin_shift)
+    dcf, multiples = run_valuation(company, dcf_inputs, terminal_growth_rate)
 
     st.title("Valuation Lab")
     st.write(f"{company['company_name']} ({company['ticker']})")
     draw_dcf(company, dcf)
+    draw_heatmap(company, dcf_inputs, dcf["wacc"])
     draw_multiples(multiples)
     st.divider()
     st.caption(FOOTER_TEXT)

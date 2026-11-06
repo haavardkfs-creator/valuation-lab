@@ -23,11 +23,14 @@
   margin list by the same amount, with five tests. Merged.
 - Done: Phase 5, step 2 — three sidebar sliders in `app.py` (growth shift, margin shift,
   terminal growth), ranges in `assumptions.py`, four range tests. Merged and live.
-- Done (in the open pull request): Phase 5, step 3 — `run_full_dcf` accepts an optional
-  `wacc_override`, checked against all 25 cells of the workbook's sensitivity table.
-- Next: Phase 5, as separate pull requests: the sensitivity heatmap (exact WACC, see
-  `docs/decisions.md`), a WACC slider, the charts, and the plain-language panel under every
-  metric.
+- Done: Phase 5, step 3 — `run_full_dcf` accepts an optional `wacc_override`, checked
+  against all 25 cells of the workbook's sensitivity table. Merged.
+- Done (in the open pull request): Phase 5, step 4 — the sensitivity heatmap: a 5x5 table of
+  prices by WACC and terminal growth, tinted against the market price, centred on the exact
+  WACC so its middle cell is $305.60. `sensitivity_table` in `valuation.py`, checked against
+  the workbook table. `pandas==3.1.1` pinned in `requirements.txt`.
+- Next: Phase 5, as separate pull requests: a WACC slider, the charts, and the plain-language
+  panel under every metric.
 - Open:
   - `README.md` still says "Phase 0 ... No valuation or app code exists yet" and "Nothing to
     run yet". It gets the live link and a rewrite in Phase 6.
