@@ -122,3 +122,34 @@ one outlier (Synopsys P/E of 82.6x) cannot dominate.
 | **Implied share price** | **$305.60** |
 | Peer medians EV/Sales / EV/EBITDA / P/E | 5.78x / 18.20x / 26.85x |
 | Multiples prices EV/Sales / EV/EBITDA / P/E | $333.58 / $420.52 / $463.54 |
+
+## Starting point for other companies
+
+Adobe's forecast assumptions are judgments made for Adobe. For any other company, the model
+starts from that company's own last reported year instead. This is a starting point, not a
+forecast: it shows what the next five years look like if nothing changes. The sliders are
+there to change it. It suits stable, cash-generating companies, and is a poor fit for banks,
+loss-making companies and early-stage companies.
+
+Workbook: sheet `starting point` (Adobe FY2025 is the test case).
+
+Last year's ratios:
+- Revenue growth = last year's revenue ÷ the year before's revenue − 1
+- Operating margin = EBIT ÷ revenue
+- Tax rate = income tax ÷ income before taxes
+- D&A % = D&A ÷ revenue
+- Capex % = capex ÷ revenue
+- Working capital % = cash from working capital ÷ revenue
+
+Revenue growth fades in equal steps to the terminal growth rate:
+- Step = (terminal growth − last year's growth) ÷ years in the forecast
+- Growth in year t = growth in year t−1 + step
+- Years in the forecast = 5. It is the only number typed by hand. With five years, growth
+  reaches the terminal growth rate in the last forecast year.
+- Adobe test case: 10.53%, 8.92%, 7.32%, 5.71%, 4.11%, 2.50%.
+
+Held at last year's level in every forecast year:
+- Operating margin, tax rate, D&A % of revenue, capex % of revenue, working capital % of revenue.
+- Working capital is held too, not set to zero. Adobe's is a cash inflow because customers
+  pay for subscriptions up front, so for a company where that inflow is a one-off, this is
+  optimistic. A company that uses cash keeps using it under the same rule.
