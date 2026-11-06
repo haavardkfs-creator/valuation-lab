@@ -43,12 +43,16 @@
   Operating margin, Peer median, DCF vs multiples) added to the boxes. Phase 5 is complete:
   sliders, WACC slider, sensitivity heatmap, charts, and a plain-language box under every
   section. Merged and live.
-- Done (in the open pull request): Phase 6 — the README is rewritten: what the app does
-  today, the live link (https://valuation-l3b.streamlit.app), how to run it locally, and
-  what is planned.
-- Next: Haavard's call. Candidates: a live data source (its own pull requests, needs a new
-  dependency discussed first), the optional Phase 7 (saving via Supabase), tidying the old
-  Phase 0 placeholder text in `docs/model.md`, `docs/glossary.md` and `LEARNING.md`.
+- Done: Phase 6 — README rewritten with the live link (https://valuation-l3b.streamlit.app),
+  local-run steps and what is planned. Merged. Phases 0-6 are complete.
+- Done (in the open pull request): the live data source, step 1 — `live_source` in
+  `data.py` takes today's share price and beta from Yahoo Finance (`yfinance==1.8.0`,
+  pinned) and everything else from the snapshot. Registered as `"live"` in `SOURCES`; the
+  app still uses the snapshot. Twelve new tests use fake Yahoo replies, never the internet;
+  161 tests pass.
+- Next: switch the app to the live source, with a fallback to the snapshot if Yahoo fails
+  (its own pull request, so the page only changes once the source has been reviewed). Other
+  candidates: the optional Phase 7 (saving via Supabase), tidying the old placeholder text.
 - Open:
   - Decided, not built: for a company other than Adobe, the forecast assumptions start from
     that company's own last reported year (see `docs/decisions.md`, 2026-11-06). The data
@@ -65,9 +69,11 @@
     10.93% in its middle row, so it shows $305.48, not $305.60. Decided (see
     `docs/decisions.md`): the Phase 5 heatmap uses the exact WACC, so its centre cell is
     $305.60. It will not match the workbook's table in the middle row, on purpose.
-  - A live data source is not built yet. Plan: its own pull request, starting with share
-    price and beta, then plugged into `SOURCES` in `data.py`. Risk-free rate and equity
-    risk premium (Damodaran) have no simple feed and stay typed in by hand.
+  - The live source covers share price and beta only. Risk-free rate and equity risk
+    premium (Damodaran) have no simple feed and stay typed in by hand, and the 10-K figures
+    and peer multiples still come from the snapshot. `yfinance` is an unofficial Yahoo
+    wrapper, so it can break or be rate-limited without warning: the app needs the
+    snapshot fallback before it relies on it.
   - The snapshot stores debt and cash as finished totals because `data.py` cannot add.
     A live source reading the 10-K's separate lines would need a small adding function in
     `valuation.py`.

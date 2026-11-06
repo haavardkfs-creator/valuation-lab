@@ -84,6 +84,49 @@ def snapshot_source(ticker):
 
 
 # ---------------------------------------------------------------------------
+# Source 2: live (current share price and beta from Yahoo Finance)
+# ---------------------------------------------------------------------------
+
+def fetch_yahoo_quote(ticker):
+    """Ask Yahoo Finance for a stock's current share price and beta.
+
+    Returns a dictionary with "share_price" and "beta"; a figure Yahoo does not have comes
+    back as None. This is the only function that touches the internet.
+    """
+    # Imported here, not at the top, so the snapshot source works even without yfinance.
+    import yfinance
+
+    info = yfinance.Ticker(ticker).info
+    return {"share_price": info.get("currentPrice"), "beta": info.get("beta")}
+
+
+def live_source(ticker, fetch_quote=fetch_yahoo_quote):
+    """Return Adobe's figures with today's share price and beta from Yahoo Finance.
+
+    Everything else (the 10-K figures, risk-free rate, equity risk premium, peers) still
+    comes from the snapshot. Stops with a plain error if Yahoo cannot be reached or does not
+    give a usable price or beta. `fetch_quote` can be swapped, which is how the tests run
+    without the internet.
+    """
+    package = snapshot_source(ticker)
+    try:
+        quote = fetch_quote(ticker)
+    except Exception as error:      # Yahoo can fail in many ways; the reader needs one clear message
+        raise ValueError("Could not get live figures from Yahoo Finance: %s" % error) from error
+
+    price = quote.get("share_price")
+    if price is None or price <= 0:
+        raise ValueError("Yahoo Finance did not give a usable share price for %s." % ticker)
+    beta = quote.get("beta")
+    if beta is None:
+        raise ValueError("Yahoo Finance did not give a beta for %s." % ticker)
+
+    package["share_price"] = price
+    package["beta"] = beta
+    return package
+
+
+# ---------------------------------------------------------------------------
 # Choosing a source and fetching
 # ---------------------------------------------------------------------------
 
@@ -91,6 +134,7 @@ def snapshot_source(ticker):
 # then add it here under a name. Nothing else needs to change.
 SOURCES = {
     "snapshot": snapshot_source,
+    "live": live_source,
 }
 
 DEFAULT_SOURCE = "snapshot"

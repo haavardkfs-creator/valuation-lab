@@ -246,3 +246,19 @@ at least), the default-deriving functions belong in `valuation.py` with tests, a
 should warn that a DCF suits stable cash-generating companies and is a poor fit for banks,
 loss-making and early-stage ones. Adobe keeps its hand-chosen assumptions, because those
 are the Excel model's. Nothing is built yet; this only records the decision.
+
+## 2026-11-06 — The live data source: yfinance for share price and beta, not yet switched on
+
+`data.py` gets a second source, `live_source`, registered as `"live"` in `SOURCES`. It asks
+Yahoo Finance for the current share price and beta and takes every other figure from the
+snapshot, so the package stays complete and `valuation.py` and `app.py` need no change. New
+dependency: `yfinance==1.8.0`, pinned, agreed with Haavard first. It is a free, unofficial
+wrapper around Yahoo Finance, the same site the snapshot already cites for these two
+numbers; the cost is that Yahoo does not support it, so it can break or be rate-limited
+without warning. Because of that, the default source stays `"snapshot"` and the app is not
+switched over in this pull request: that is a separate step, with a fallback to the snapshot
+if Yahoo fails, so the page only changes after the source has been reviewed. The import of
+`yfinance` sits inside the one function that touches the internet, and the tests feed in
+fake Yahoo replies instead, so CI never depends on Yahoo being up. A missing,
+zero or negative price, or a missing beta, stops with a plain error rather than flowing into
+the DCF. No new files.
