@@ -67,3 +67,53 @@ def test_assumptions_and_snapshot_together_give_the_excel_price():
         terminal_growth_rate=a.TERMINAL_GROWTH_RATE,
     )
     assert result["implied_share_price"] == pytest.approx(305.60, abs=0.005)   # valuation sheet
+
+
+# ---------------------------------------------------------------------------
+# Slider ranges (Phase 5). Not Excel cells; they check the ranges are sensible.
+# ---------------------------------------------------------------------------
+
+def test_every_slider_contains_its_base_case_starting_point():
+    assert a.GROWTH_SHIFT_MIN <= 0 <= a.GROWTH_SHIFT_MAX          # shift of 0 = base case
+    assert a.MARGIN_SHIFT_MIN <= 0 <= a.MARGIN_SHIFT_MAX
+    assert a.TERMINAL_GROWTH_MIN <= a.TERMINAL_GROWTH_RATE <= a.TERMINAL_GROWTH_MAX
+
+
+def test_every_slider_has_a_positive_step_smaller_than_its_range():
+    for low, high, step in (
+        (a.GROWTH_SHIFT_MIN, a.GROWTH_SHIFT_MAX, a.GROWTH_SHIFT_STEP),
+        (a.MARGIN_SHIFT_MIN, a.MARGIN_SHIFT_MAX, a.MARGIN_SHIFT_STEP),
+        (a.TERMINAL_GROWTH_MIN, a.TERMINAL_GROWTH_MAX, a.TERMINAL_GROWTH_STEP),
+    ):
+        assert 0 < step < high - low
+
+
+def test_terminal_growth_slider_stays_well_below_the_wacc():
+    wacc_excel = 0.10926631869756551        # WACC, exact value from the Excel model
+    assert a.TERMINAL_GROWTH_MAX < wacc_excel / 2
+
+
+def test_the_most_extreme_sliders_still_give_a_price():
+    company = data.get_company_data("ADBE")
+    for growth_shift in (a.GROWTH_SHIFT_MIN, a.GROWTH_SHIFT_MAX):
+        for margin_shift in (a.MARGIN_SHIFT_MIN, a.MARGIN_SHIFT_MAX):
+            for terminal_growth in (a.TERMINAL_GROWTH_MIN, a.TERMINAL_GROWTH_MAX):
+                result = v.run_full_dcf(
+                    base_revenue=company["revenue"],
+                    growth_rates=v.shift_rates(a.GROWTH_RATES, growth_shift),
+                    operating_margins=v.shift_rates(a.OPERATING_MARGINS, margin_shift),
+                    tax_rate=a.TAX_RATE,
+                    da_pcts=a.DA_PCTS,
+                    capex_pcts=a.CAPEX_PCTS,
+                    wc_pcts=a.WC_PCTS,
+                    risk_free_rate=company["risk_free_rate"],
+                    beta=company["beta"],
+                    equity_risk_premium=company["equity_risk_premium"],
+                    pre_tax_cost_of_debt=company["pre_tax_cost_of_debt"],
+                    share_price=company["share_price"],
+                    shares=company["shares"],
+                    debt=company["debt"],
+                    cash_and_investments=company["cash_and_investments"],
+                    terminal_growth_rate=terminal_growth,
+                )
+                assert result["implied_share_price"] > 0

@@ -116,3 +116,19 @@ because it is maths and `app.py` does not compute (guard rail 5). It is its own 
 request ahead of the sliders. Its tests are worked out by hand, not copied from an Excel
 cell, because the Excel model has no shift; the one Excel-linked test shows that a shift of
 0 still gives $305.60. No new files.
+
+## 2026-11-05 — Phase 5: three sliders in the sidebar, ranges in assumptions.py
+
+`app.py` gets three sidebar sliders: a growth shift and a margin shift (each moves every
+forecast year by the same amount, -5 to +5 percentage points in steps of 0.5) and terminal
+growth (0% to 4% in steps of 0.25). All three start at the base case, so the page still
+opens at $305.60. The ranges are named constants in `assumptions.py` with a comment
+(guard rail 6), checked by four new tests in `test_assumptions.py`, including one that runs
+the DCF at all eight extreme corners to prove it always returns a positive price. Terminal
+growth stops at 4% because the Gordon growth formula needs it to stay well below the WACC
+(10.93%) and long-run growth above the economy's is not realistic. The sliders hold plain
+decimals and Streamlit's own `"percent"` display format shows them as percentages, so
+`app.py` does no ×100 maths. The ranges are my proposal; they are Haavard's to change.
+The multiples do not move with the sliders, on purpose: they come from peers' multiples and
+Adobe's reported figures, not from the forecast. No new files. Not yet built: a WACC slider
+(needs an override in `valuation.py`), the heatmap, the charts and the explanation panels.
