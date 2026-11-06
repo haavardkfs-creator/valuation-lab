@@ -45,14 +45,17 @@
   section. Merged and live.
 - Done: Phase 6 — README rewritten with the live link (https://valuation-l3b.streamlit.app),
   local-run steps and what is planned. Merged. Phases 0-6 are complete.
-- Done (in the open pull request): the live data source, step 1 — `live_source` in
-  `data.py` takes today's share price and beta from Yahoo Finance (`yfinance==1.8.0`,
-  pinned) and everything else from the snapshot. Registered as `"live"` in `SOURCES`; the
-  app still uses the snapshot. Twelve new tests use fake Yahoo replies, never the internet;
-  161 tests pass.
-- Next: switch the app to the live source, with a fallback to the snapshot if Yahoo fails
-  (its own pull request, so the page only changes once the source has been reviewed). Other
-  candidates: the optional Phase 7 (saving via Supabase), tidying the old placeholder text.
+- Done: the live data source, step 1 — `live_source` in `data.py` takes today's share price
+  and beta from Yahoo Finance (`yfinance==1.8.0`, pinned) and everything else from the
+  snapshot. Registered as `"live"` in `SOURCES`. Twelve tests use fake Yahoo replies, never
+  the internet. Merged.
+- Done (in the open pull request): the live data source, step 2 — the app now uses it.
+  `get_company_data_with_fallback` in `data.py` tries live and falls back to the snapshot;
+  `app.py` remembers the answer for 15 minutes and shows a grey line (live) or a yellow
+  warning (fell back) under the title. The page no longer shows exactly $305.60 at the
+  default sliders, on purpose (see decisions). Five new tests; 166 tests pass.
+- Next: Haavard's call. Candidates: the optional Phase 7 (saving via Supabase), tidying the
+  old placeholder text, or more live figures so other tickers can be valued.
 - Open:
   - Decided, not built: for a company other than Adobe, the forecast assumptions start from
     that company's own last reported year (see `docs/decisions.md`, 2026-11-06). The data

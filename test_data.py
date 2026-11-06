@@ -186,6 +186,51 @@ def test_the_default_source_is_still_the_snapshot():
 
 
 # ---------------------------------------------------------------------------
+# The fallback: live first, snapshot if live fails
+# ---------------------------------------------------------------------------
+
+def test_the_preferred_and_fallback_sources_both_exist():
+    assert data.PREFERRED_SOURCE in data.SOURCES
+    assert data.FALLBACK_SOURCE in data.SOURCES
+
+
+def test_fallback_uses_the_live_source_when_it_works(monkeypatch):
+    monkeypatch.setattr("yfinance.Ticker", FakeYahooTicker)
+    package, source_used = data.get_company_data_with_fallback("ADBE")
+    assert source_used == "live"
+    assert package["share_price"] == 240.74
+    assert package["beta"] == 1.383
+
+
+def test_fallback_uses_the_snapshot_when_yahoo_cannot_be_reached(monkeypatch):
+    class BrokenTicker:
+        def __init__(self, ticker):
+            raise ConnectionError("no internet")
+
+    monkeypatch.setattr("yfinance.Ticker", BrokenTicker)
+    package, source_used = data.get_company_data_with_fallback("ADBE")
+    assert source_used == "snapshot"
+    assert package == EXPECTED_SNAPSHOT
+
+
+def test_fallback_uses_the_snapshot_when_yahoo_gives_nothing_usable(monkeypatch):
+    class EmptyTicker:
+        def __init__(self, ticker):
+            self.info = {}
+
+    monkeypatch.setattr("yfinance.Ticker", EmptyTicker)
+    package, source_used = data.get_company_data_with_fallback("ADBE")
+    assert source_used == "snapshot"
+    assert package["share_price"] == 251.47
+
+
+def test_fallback_does_not_hide_a_company_neither_source_has(monkeypatch):
+    monkeypatch.setattr("yfinance.Ticker", FakeYahooTicker)
+    with pytest.raises(ValueError, match="only has Adobe"):
+        data.get_company_data_with_fallback("MSFT")
+
+
+# ---------------------------------------------------------------------------
 # The whole chain: data.py -> valuation.py gives the Excel answers
 # ---------------------------------------------------------------------------
 

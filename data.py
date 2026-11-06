@@ -162,3 +162,21 @@ def get_company_data(ticker, source=DEFAULT_SOURCE):
     package = SOURCES[source](ticker.upper())
     check_package(package)
     return package
+
+
+# The page tries the preferred source first and falls back to the other if it fails.
+PREFERRED_SOURCE = "live"
+FALLBACK_SOURCE = "snapshot"
+
+
+def get_company_data_with_fallback(ticker):
+    """Fetch a company's figures from the live source, or from the snapshot if the live
+    source fails.
+
+    Returns two things: the package of figures, and the name of the source that supplied it,
+    so the page can tell the reader where the numbers came from.
+    """
+    try:
+        return get_company_data(ticker, source=PREFERRED_SOURCE), PREFERRED_SOURCE
+    except ValueError:      # live_source turns every Yahoo failure into a ValueError
+        return get_company_data(ticker, source=FALLBACK_SOURCE), FALLBACK_SOURCE
