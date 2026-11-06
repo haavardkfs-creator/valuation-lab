@@ -60,6 +60,16 @@ def free_cash_flows(revenues, operating_margins, tax_rate, da_pcts, capex_pcts, 
     ]
 
 
+def shift_rates(rates, shift):
+    """Move every year's rate up or down by the same amount, for example +0.01 turns
+    9% growth into 10%.
+
+    Returns a new list and leaves the original untouched. A shift of 0 gives back the same
+    numbers.
+    """
+    return [rate + shift for rate in rates]
+
+
 # ---------------------------------------------------------------------------
 # Discount rate (docs/model.md: "Discount rate (WACC)")
 # ---------------------------------------------------------------------------
