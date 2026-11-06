@@ -652,3 +652,11 @@ def test_a_company_with_no_debt_gets_a_zero_cost_of_debt_that_does_not_move_the_
 def test_estimated_cost_of_debt_refuses_a_negative_amount(interest_expense, debt):
     with pytest.raises(ValueError, match="must both be positive"):
         v.estimate_pre_tax_cost_of_debt(interest_expense, debt)
+
+
+def test_financial_debt_matches_wacc_c22():
+    assert v.financial_debt(0, 6210) == 6210                  # Inputs G47 (0) + G48 (6,210)
+
+
+def test_financial_debt_adds_the_two_lines():
+    assert v.financial_debt(9227, 31067) == 40294

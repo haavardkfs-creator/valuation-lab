@@ -172,6 +172,13 @@ def enterprise_value(pv_of_forecast, pv_of_terminal_value):
 # From enterprise value to a share price
 # ---------------------------------------------------------------------------
 
+def financial_debt(current_debt, long_term_debt):
+    """Add the current portion of debt to long-term debt to get financial debt, with
+    leases left out (docs/model.md: "Discount rate (WACC)").
+    """
+    return current_debt + long_term_debt
+
+
 def net_debt(debt, cash_and_investments):
     """Subtract cash and investments from debt; a negative answer means the company has
     more cash than debt.
