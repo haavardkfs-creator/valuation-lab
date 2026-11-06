@@ -73,34 +73,34 @@
   the package; the 10-K cost of debt and the peer multiples are `OPTIONAL_FIELDS`;
   `valuation.financial_debt` adds current and long-term debt; the risk-free rate and equity
   risk premium are named constants dated 1 Nov 2026. Merged.
-- Done (in the open pull request): the ticker box. A "Company ticker" box in the sidebar
-  (opens on ADBE). Adobe is unchanged. Any other company gets the starting point from its own
-  last year, the estimated cost of debt, numbered years ("Year 1-5"), no peer multiples, and a
-  yellow "starting point, not a forecast" warning. A ticker Yahoo does not know, a company with
-  no pre-tax profit, or a WACC at or below terminal growth shows a plain red error and the
-  footer. New `test_app.py` (14 tests) runs the page with fake Yahoo data. 230 tests pass.
-  Run for real on Adobe, Microsoft and a nonsense ticker.
-- Next: Haavard's call. Options: look at the Microsoft result below and decide whether the
-  starting point needs a capex slider or a fade, a way to choose peers so other companies get
-  multiples, or the optional Phase 7 (saving via Supabase).
+- Done: the ticker box. A "Company ticker" box in the sidebar (opens on ADBE). Adobe is
+  unchanged. Any other company gets the starting point from its own last year, the estimated
+  cost of debt, numbered years ("Year 1-5"), no peer multiples, and a yellow "starting point,
+  not a forecast" warning. A ticker Yahoo does not know, a company with no pre-tax profit, or a
+  WACC at or below terminal growth shows a plain red error and the footer. `test_app.py` runs
+  the page with fake Yahoo data. Merged and live.
+- Done (in the open pull request): capex fades. Haavard changed row 21 of the `starting point`
+  sheet and added a worked example (rows 29-32: capex 35%, D&A 12%, fading to 12%). In Python,
+  `fade_capex_pcts` steps capex down to the D&A level in equal steps, and never pushes it up
+  (Adobe's 0.75% against D&A of 3.44% stays flat); `starting_point_assumptions` uses it. 5 new
+  tests against the sheet's cells; 235 tests pass. On real data Microsoft moves from a DCF price
+  79% below the market to 48% below.
+- Next: Haavard's call. Two problems the real companies showed (see Open): working capital held
+  forever, and companies without an interest expense line. Other options: a way to choose peers
+  so other companies get multiples, or the optional Phase 7 (saving via Supabase).
 - Open:
-  - The starting point is mechanical, and Microsoft shows it. On 6 Nov 2026 the page gives
-    Microsoft a DCF price of $109.88 against a market price of $532.49 (-79%). Last year its
-    capex was about 35% of revenue (against D&A of about 12%), and the starting point holds
-    that for ever, so free cash flow stays small. That is the rule working as designed, not
-    an error, and it is why the page says "not a forecast". Ideas, none built: a capex
-    slider, or fading capex towards D&A the way growth fades.
-  - The interest expense shortcut can overstate the cost of debt. For Microsoft on 6 Nov
-    2026 it gives 7.6% (interest 3,051 / debt 40,294), because Yahoo's interest expense may
-    include interest on leases while the debt figure leaves leases out. Adobe gives 4.24%
-    against 4.16% from its notes. The page should show the estimate so it can be questioned.
-  - A company with no long-term debt line on Yahoo (a debt-free one) stops with an error,
-    because a missing long-term debt line is not guessed as zero. Decide later whether to
-    allow debt-free companies.
-  - Yahoo's "Change In Working Capital" for Adobe is 605, the same as the six lines Haavard
-    adds up on the `Projection` sheet (checked 6 Nov 2026), and the `"yahoo"` source uses it.
-    Yahoo's share count (389.2m) is more recent than the 10-K year-end count the model uses
-    for Adobe (413m).
+  - Working capital held at last year's level can sink a company. Coca-Cola on 6 Nov 2026:
+    cash from working capital was -7,208 (-15% of revenue), probably a one-off, and the starting
+    point holds that outflow for ever; with that, the DCF price is $25 against a market price of
+    $96 (-74%). Haavard chose to hold working capital (decisions, 6 Nov); this is the downside
+    of that choice. Options, none built: fade it to zero like capex fades, or cap it.
+  - Apple cannot be valued: Yahoo has no interest expense at all for it (every interest line
+    is empty), so the cost of debt cannot be estimated and the page shows a plain error. Needs
+    a decision: a fallback cost of debt (for example the risk-free rate plus a spread), or
+    leave it as an honest error.
+  - Even after the capex fade, Microsoft's DCF price is 48% below its market price ($278 vs
+    $532, 6 Nov 2026). A starting point from one year is not a forecast, and a 17.8% grower
+    fading to 2.5% over five years is a conservative path for it.
   - A starting point is mechanical. It does not know about one-off years, margins that are
     still rising or falling, or a company whose last year was unusual. The page must say so.
   - After a deploy that changes a file the app imports (for example `assumptions.py`), the
