@@ -8,10 +8,11 @@ result. Every metric is explained in plain language.
 This is a learning project, not investment advice.
 
 ## Status
-
-Phase 0: project skeleton. No valuation or app code exists yet. See
-[docs/status.md](docs/status.md) for what's done and what's next.
-
+finished with phase 5. The app values ADBE only, from a frozen snapshot of the figures from the excel model. 
+It runs a DCF (implied price $305.60 against a market price of $251.47) and a peer multiples comparison (EV/Sales, EV/EBITDA and P/E prices, with a middle value of $420.52).
+You can change the assumptions with sliders (revenue growth, operating margin and terminal growth) and with an optional “Set the WACC myself” control.
+It shows a sensitivity heatmap (price by WACC and terminal growth), two charts (the forecast, and what the company is worth today) and “What do these terms mean?” boxes that come from your glossary.
+It has a footer saying it’s a learning project, not investment advice.
 ## Running it locally
 
 Nothing to run yet. Once `app.py` exists (Phase 4 onward):
