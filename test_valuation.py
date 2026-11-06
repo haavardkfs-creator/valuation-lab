@@ -608,14 +608,23 @@ def test_fade_growth_rates_need_at_least_one_year():
         v.fade_growth_rates(0.10, 0.025, 0)
 
 
-def test_starting_point_assumptions_hold_the_ratios_flat_like_the_sheet():
+WORKING_CAPITAL_FADE = [                        # starting point D22:H22
+    0.02036265724262695,
+    0.015271992931970211,
+    0.010181328621313473,
+    0.0050906643106567355,
+    0.0,
+]
+
+
+def test_starting_point_assumptions_match_the_sheets_rows_17_to_22():
     result = v.starting_point_assumptions(STARTING_POINT_RATIOS, TERMINAL_GROWTH_RATE, 5)
     assert result["growth_rates"] == [close(expected) for expected in STARTING_POINT_GROWTH]
     assert result["operating_margins"] == [close(0.36627540073204595)] * 5     # starting point D18:H18
     assert result["tax_rate"] == close(0.18365010304556903)                    # D19:H19
     assert result["da_pcts"] == [close(0.034414573604274475)] * 5              # D20:H20
     assert result["capex_pcts"] == [close(0.007530817451302116)] * 5           # D21:H21
-    assert result["wc_pcts"] == [close(0.025453321553283687)] * 5              # D22:H22
+    assert result["wc_pcts"] == [pytest.approx(x, abs=1e-12) for x in WORKING_CAPITAL_FADE]     # D22:H22
 
 
 def test_starting_point_assumptions_fit_straight_into_run_full_dcf():
@@ -689,16 +698,39 @@ def test_capex_fade_reaches_da_in_the_last_year_whatever_the_length():
         assert v.fade_capex_pcts(0.40, 0.10, years)[-1] == close(0.10)
 
 
-def test_starting_point_fades_a_high_capex_but_holds_the_other_ratios():
+def test_starting_point_fades_a_high_capex_and_still_holds_margin_tax_and_da():
     heavy = dict(STARTING_POINT_RATIOS, capex_pct=0.35, da_pct=0.12)         # the sheet's example
     result = v.starting_point_assumptions(heavy, TERMINAL_GROWTH_RATE, 5)
     assert result["capex_pcts"] == [close(x) for x in CAPEX_FADE_EXAMPLE]
     assert result["da_pcts"] == [close(0.12)] * 5                            # D&A is still held flat
     assert result["operating_margins"] == [close(heavy["operating_margin"])] * 5
-    assert result["wc_pcts"] == [close(heavy["wc_pct"])] * 5
+    assert result["wc_pcts"] == [pytest.approx(x, abs=1e-12) for x in WORKING_CAPITAL_FADE]
 
 
 def test_convert_currency_multiplies_by_the_rate():
     assert v.convert_currency(1000, 0.10564258) == close(105.64258)     # 1,000 NOK at a rate of 0.1056
     assert v.convert_currency(1000, 1.0) == 1000                        # dollars stay dollars
     assert v.convert_currency(-50, 0.5) == -25                          # signs are kept
+
+
+# ---------------------------------------------------------------------------
+# Working capital fades to zero (starting point sheet, row 22)
+# ---------------------------------------------------------------------------
+
+def test_working_capital_fade_matches_the_starting_point_sheet():
+    rates = v.fade_working_capital_pcts(STARTING_POINT_RATIOS["wc_pct"], 5)
+    assert rates == [pytest.approx(x, abs=1e-12) for x in WORKING_CAPITAL_FADE]     # D22:H22
+
+
+def test_an_inflow_and_an_outflow_both_fade_to_zero():
+    assert v.fade_working_capital_pcts(0.10, 5) == [close(0.08), close(0.06), close(0.04), close(0.02), pytest.approx(0, abs=1e-12)]
+    assert v.fade_working_capital_pcts(-0.15, 5) == [close(-0.12), close(-0.09), close(-0.06), close(-0.03), pytest.approx(0, abs=1e-12)]
+
+
+def test_working_capital_of_zero_stays_zero():
+    assert v.fade_working_capital_pcts(0.0, 5) == [0.0] * 5
+
+
+def test_working_capital_reaches_zero_in_the_last_year_whatever_the_length():
+    for years in (1, 3, 10):
+        assert v.fade_working_capital_pcts(-0.15, years)[-1] == pytest.approx(0, abs=1e-12)

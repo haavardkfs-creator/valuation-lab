@@ -457,10 +457,21 @@ def fade_capex_pcts(last_year_capex_pct, da_pct, years):
     return fade_growth_rates(last_year_capex_pct, target, years)
 
 
+def fade_working_capital_pcts(last_year_wc_pct, years):
+    """Step cash from working capital, as a share of revenue, from last year's level to zero in
+    equal steps, reaching zero in the last forecast year. A company cannot keep gaining or
+    losing a large share of its revenue in working capital year after year, whether last
+    year's figure was an inflow or an outflow.
+
+    Returns a list with one working capital % per forecast year.
+    """
+    return fade_growth_rates(last_year_wc_pct, 0.0, years)
+
+
 def starting_point_assumptions(ratios, terminal_growth_rate, years):
     """Turn last year's ratios into a starting forecast: growth fades to the terminal rate,
-    capex fades down to the D&A level if it was above it, and every other ratio stays at
-    last year's level.
+    capex fades down to the D&A level if it was above it, working capital fades to zero, and
+    the operating margin, tax rate and D&A % stay at last year's level.
 
     Returns the assumptions in the same shapes run_full_dcf takes, so they can be passed
     straight in. This is a starting point, not a forecast.
@@ -471,5 +482,5 @@ def starting_point_assumptions(ratios, terminal_growth_rate, years):
         "tax_rate": ratios["tax_rate"],
         "da_pcts": [ratios["da_pct"]] * years,
         "capex_pcts": fade_capex_pcts(ratios["capex_pct"], ratios["da_pct"], years),
-        "wc_pcts": [ratios["wc_pct"]] * years,
+        "wc_pcts": fade_working_capital_pcts(ratios["wc_pct"], years),
     }
