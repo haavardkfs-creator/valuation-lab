@@ -21,12 +21,13 @@
   at https://valuation-l3b.streamlit.app. Every merge to `main` now goes live there.
 - Done: Phase 5, step 1 — `shift_rates` in `valuation.py` moves every year of a growth or
   margin list by the same amount, with five tests. Merged.
-- Done (in the open pull request): Phase 5, step 2 — three sidebar sliders in `app.py`
-  (growth shift, margin shift, terminal growth), ranges in `assumptions.py`, four range
-  tests. Checked in real Streamlit: base case $305.60, growth +1 point gives $318.18.
-- Next: Phase 5, as separate pull requests: a WACC slider (needs an override in
-  `valuation.py`), the sensitivity heatmap (exact WACC, see `docs/decisions.md`), the
-  charts, and the plain-language panel under every metric.
+- Done: Phase 5, step 2 — three sidebar sliders in `app.py` (growth shift, margin shift,
+  terminal growth), ranges in `assumptions.py`, four range tests. Merged and live.
+- Done (in the open pull request): Phase 5, step 3 — `run_full_dcf` accepts an optional
+  `wacc_override`, checked against all 25 cells of the workbook's sensitivity table.
+- Next: Phase 5, as separate pull requests: the sensitivity heatmap (exact WACC, see
+  `docs/decisions.md`), a WACC slider, the charts, and the plain-language panel under every
+  metric.
 - Open:
   - `README.md` still says "Phase 0 ... No valuation or app code exists yet" and "Nothing to
     run yet". It gets the live link and a rewrite in Phase 6.

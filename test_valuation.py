@@ -363,3 +363,93 @@ def test_higher_growth_and_margins_give_a_higher_price():
     assert price_with(0, 0.01) > base
     assert price_with(-0.01, 0) < base
     assert price_with(0, -0.01) < base
+
+
+# ---------------------------------------------------------------------------
+# Using a WACC of your own (new in Phase 5): the workbook's sensitivity table
+# ---------------------------------------------------------------------------
+
+# valuation sheet D34:H38. Rows are the WACC in column C (rounded, as typed in the workbook),
+# columns are the terminal growth rate in row 33. Each cell is the implied share price.
+SENSITIVITY_TABLE = {
+    # WACC 9.93% (valuation C34)
+    (0.0993, 0.015): 315.66445331601653,    # D34
+    (0.0993, 0.02): 330.75181395646274,    # E34
+    (0.0993, 0.025): 347.8697749522851,    # F34
+    (0.0993, 0.03): 367.45786018992914,    # G34
+    (0.0993, 0.035): 390.09230394042595,    # H34
+    # WACC 10.43% (valuation C35)
+    (0.1043, 0.015): 297.3577483674705,    # D35
+    (0.1043, 0.02): 310.5145892756557,    # E35
+    (0.1043, 0.025): 325.3305526186687,    # F35
+    (0.1043, 0.03): 342.14058908994735,    # G35
+    (0.1043, 0.035): 361.3763162497221,    # H35
+    # WACC 10.93% (valuation C36)
+    (0.1093, 0.015): 281.0039574367139,    # D36
+    (0.1093, 0.02): 292.55496163903973,    # E36
+    (0.1093, 0.025): 305.47619172538987,    # F36
+    (0.1093, 0.03): 320.02683291972875,    # G36
+    (0.1093, 0.035): 336.5358376664685,    # H36
+    # WACC 11.43% (valuation C37)
+    (0.1143, 0.015): 266.3078209079082,    # D37
+    (0.1143, 0.02): 276.51038853451223,    # E37
+    (0.1143, 0.025): 287.85546093453206,    # F37
+    (0.1143, 0.03): 300.5463307722768,    # G37
+    (0.1143, 0.035): 314.83756250633235,    # H37
+    # WACC 11.93% (valuation C38)
+    (0.1193, 0.015): 253.03070350815184,    # D38
+    (0.1193, 0.02): 262.0913539028656,    # E38
+    (0.1193, 0.025): 272.11283678906545,    # F38
+    (0.1193, 0.03): 283.25654620227533,    # G38
+    (0.1193, 0.035): 295.72216657790625,    # H38
+}
+
+
+def run_base_case_with_wacc(wacc_override, terminal_growth_rate=TERMINAL_GROWTH_RATE):
+    return v.run_full_dcf(
+        base_revenue=BASE_REVENUE,
+        growth_rates=GROWTH_RATES,
+        operating_margins=OPERATING_MARGINS,
+        tax_rate=TAX_RATE,
+        da_pcts=DA_PCTS,
+        capex_pcts=CAPEX_PCTS,
+        wc_pcts=WC_PCTS,
+        risk_free_rate=RISK_FREE_RATE,
+        beta=BETA,
+        equity_risk_premium=EQUITY_RISK_PREMIUM,
+        pre_tax_cost_of_debt=PRE_TAX_COST_OF_DEBT,
+        share_price=SHARE_PRICE,
+        shares=SHARES,
+        debt=DEBT,
+        cash_and_investments=CASH_AND_INVESTMENTS,
+        terminal_growth_rate=terminal_growth_rate,
+        wacc_override=wacc_override,
+    )
+
+
+@pytest.mark.parametrize("wacc_and_growth", SENSITIVITY_TABLE)
+def test_wacc_override_matches_every_cell_of_the_excel_sensitivity_table(wacc_and_growth):
+    wacc_rate, growth_rate = wacc_and_growth
+    result = run_base_case_with_wacc(wacc_rate, growth_rate)
+    assert result["implied_share_price"] == close(SENSITIVITY_TABLE[wacc_and_growth])
+
+
+def test_wacc_override_is_the_rate_reported_back():
+    assert run_base_case_with_wacc(0.1043)["wacc"] == 0.1043
+
+
+def test_no_wacc_override_still_gives_the_excel_price_and_wacc():
+    result = run_base_case_with_wacc(None)
+    assert result["wacc"] == close(0.10926631869756551)
+    assert result["implied_share_price"] == close(305.60201673218938)
+
+
+def test_overriding_with_the_exact_wacc_gives_the_same_price_as_not_overriding():
+    exact_wacc = run_base_case()["wacc"]
+    assert run_base_case_with_wacc(exact_wacc)["implied_share_price"] == close(
+        run_base_case()["implied_share_price"]
+    )
+
+
+def test_a_higher_wacc_gives_a_lower_price():
+    assert run_base_case_with_wacc(0.12)["implied_share_price"] < run_base_case_with_wacc(0.10)["implied_share_price"]

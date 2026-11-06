@@ -132,3 +132,15 @@ decimals and Streamlit's own `"percent"` display format shows them as percentage
 The multiples do not move with the sliders, on purpose: they come from peers' multiples and
 Adobe's reported figures, not from the forecast. No new files. Not yet built: a WACC slider
 (needs an override in `valuation.py`), the heatmap, the charts and the explanation panels.
+
+## 2026-11-05 — run_full_dcf can take a WACC of its own
+
+`run_full_dcf` gets one optional input, `wacc_override`. Left out, nothing changes: WACC is
+worked out from the cost of equity and cost of debt as before, and the base case is still
+$305.60. When given, that rate is used as the discount rate instead, and the returned
+`"wacc"` is the rate actually used. Reason: the Phase 5 heatmap needs the price at other
+WACCs, and a later WACC slider needs the same thing, and a WACC that is only ever calculated
+cannot be moved. The change is one `if` and no new function. It is checked against all 25
+cells of the workbook's sensitivity table (valuation D34:H38), which uses the rounded WACCs
+9.93% to 11.93%; that is only to prove the override matches Excel. The heatmap itself will
+still be centred on the exact WACC (see the decision above). No new files.
