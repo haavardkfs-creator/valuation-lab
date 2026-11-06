@@ -22,6 +22,11 @@ EXPECTED_SNAPSHOT = {
     "ebit": 8706,                           # Multiples C18
     "depreciation_and_amortisation": 818,   # Multiples C19
     "net_income": 7130,                     # Multiples C21
+    "prior_year_revenue": 21505,            # Inputs F11
+    "income_tax": 1604,                     # Inputs G25
+    "income_before_tax": 8734,              # Inputs G24
+    "capex": 179,                           # Projection G14 (Inputs G41 is -179; stored as spending)
+    "cash_from_working_capital": 605,       # Projection G16 (sum of Inputs G34:G39)
     "debt": 6210,                           # WACC C22
     "cash_and_investments": 6595,           # valuation C22
     "shares": 413,                          # WACC C20
@@ -280,3 +285,40 @@ def test_data_into_the_multiples_gives_the_excel_prices():
         base.close(420.51859564164647),     # H28
         base.close(463.53631961259072),     # H29
     ]
+
+
+# ---------------------------------------------------------------------------
+# The whole chain for another company's starting point: data.py -> valuation.py
+# gives the "starting point" sheet's numbers
+# ---------------------------------------------------------------------------
+
+def test_data_into_last_year_ratios_gives_the_starting_point_sheet_ratios():
+    d = data.get_company_data("ADBE")
+    ratios = v.last_year_ratios(
+        revenue=d["revenue"],
+        prior_revenue=d["prior_year_revenue"],
+        ebit=d["ebit"],
+        income_tax=d["income_tax"],
+        income_before_tax=d["income_before_tax"],
+        depreciation_and_amortisation=d["depreciation_and_amortisation"],
+        capex=d["capex"],
+        cash_from_working_capital=d["cash_from_working_capital"],
+    )
+    for name, expected in base.STARTING_POINT_RATIOS.items():       # starting point C5:C10
+        assert ratios[name] == base.close(expected)
+
+
+def test_data_into_the_starting_point_gives_the_sheets_growth_fade():
+    d = data.get_company_data("ADBE")
+    ratios = v.last_year_ratios(
+        revenue=d["revenue"],
+        prior_revenue=d["prior_year_revenue"],
+        ebit=d["ebit"],
+        income_tax=d["income_tax"],
+        income_before_tax=d["income_before_tax"],
+        depreciation_and_amortisation=d["depreciation_and_amortisation"],
+        capex=d["capex"],
+        cash_from_working_capital=d["cash_from_working_capital"],
+    )
+    start = v.starting_point_assumptions(ratios, base.TERMINAL_GROWTH_RATE, 5)
+    assert start["growth_rates"] == [base.close(x) for x in base.STARTING_POINT_GROWTH]     # D17:H17

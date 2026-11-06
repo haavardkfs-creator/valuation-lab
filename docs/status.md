@@ -58,20 +58,27 @@
   write-up in `docs/model.md` ("Starting point for other companies"). It takes Adobe's FY2025
   ratios from `Projection`, fades revenue growth in a straight line to terminal growth over
   five years, and holds the other five ratios at last year's level. Merged.
-- Done (in the open pull request): the Python for it. `last_year_ratios`,
-  `fade_growth_rates` and `starting_point_assumptions` in `valuation.py`, and
-  `STARTING_POINT_YEARS` in `assumptions.py`, with 19 new tests against the sheet's cells
-  (C5:C10 and D17:H22). 185 tests pass. Nothing calls them yet: `data.py` and `app.py` are
-  unchanged.
-- Next: Haavard's call. The data package for other companies (`data.py`): last year's
-  prior-year revenue, income tax, income before tax, capex and cash from working capital,
-  first for Adobe from the snapshot, then from a live source. After that, a ticker box in the
-  app. Other candidate: the optional Phase 7 (saving via Supabase).
+- Done: the Python for it. `last_year_ratios`, `fade_growth_rates` and
+  `starting_point_assumptions` in `valuation.py`, and `STARTING_POINT_YEARS` in
+  `assumptions.py`, with 19 new tests against the sheet's cells (C5:C10 and D17:H22). Merged.
+- Done (in the open pull request): `data.py`'s package now carries last year's figures:
+  `prior_year_revenue`, `income_tax`, `income_before_tax`, `capex` and
+  `cash_from_working_capital`, filled in for Adobe in the snapshot with their 10-K pages.
+  A new test feeds the snapshot through `last_year_ratios` and expects the `starting point`
+  sheet's C5:C10, and through `starting_point_assumptions` for D17:H17. 192 tests pass.
+  The page is unchanged.
+- Next: Haavard's call. A live source for other companies: these five figures plus revenue,
+  EBIT and D&A from Yahoo's financial statements (new tests with fake replies). After that,
+  a ticker box in the app. Other candidate: the optional Phase 7 (saving via Supabase).
 - Open:
-  - Decided, maths built, not yet used: for a company other than Adobe, the forecast
-    assumptions start from that company's own last reported year (see `docs/decisions.md`,
-    both 2026-11-06 entries). The data package still needs the new fields above, and the
+  - Decided, maths and Adobe data built, not yet used: for a company other than Adobe, the
+    forecast assumptions start from that company's own last reported year (see
+    `docs/decisions.md`, the 2026-11-06 entries). Only Adobe has these figures so far, and the
     page must warn that a DCF suits stable, cash-generating companies.
+  - Yahoo's "working capital" line may not be the same six lines Haavard adds up on the
+    `Projection` sheet (receivables, prepaid expenses, payables, accrued expenses, income
+    taxes payable, deferred revenue). The live source for other companies must check this
+    and say how the two differ before the figures are trusted.
   - A starting point is mechanical. It does not know about one-off years, margins that are
     still rising or falling, or a company whose last year was unusual. The page must say so.
   - After a deploy that changes a file the app imports (for example `assumptions.py`), the
