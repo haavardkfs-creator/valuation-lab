@@ -1,32 +1,60 @@
 # Valuation Lab
 
-A learning project. Type a stock ticker or search for a company, and this app fetches its
-financials, runs a discounted cash flow valuation and a multiples comparison, and lets you
-explore how changing revenue growth, operating margin, WACC and terminal growth changes the
-result. Every metric is explained in plain language.
+A learning project: an interactive valuation of Adobe, built to learn finance and Python
+at the same time. It runs a discounted cash flow (DCF) valuation and a peer multiples
+comparison, lets you change the assumptions and watch the price move, and explains every
+metric in plain language.
+
+**Live app: https://valuation-l3b.streamlit.app**
 
 This is a learning project, not investment advice.
 
-## Status
-finished with phase 5. The app values ADBE only, from a frozen snapshot of the figures from the excel model. 
-It runs a DCF (implied price $305.60 against a market price of $251.47) and a peer multiples comparison (EV/Sales, EV/EBITDA and P/E prices, with a middle value of $420.52).
-You can change the assumptions with sliders (revenue growth, operating margin and terminal growth) and with an optional “Set the WACC myself” control.
-It shows a sensitivity heatmap (price by WACC and terminal growth), two charts (the forecast, and what the company is worth today) and “What do these terms mean?” boxes that come from your glossary.
-It has a footer saying it’s a learning project, not investment advice.
+## What it does today
+
+The app values **Adobe (ADBE)** from a frozen snapshot of the figures in the Excel model
+(dated 4 Nov 2026; sources are in `data.py` and `docs/model.md`). In the base case the DCF
+gives an implied share price of $305.60, against a market price of $251.47.
+
+- **Sliders** change revenue growth, operating margin and terminal growth, and an optional
+  "Set the WACC myself" control replaces the model's own WACC.
+- A **sensitivity heatmap** shows the price at different WACCs and terminal growth rates.
+- **Two charts** show the five-year forecast and what the company is worth today.
+- A **peer multiples comparison** (EV/Sales, EV/EBITDA, P/E) sits beside the DCF.
+- A **"What do these terms mean?" box** under each section explains the terms in plain
+  language, using the wording in `docs/glossary.md`.
+
 ## Running it locally
 
-Nothing to run yet. Once `app.py` exists (Phase 4 onward):
+You need Python 3.12.
 
 ```bash
+python3.12 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 streamlit run app.py
 ```
 
-## Live app
+To run the tests:
 
-Not deployed yet. This section will hold the Streamlit Community Cloud link once Phase 6
-ships.
+```bash
+pytest
+```
 
-## Project layout
+The tests check the Python against the numbers in the Excel model (`excel/valuation-lab.xlsx`),
+so they fail if the two ever drift apart.
 
-See [CLAUDE.md](CLAUDE.md) for the full folder structure and what each file is for.
+## Planned
+
+- A live data source, starting with share price and beta, so you could type a ticker and
+  value companies other than Adobe. Today the app only knows Adobe. For other companies the
+  forecast would start from the company's own last reported year and be shown clearly as a
+  starting point, not a forecast.
+- Optionally, saving a user's assumptions.
+
+## How it is built
+
+All valuation maths lives in `valuation.py`. `data.py` supplies the company figures,
+`assumptions.py` holds the forecast assumptions, `explanations.py` holds the plain-language
+text and `app.py` only draws the page. See [CLAUDE.md](CLAUDE.md) for the full folder
+structure and the rules the project follows, [docs/model.md](docs/model.md) for every
+formula, and [docs/status.md](docs/status.md) for what is done and what is next.

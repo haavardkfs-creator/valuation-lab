@@ -219,3 +219,30 @@ number" box, next to the forecast chart they drive; Peer median and DCF vs multi
 multiples box. `test_explanations.py` already checks each text against the glossary, so it
 covered the new ones with no change. With this, every part of Phase 5 in CLAUDE.md is built:
 sliders, sensitivity heatmap, charts, and a plain-language panel under every metric.
+
+## 2026-11-06 — Phase 6: the README says what the app does today, and the live link goes in
+
+The README is rewritten. It had still described Phase 0 ("No valuation or app code exists
+yet") and promised "type a stock ticker or search for a company", which the app cannot do:
+it values Adobe only, from a frozen snapshot. The new README says that plainly, gives the live
+link (https://valuation-l3b.streamlit.app), lists what the page does, gives the steps to run
+it locally on Python 3.12, and moves the ticker idea and saving under "Planned". Reason: the
+front page of the project should match what exists, especially for anyone reading it as a
+portfolio piece. No new files.
+
+## 2026-11-06 — Design decision for other companies: assumptions start from the company's own last year
+
+The forecast assumptions in `assumptions.py` (growth, margins, tax rate, D&A %, capex %,
+working capital %, terminal growth) are Haavard's judgments for Adobe and would be wrong for
+any other company. For a company other than Adobe the app will derive a starting point from
+that company's own last reported year: hold its operating margin, tax rate, D&A % and capex %
+where they were, and fade revenue growth from last year's rate towards the terminal growth
+rate over the five forecast years. The sliders then adjust it, and the page will say clearly
+that this is a starting point from the last reported year, not a forecast. The other options
+were generic defaults for everyone (a poor fit for most companies) and making the user type
+everything in (it defeats the point of choosing a ticker). Consequences, for when the live data
+source is built: `data.py`'s package must grow (last year's capex, tax and prior-year revenue
+at least), the default-deriving functions belong in `valuation.py` with tests, and the page
+should warn that a DCF suits stable cash-generating companies and is a poor fit for banks,
+loss-making and early-stage ones. Adobe keeps its hand-chosen assumptions, because those
+are the Excel model's. Nothing is built yet; this only records the decision.
