@@ -31,6 +31,11 @@ CHART_LIGHT_BLUE = "#8FB0D1"
 # Guard rail 13: the footer every page of the app must show.
 FOOTER_TEXT = "Valuation Lab is a learning project, not investment advice."
 
+# How long the page remembers Yahoo's answer. Streamlit reruns the whole page on every
+# slider move, so without this each move would ask Yahoo again. 15 minutes is a judgment
+# call agreed with Haavard, not a rule from Yahoo.
+LIVE_DATA_CACHE_SECONDS = 15 * 60
+
 
 def dollars(amount):
     """Write a number as a dollar price with two decimals, for example $305.60."""
@@ -283,15 +288,39 @@ def draw_multiples(multiples):
     draw_explanations("multiples")
 
 
+@st.cache_data(ttl=LIVE_DATA_CACHE_SECONDS, show_spinner=False)
+def load_company(ticker):
+    """Fetch a company's figures (live, or the snapshot if Yahoo fails) and remember them
+    for LIVE_DATA_CACHE_SECONDS, so moving a slider does not ask Yahoo again.
+
+    Returns the package of figures and the name of the source that supplied it.
+    """
+    return data.get_company_data_with_fallback(ticker)
+
+
+def draw_source_note(source_used):
+    """Tell the reader where the share price and beta came from: a quiet line when they are
+    live, a visible warning when the page had to fall back to the frozen snapshot.
+    """
+    if source_used == data.PREFERRED_SOURCE:
+        st.caption("Share price and beta are live from Yahoo Finance.")
+    else:
+        st.warning(
+            "Yahoo Finance could not be reached, so share price and beta come from a "
+            "frozen snapshot."
+        )
+
+
 def draw_page():
     """Draw the whole page: sliders, title, DCF section, charts, heatmap, multiples and footer."""
-    company = data.get_company_data(TICKER)
+    company, source_used = load_company(TICKER)
     growth_shift, margin_shift, terminal_growth_rate, wacc_override = draw_sliders()
     dcf_inputs = build_dcf_inputs(company, growth_shift, margin_shift)
     dcf, multiples = run_valuation(company, dcf_inputs, terminal_growth_rate, wacc_override)
 
     st.title("Valuation Lab")
     st.write(f"{company['company_name']} ({company['ticker']})")
+    draw_source_note(source_used)
     draw_dcf(company, dcf, wacc_override is not None)
     draw_charts(dcf)
     draw_heatmap(company, dcf_inputs, model_wacc(dcf_inputs))

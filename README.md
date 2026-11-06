@@ -11,9 +11,12 @@ This is a learning project, not investment advice.
 
 ## What it does today
 
-The app values **Adobe (ADBE)** from a frozen snapshot of the figures in the Excel model
-(dated 4 Nov 2026; sources are in `data.py` and `docs/model.md`). In the base case the DCF
-gives an implied share price of $305.60, against a market price of $251.47.
+The app values **Adobe (ADBE)**. The share price and beta are live from Yahoo Finance
+(remembered for 15 minutes); if Yahoo cannot be reached, the page says so and uses a frozen
+snapshot instead. Every other figure comes from the snapshot of the Excel model (dated
+4 Nov 2026; sources are in `data.py` and `docs/model.md`). With the snapshot's price and beta
+the base-case DCF gives an implied share price of $305.60, against a market price of $251.47;
+with live figures the result moves a little with Yahoo's beta.
 
 - **Sliders** change revenue growth, operating margin and terminal growth, and an optional
   "Set the WACC myself" control replaces the model's own WACC.
@@ -45,10 +48,10 @@ so they fail if the two ever drift apart.
 
 ## Planned
 
-- A live data source, starting with share price and beta, so you could type a ticker and
-  value companies other than Adobe. Today the app only knows Adobe. For other companies the
-  forecast would start from the company's own last reported year and be shown clearly as a
-  starting point, not a forecast.
+- Live figures beyond share price and beta, so you could type a ticker and value companies
+  other than Adobe. Today the app only knows Adobe. For other companies the forecast would
+  start from the company's own last reported year and be shown clearly as a starting point,
+  not a forecast.
 - Optionally, saving a user's assumptions.
 
 ## How it is built

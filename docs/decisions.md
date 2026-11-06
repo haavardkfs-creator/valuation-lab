@@ -262,3 +262,18 @@ if Yahoo fails, so the page only changes after the source has been reviewed. The
 fake Yahoo replies instead, so CI never depends on Yahoo being up. A missing,
 zero or negative price, or a missing beta, stops with a plain error rather than flowing into
 the DCF. No new files.
+
+## 2026-11-06 — The app switches to the live source, with a snapshot fallback
+
+`app.py` now asks `data.get_company_data_with_fallback`, which tries the `"live"` source
+(Yahoo share price and beta) and uses the `"snapshot"` if that fails, and returns which one
+it used. The fallback lives in `data.py` because it is about where figures come from, not
+maths. The page remembers the answer for 15 minutes (`LIVE_DATA_CACHE_SECONDS` in `app.py`),
+because Streamlit reruns the page on every slider move and each move would otherwise be a
+Yahoo call; the cost is that after one Yahoo failure the page stays on the snapshot until the
+memory expires. A line under the title says where the price and beta came from: a quiet grey
+caption when live, a yellow warning when it fell back. Agreed with Haavard: with live figures
+the page no longer shows the Excel model's $305.60 at the default sliders, because beta
+changes the WACC. This is on purpose. The tests still match Excel to the cent, because they
+run on the snapshot, which stays the default source in `data.py`. Only the fetching is
+covered by tests; how the page looks was checked by running it. No new files.
