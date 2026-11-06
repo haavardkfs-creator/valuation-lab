@@ -1,12 +1,5 @@
 # Glossary
 
-Plain-language explanations of every metric used in this project, written by Haavard as
-each one comes up.
-
-It is empty for now — there's nothing to explain yet until Phase 1's Excel model and
-Phase 2's valuation code introduce real metrics.
-# Glossary
-
 Every metric in this project, explained in plain language. Haavard writes these in his own
 words. Claude checks them for accuracy and says what is wrong, but does not write them for
 him — the point is that each one can be explained out loud in an interview.
