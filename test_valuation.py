@@ -626,3 +626,29 @@ def test_starting_point_assumptions_fit_straight_into_run_full_dcf():
     result = v.run_full_dcf(**dict(BASE_DCF_INPUTS, **assumptions), terminal_growth_rate=TERMINAL_GROWTH_RATE)
     assert result["implied_share_price"] > 0
     assert len(result["revenues"]) == 5
+
+
+# ---------------------------------------------------------------------------
+# Cost of debt for other companies (starting point sheet, rows 24-27)
+# ---------------------------------------------------------------------------
+
+def test_estimated_cost_of_debt_matches_the_starting_point_sheet():
+    # Interest expense 263 (starting point C25) over debt 6,210 (C26) gives C27.
+    assert v.estimate_pre_tax_cost_of_debt(263, 6210) == close(0.04235104669887278)
+
+
+def test_estimated_cost_of_debt_on_simple_numbers():
+    assert v.estimate_pre_tax_cost_of_debt(50, 1000) == close(0.05)
+
+
+def test_a_company_with_no_debt_gets_a_zero_cost_of_debt_that_does_not_move_the_wacc():
+    assert v.estimate_pre_tax_cost_of_debt(0, 0) == 0.0
+    assert v.estimate_pre_tax_cost_of_debt(10, 0) == 0.0
+    # With no debt the WACC is just the cost of equity, whatever cost of debt is passed in.
+    assert v.wacc(100, 50, 0, 0.09, 0.0) == close(0.09)
+
+
+@pytest.mark.parametrize("interest_expense, debt", [(-263, 6210), (263, -6210)])
+def test_estimated_cost_of_debt_refuses_a_negative_amount(interest_expense, debt):
+    with pytest.raises(ValueError, match="must both be positive"):
+        v.estimate_pre_tax_cost_of_debt(interest_expense, debt)

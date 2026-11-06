@@ -25,6 +25,9 @@ htmlcov/
 .DS_Store
 Thumbs.db
 
+# Excel's temporary lock file, created next to a workbook while it is open
+~$*
+
 # Secrets — never commit these
 .streamlit/secrets.toml
 .env

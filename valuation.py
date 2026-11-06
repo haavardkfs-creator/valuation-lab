@@ -88,6 +88,21 @@ def after_tax_cost_of_debt(pre_tax_cost_of_debt, tax_rate):
     return pre_tax_cost_of_debt * (1 - tax_rate)
 
 
+def estimate_pre_tax_cost_of_debt(interest_expense, debt):
+    """Estimate what a company pays to borrow: its yearly interest expense divided by its
+    debt. A shortcut for companies whose debt notes we do not have.
+
+    Interest expense is passed as a positive amount. A company with no debt gets 0, which
+    does no harm because debt then has no weight in the discount rate. Stops with a plain
+    error if either figure is negative, which almost always means a sign got mixed up.
+    """
+    if interest_expense < 0 or debt < 0:
+        raise ValueError("Interest expense and debt must both be positive amounts.")
+    if debt == 0:
+        return 0.0
+    return interest_expense / debt
+
+
 def wacc(share_price, shares, debt, cost_of_equity_rate, after_tax_cost_of_debt_rate):
     """Blend the cost of equity and the after-tax cost of debt into one discount rate,
     weighting each by how much of the company's market value it funds.

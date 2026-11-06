@@ -334,3 +334,21 @@ future source must supply all five. Two new tests run Adobe's snapshot through
 `last_year_ratios` and `starting_point_assumptions` and expect the `starting point` sheet's
 cells. Not done on purpose: getting these figures for other companies from Yahoo, and
 anything on the page. No new files.
+
+## 2026-11-06 — Cost of debt for other companies: interest expense divided by debt, and no peers yet
+
+Adobe's pre-tax cost of debt (4.16%) comes from the 10-K's debt note, which a data source
+cannot supply for an arbitrary company. For other companies the model estimates it as the
+yearly interest expense divided by financial debt. Haavard added it to the `starting point`
+sheet first (rows 24-27: 263 / 6,210 = 4.24% for Adobe, close to the 4.16% from the notes),
+and `estimate_pre_tax_cost_of_debt` in `valuation.py` matches that cell. Because `data.py`
+does not calculate (guard rail 5), the package will hold the `interest_expense` and the
+division happens in `valuation.py`; the package field itself comes in the next pull request.
+A company with no debt gets a cost of debt of 0, which does not matter because debt then has
+no weight in the WACC; a negative interest expense or debt is refused with a plain error,
+because it almost always means a sign was mixed up. Also agreed with Haavard: Yahoo cannot
+say who a company's peers are, so for companies other than Adobe the page will show the DCF
+only, and the multiples section stays Adobe-only until there is a way to choose peers.
+Housekeeping in the same pull request: `.gitignore` now ignores `~$*`, the temporary lock
+file Excel creates next to a workbook while it is open, so it cannot be committed by
+accident. No new files.
