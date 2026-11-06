@@ -244,18 +244,25 @@ def run_full_dcf(
     debt,
     cash_and_investments,
     terminal_growth_rate,
+    wacc_override=None,
 ):
     """Run every step of the DCF in order, from revenue forecast to implied share price.
 
-    Returns a dictionary holding every intermediate number as well as the final answer,
-    so a page can show any of them.
+    Normally the discount rate (WACC) is worked out from the company's cost of equity and
+    cost of debt. Pass wacc_override to use a rate of your own instead, for example to see
+    how the price changes at a different WACC. Returns a dictionary holding every
+    intermediate number as well as the final answer, so a page can show any of them; its
+    "wacc" entry is the rate that was actually used.
     """
     revenues = project_revenue(base_revenue, growth_rates)
     cash_flows = free_cash_flows(revenues, operating_margins, tax_rate, da_pcts, capex_pcts, wc_pcts)
 
     equity_cost = cost_of_equity(risk_free_rate, beta, equity_risk_premium)
     debt_cost = after_tax_cost_of_debt(pre_tax_cost_of_debt, tax_rate)
-    discount_rate = wacc(share_price, shares, debt, equity_cost, debt_cost)
+    if wacc_override is None:
+        discount_rate = wacc(share_price, shares, debt, equity_cost, debt_cost)
+    else:
+        discount_rate = wacc_override
 
     pv_of_forecast = present_value_of_forecast(cash_flows, discount_rate)
     terminal = terminal_value(cash_flows[-1], discount_rate, terminal_growth_rate)
