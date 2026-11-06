@@ -65,25 +65,37 @@
   `income_before_tax`, `capex` and `cash_from_working_capital`, filled in for Adobe in the
   snapshot with their 10-K pages, and tested through `last_year_ratios` and
   `starting_point_assumptions` against the sheet. Merged.
-- Done (in the open pull request): the cost of debt for other companies. Haavard added rows
-  24-27 to the `starting point` sheet (interest expense 263 / debt 6,210 = 4.24%), and
-  `estimate_pre_tax_cost_of_debt` in `valuation.py` matches C27, with 5 new tests. 197 tests
-  pass. `.gitignore` now ignores Excel's `~$` lock files. The page is unchanged.
-- Next: Haavard's call. `data.py` for other companies: an `interest_expense` field in the
-  package, and a function that fetches a company's statements from Yahoo and fills the
-  package (new tests with fake replies; multiples stay Adobe-only for now, see decisions).
-  After that, a ticker box in the app. Other candidate: the optional Phase 7 (saving via
+- Done: the cost of debt for other companies. Haavard added rows 24-27 to the `starting
+  point` sheet (interest expense 263 / debt 6,210 = 4.24%), `estimate_pre_tax_cost_of_debt`
+  in `valuation.py` matches C27, and `.gitignore` ignores Excel's `~$` lock files. Merged.
+- Done (in the open pull request): a `"yahoo"` data source in `data.py` that builds the whole
+  package for any company from Yahoo's statements (`fetch_yahoo_statements`, `yahoo_source`).
+  `interest_expense` joins the package; the 10-K cost of debt and the peer multiples become
+  `OPTIONAL_FIELDS`. `valuation.financial_debt` adds current and long-term debt. The
+  risk-free rate and equity risk premium are now named constants in `data.py`, dated 1 Nov
+  2026. 18 new tests with fake Yahoo replies; 215 tests pass. Checked once on real data:
+  Adobe through Yahoo reproduces the sheet's six ratios and the 4.24% cost of debt, and
+  Microsoft works. The page is unchanged.
+- Next: Haavard's call. A ticker box in the app, using the `"yahoo"` source for any company
+  other than Adobe, the starting point for the assumptions, the DCF only (no multiples), and
+  the warnings the page must show. Other candidate: the optional Phase 7 (saving via
   Supabase).
 - Open:
-  - Decided, maths and Adobe data built, not yet used: for a company other than Adobe, the
+  - Decided, maths and data built, not yet on the page: for a company other than Adobe, the
     forecast assumptions start from that company's own last reported year (see
-    `docs/decisions.md`, the 2026-11-06 entries). Only Adobe has these figures so far, and the
-    page must warn that a DCF suits stable, cash-generating companies.
+    `docs/decisions.md`, the 2026-11-06 entries), and the page must warn that a DCF suits
+    stable, cash-generating companies.
+  - The interest expense shortcut can overstate the cost of debt. For Microsoft on 6 Nov
+    2026 it gives 7.6% (interest 3,051 / debt 40,294), because Yahoo's interest expense may
+    include interest on leases while the debt figure leaves leases out. Adobe gives 4.24%
+    against 4.16% from its notes. The page should show the estimate so it can be questioned.
+  - A company with no long-term debt line on Yahoo (a debt-free one) stops with an error,
+    because a missing long-term debt line is not guessed as zero. Decide later whether to
+    allow debt-free companies.
   - Yahoo's "Change In Working Capital" for Adobe is 605, the same as the six lines Haavard
-    adds up on the `Projection` sheet (checked 6 Nov 2026), so the definitions agree at least
-    for Adobe. Yahoo's "Total Debt" includes leases (6,648), so the live source must use long
-    term plus current debt (6,210) instead. Yahoo's share count (389.2m) is more recent than
-    the 10-K year-end count the model uses (413m).
+    adds up on the `Projection` sheet (checked 6 Nov 2026), and the `"yahoo"` source uses it.
+    Yahoo's share count (389.2m) is more recent than the 10-K year-end count the model uses
+    for Adobe (413m).
   - A starting point is mechanical. It does not know about one-off years, margins that are
     still rising or falling, or a company whose last year was unusual. The page must say so.
   - After a deploy that changes a file the app imports (for example `assumptions.py`), the

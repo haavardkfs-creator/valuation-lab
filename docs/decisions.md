@@ -352,3 +352,28 @@ only, and the multiples section stays Adobe-only until there is a way to choose 
 Housekeeping in the same pull request: `.gitignore` now ignores `~$*`, the temporary lock
 file Excel creates next to a workbook while it is open, so it cannot be committed by
 accident. No new files.
+
+## 2026-11-06 — A "yahoo" data source for any company; peers and the 10-K cost of debt become optional
+
+`data.py` gets a third source, `"yahoo"`, that builds the whole package for any ticker from
+Yahoo Finance's financial statements. One function, `fetch_yahoo_statements`, touches the
+internet and returns plain figures in the package's units (dollars turned into $ millions,
+capex and interest expense as positive amounts); `yahoo_source` turns that into a package. To
+make this possible, `interest_expense` joins the required package fields (Adobe: 263), and
+the cost of debt from the 10-K notes and the four peer fields move to a new `OPTIONAL_FIELDS`,
+because Yahoo cannot supply them: for other companies the cost of debt is estimated from
+interest expense and the page shows the DCF only (both agreed earlier today). Agreed with
+Haavard: the risk-free rate (5.29%) and equity risk premium (4.41%) are market-wide, so every
+company gets the same Damodaran figures, now named constants in `data.py` dated 1 Nov 2026
+(the Adobe snapshot uses the same constants, so there is one place to update); a missing core
+line stops with a plain error naming it; a missing current debt line counts as 0, because
+Yahoo leaves it out when there is none. One thing was decided while building, and is flagged
+here: a missing long-term debt line is not guessed as 0, so a company with no debt at all
+stops with an error for now. Debt is current plus long-term debt, leases left out, like
+Adobe's; the addition is done by a new `valuation.financial_debt` (tested against WACC C22),
+and `data.py` calls it, because the rule is that `data.py` does not calculate. The tests use
+fake Yahoo replies shaped like the real ones. Checked once by hand on real data: Yahoo's
+Adobe reply gives the 10-K figures and reproduces the starting point sheet's ratios and its
+4.24% cost of debt; Microsoft works too, with a cost of debt estimate of 7.6% that looks high
+(see status). Not done on purpose: the ticker box and anything else on the page. No new
+files.

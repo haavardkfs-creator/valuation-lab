@@ -5,10 +5,14 @@ source hands back the same "package" of named figures (see PACKAGE_FIELDS), so a
 can be plugged in later without touching valuation.py or the app.
 
 Conventions: money is in $ millions, shares are in millions, and rates are decimals
-(0.05 means 5%).
+(0.05 means 5%). Turning Yahoo's dollars into millions, or its negative capex into a
+positive amount, is tidying the units, not maths. Adding two reported debt lines together is
+maths, so it is done by valuation.financial_debt, not here.
 """
 
 import copy
+
+import valuation
 
 
 # ---------------------------------------------------------------------------
@@ -25,6 +29,7 @@ PACKAGE_FIELDS = {
     "prior_year_revenue": "Total revenue of the full year before the latest one, $ millions",
     "income_tax": "Latest full-year income tax expense (provision for income taxes), $ millions",
     "income_before_tax": "Latest full-year income before income taxes, $ millions",
+    "interest_expense": "Latest full-year interest expense, as a positive amount, $ millions",
     "capex": "Latest full-year capital spending, as a positive amount, $ millions",
     "cash_from_working_capital": "Latest full-year cash from working capital, positive when cash comes in, $ millions",
     "debt": "Financial debt: current portion plus long-term debt, leases excluded, $ millions",
@@ -34,12 +39,28 @@ PACKAGE_FIELDS = {
     "beta": "How much the stock moves with the market (5-year monthly)",
     "risk_free_rate": "Risk-free rate, decimal",
     "equity_risk_premium": "Equity risk premium, decimal",
+}
+
+# Figures only some sources can supply. Adobe has both (typed in from the 10-K and Yahoo's
+# Statistics tab); a company read from Yahoo's statements has neither, so for it the page shows
+# the DCF only (see docs/decisions.md).
+OPTIONAL_FIELDS = {
     "pre_tax_cost_of_debt": "Weighted average effective interest rate on the company's debt, decimal",
     "peer_tickers": "Tickers of the peer companies, in the same order as the three lists below",
     "peer_ev_sales": "Each peer's EV/Sales multiple",
     "peer_ev_ebitda": "Each peer's EV/EBITDA multiple",
     "peer_pe": "Each peer's P/E multiple",
 }
+
+
+# ---------------------------------------------------------------------------
+# Market-wide figures: the same for every company, typed in by hand (no simple feed)
+# ---------------------------------------------------------------------------
+
+# Dated 1 Nov 2026. These go stale: update them, and the date in their comments, when
+# Damodaran publishes new ones.
+RISK_FREE_RATE = 0.0529             # Damodaran, US Treasury rate used in his implied ERP, 1 Nov 2026
+EQUITY_RISK_PREMIUM = 0.0441        # Damodaran, implied ERP (trailing 12 months, adjusted payout), 1 Nov 2026
 
 
 # ---------------------------------------------------------------------------
@@ -59,7 +80,8 @@ ADOBE_SNAPSHOT = {
     "prior_year_revenue": 21505,            # Income statement, p. 48: FY2024 total revenue (Inputs F11)
     "income_tax": 1604,                     # Income statement, p. 48: provision for income taxes
     "income_before_tax": 8734,              # Income statement, p. 48: income before income taxes
-    "capex": 179,                           # Cash flow statement, p. 51: purchases of property and equipment (shown as -179 there)
+    "interest_expense": 263,                # Income statement, p. 48: interest expense (shown as -263 there)
+    "capex": 179,                          # Cash flow statement, p. 51: purchases of property and equipment (shown as -179 there)
     # Cash flow statement, p. 51: the six working capital lines added together (receivables,
     # prepaid expenses, payables, accrued expenses, income taxes payable, deferred revenue).
     "cash_from_working_capital": 605,
@@ -69,8 +91,8 @@ ADOBE_SNAPSHOT = {
     # Market data
     "share_price": 251.47,                  # Yahoo Finance, closing price, 2 Nov 2026
     "beta": 1.38,                           # Yahoo Finance, 5Y monthly, 2 Nov 2026
-    "risk_free_rate": 0.0529,               # Damodaran, US Treasury rate used in his implied ERP, 1 Nov 2026
-    "equity_risk_premium": 0.0441,          # Damodaran, implied ERP (trailing 12 months, adjusted payout), 1 Nov 2026
+    "risk_free_rate": RISK_FREE_RATE,
+    "equity_risk_premium": EQUITY_RISK_PREMIUM,
     # Weighted average effective rate on the senior notes, FY2025 10-K Note 17, p. 82.
     # Stored unrounded, exactly as the Excel model holds it (Inputs G55), not as 4.16%.
     "pre_tax_cost_of_debt": 0.041642276422764232,
@@ -139,6 +161,131 @@ def live_source(ticker, fetch_quote=fetch_yahoo_quote):
 
 
 # ---------------------------------------------------------------------------
+# Source 3: yahoo (any company, from Yahoo Finance's financial statements)
+# ---------------------------------------------------------------------------
+
+MILLION = 1_000_000     # Yahoo reports money in dollars; the package is in $ millions
+
+
+def _statement_line(frame, names, column):
+    """Read one figure from a Yahoo statement table: the first of `names` that Yahoo has,
+    for the year in `column` (0 is the latest year, 1 the year before).
+
+    Returns None if Yahoo has no figure for it.
+    """
+    if column >= len(frame.columns):
+        return None
+    for name in names:
+        if name in frame.index:
+            value = frame.loc[name].iloc[column]
+            if value == value:      # a "not a number" means Yahoo has no figure for that year
+                return float(value)
+    return None
+
+
+def fetch_yahoo_statements(ticker):
+    """Ask Yahoo Finance for a company's latest two annual statements and its quote.
+
+    Returns a dictionary of figures in the package's units ($ millions, shares in millions);
+    a figure Yahoo does not have comes back as None. Capex and interest expense come back as
+    positive amounts. Debt comes back as two separate lines. This is the only function in
+    this source that touches the internet.
+    """
+    # Imported here, not at the top, so the other sources work even without yfinance.
+    import yfinance
+
+    stock = yfinance.Ticker(ticker)
+    income, cash_flow, balance, info = stock.income_stmt, stock.cashflow, stock.balance_sheet, stock.info
+
+    def millions(frame, names, column=0, positive=False):
+        value = _statement_line(frame, names, column)
+        if value is None:
+            return None
+        value = value / MILLION
+        return abs(value) if positive else value
+
+    shares = info.get("sharesOutstanding")
+    return {
+        "company_name": info.get("longName") or info.get("shortName"),
+        "revenue": millions(income, ["Total Revenue"]),
+        "prior_year_revenue": millions(income, ["Total Revenue"], column=1),
+        "ebit": millions(income, ["Operating Income"]),
+        "net_income": millions(income, ["Net Income"]),
+        "income_tax": millions(income, ["Tax Provision"]),
+        "income_before_tax": millions(income, ["Pretax Income"]),
+        "interest_expense": millions(income, ["Interest Expense"], positive=True),
+        "depreciation_and_amortisation": millions(
+            cash_flow, ["Depreciation And Amortization", "Depreciation Amortization Depletion"]
+        ),
+        "capex": millions(cash_flow, ["Capital Expenditure"], positive=True),
+        "cash_from_working_capital": millions(cash_flow, ["Change In Working Capital"]),
+        "long_term_debt": millions(balance, ["Long Term Debt"]),
+        "current_debt": millions(balance, ["Current Debt"]),
+        "cash_and_investments": millions(balance, ["Cash Cash Equivalents And Short Term Investments"]),
+        "shares": None if shares is None else shares / MILLION,
+        "share_price": info.get("currentPrice"),
+        "beta": info.get("beta"),
+    }
+
+
+# Figures Yahoo must supply for a company to be valued. Current debt is the one exception:
+# Yahoo leaves it out when a company has none, so a missing one counts as 0.
+YAHOO_REQUIRED = [
+    "company_name", "revenue", "prior_year_revenue", "ebit", "net_income", "income_tax",
+    "income_before_tax", "interest_expense", "depreciation_and_amortisation", "capex",
+    "cash_from_working_capital", "long_term_debt", "cash_and_investments", "shares",
+    "share_price", "beta",
+]
+
+
+def yahoo_source(ticker, fetch_statements=fetch_yahoo_statements):
+    """Return a company's figures from Yahoo Finance's financial statements, for any company.
+
+    The risk-free rate and equity risk premium are the market-wide figures typed in above.
+    The package has no cost of debt from the debt notes and no peer multiples, because Yahoo
+    cannot supply them. Stops with a plain error naming any figure Yahoo did not supply, or if
+    Yahoo cannot be reached. `fetch_statements` can be swapped, which is how the tests run
+    without the internet.
+    """
+    try:
+        statements = fetch_statements(ticker)
+    except Exception as error:      # Yahoo can fail in many ways; the reader needs one clear message
+        raise ValueError("Could not get figures from Yahoo Finance: %s" % error) from error
+
+    missing = [name for name in YAHOO_REQUIRED if statements.get(name) is None]
+    if missing:
+        raise ValueError("Yahoo Finance did not supply, for %s: %s." % (ticker, ", ".join(missing)))
+    if statements["share_price"] <= 0 or statements["shares"] <= 0:
+        raise ValueError("Yahoo Finance gave a share price or share count of zero or less for %s." % ticker)
+
+    current_debt = statements.get("current_debt")
+    if current_debt is None:
+        current_debt = 0
+
+    return {
+        "company_name": statements["company_name"],
+        "ticker": ticker,
+        "revenue": statements["revenue"],
+        "ebit": statements["ebit"],
+        "depreciation_and_amortisation": statements["depreciation_and_amortisation"],
+        "net_income": statements["net_income"],
+        "prior_year_revenue": statements["prior_year_revenue"],
+        "income_tax": statements["income_tax"],
+        "income_before_tax": statements["income_before_tax"],
+        "interest_expense": statements["interest_expense"],
+        "capex": statements["capex"],
+        "cash_from_working_capital": statements["cash_from_working_capital"],
+        "debt": valuation.financial_debt(current_debt, statements["long_term_debt"]),
+        "cash_and_investments": statements["cash_and_investments"],
+        "shares": statements["shares"],
+        "share_price": statements["share_price"],
+        "beta": statements["beta"],
+        "risk_free_rate": RISK_FREE_RATE,
+        "equity_risk_premium": EQUITY_RISK_PREMIUM,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Choosing a source and fetching
 # ---------------------------------------------------------------------------
 
@@ -147,6 +294,7 @@ def live_source(ticker, fetch_quote=fetch_yahoo_quote):
 SOURCES = {
     "snapshot": snapshot_source,
     "live": live_source,
+    "yahoo": yahoo_source,
 }
 
 DEFAULT_SOURCE = "snapshot"
