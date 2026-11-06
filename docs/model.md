@@ -150,9 +150,8 @@ Revenue growth fades in equal steps to the terminal growth rate:
 
 Held at last year's level in every forecast year:
 - Operating margin, tax rate, D&A % of revenue, capex % of revenue, working capital % of revenue.
-- Working capital is held too, not set to zero. Adobe's is a cash inflow because customers
-  pay for subscriptions up front, so for a company where that inflow is a one-off, this is
-  optimistic. A company that uses cash keeps using it under the same rule.
+- Working capital as a percentage of revenue fades gradually to 0% over the forecast period. This avoids carrying unusual one-year cash inflows or outflows forward forever.
+For Yahoo-sourced companies, all financial figures and the share price are converted to US dollars using current exchange rates before valuation.
 
 Cost of debt is estimated as interest expense divided by total debt. This gives the company's implied pre-tax borrowing rate based on its most recent financials.
 If a company has no debt, the cost of debt is set to 0 because there are no borrowing costs to estimate.
