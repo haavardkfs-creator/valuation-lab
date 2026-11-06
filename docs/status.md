@@ -39,18 +39,25 @@
   under each of the four sections, using Haavard's glossary wording word for word
   (definition sentences only). `test_explanations.py` checks the wording against
   `docs/glossary.md`. Merged and live.
-- Done (in the open pull request): Phase 5, step 8 — the five new glossary entries (Upside vs
-  market, Revenue growth, Operating margin, Peer median, DCF vs multiples) added to the
-  boxes. Phase 5 is then complete.
-- Next: Phase 6 — the README gets the live link (https://valuation-l3b.streamlit.app) and a
-  rewrite of its old Phase 0 text. Phase 7 (saving via Supabase) is optional.
+- Done: Phase 5, step 8 — the five new glossary entries (Upside vs market, Revenue growth,
+  Operating margin, Peer median, DCF vs multiples) added to the boxes. Phase 5 is complete:
+  sliders, WACC slider, sensitivity heatmap, charts, and a plain-language box under every
+  section. Merged and live.
+- Done (in the open pull request): Phase 6 — the README is rewritten: what the app does
+  today, the live link (https://valuation-l3b.streamlit.app), how to run it locally, and
+  what is planned.
+- Next: Haavard's call. Candidates: a live data source (its own pull requests, needs a new
+  dependency discussed first), the optional Phase 7 (saving via Supabase), tidying the old
+  Phase 0 placeholder text in `docs/model.md`, `docs/glossary.md` and `LEARNING.md`.
 - Open:
+  - Decided, not built: for a company other than Adobe, the forecast assumptions start from
+    that company's own last reported year (see `docs/decisions.md`, 2026-11-06). The data
+    package will need more fields (last year's capex, tax, prior-year revenue), and the
+    page must warn that a DCF suits stable, cash-generating companies.
   - After a deploy that changes a file the app imports (for example `assumptions.py`), the
     live app can crash with an `AttributeError` because the server still holds the old copy
     in memory. This happened after the WACC slider merge. Fix: Manage app, the three dots,
     Reboot app. It is not a code bug.
-  - `README.md` still says "Phase 0 ... No valuation or app code exists yet" and "Nothing to
-    run yet". It gets the live link and a rewrite in Phase 6.
   - `docs/model.md`, `docs/glossary.md` and `LEARNING.md` still have their old Phase 0
     placeholder text above the real content (e.g. "It is empty for now"). Haavard's call
     whether to tidy this.
