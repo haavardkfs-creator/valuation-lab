@@ -293,3 +293,73 @@ def test_run_multiples_median_price_and_gap_to_dcf_match_multiples_sheet():
     result = run_base_case_multiples()
     assert result["median_price"] == close(420.51859564164647)       # Multiples C37
     assert result["dcf_vs_multiples"] == close(-0.27327347732176299)  # Multiples C39
+
+
+# ---------------------------------------------------------------------------
+# Shifting a list of yearly rates (new in Phase 5; not a cell in the Excel model, so the
+# expected numbers below are worked out by hand)
+# ---------------------------------------------------------------------------
+
+def test_shift_rates_adds_the_shift_to_every_year():
+    shifted = v.shift_rates([0.09, 0.09, 0.08, 0.075, 0.07], 0.01)
+    assert shifted == [close(0.10), close(0.10), close(0.09), close(0.085), close(0.08)]
+
+
+def test_shift_rates_can_move_rates_down():
+    assert v.shift_rates([0.09, 0.07], -0.02) == [close(0.07), close(0.05)]
+
+
+def test_shift_rates_leaves_the_original_list_untouched():
+    original = [0.09, 0.07]
+    v.shift_rates(original, 0.01)
+    assert original == [0.09, 0.07]
+
+
+def test_a_shift_of_zero_still_gives_the_excel_price():
+    result = v.run_full_dcf(
+        base_revenue=BASE_REVENUE,
+        growth_rates=v.shift_rates(GROWTH_RATES, 0),
+        operating_margins=v.shift_rates(OPERATING_MARGINS, 0),
+        tax_rate=TAX_RATE,
+        da_pcts=DA_PCTS,
+        capex_pcts=CAPEX_PCTS,
+        wc_pcts=WC_PCTS,
+        risk_free_rate=RISK_FREE_RATE,
+        beta=BETA,
+        equity_risk_premium=EQUITY_RISK_PREMIUM,
+        pre_tax_cost_of_debt=PRE_TAX_COST_OF_DEBT,
+        share_price=SHARE_PRICE,
+        shares=SHARES,
+        debt=DEBT,
+        cash_and_investments=CASH_AND_INVESTMENTS,
+        terminal_growth_rate=TERMINAL_GROWTH_RATE,
+    )
+    assert result["implied_share_price"] == close(305.60201673218938)
+
+
+def test_higher_growth_and_margins_give_a_higher_price():
+    def price_with(growth_shift, margin_shift):
+        return v.run_full_dcf(
+            base_revenue=BASE_REVENUE,
+            growth_rates=v.shift_rates(GROWTH_RATES, growth_shift),
+            operating_margins=v.shift_rates(OPERATING_MARGINS, margin_shift),
+            tax_rate=TAX_RATE,
+            da_pcts=DA_PCTS,
+            capex_pcts=CAPEX_PCTS,
+            wc_pcts=WC_PCTS,
+            risk_free_rate=RISK_FREE_RATE,
+            beta=BETA,
+            equity_risk_premium=EQUITY_RISK_PREMIUM,
+            pre_tax_cost_of_debt=PRE_TAX_COST_OF_DEBT,
+            share_price=SHARE_PRICE,
+            shares=SHARES,
+            debt=DEBT,
+            cash_and_investments=CASH_AND_INVESTMENTS,
+            terminal_growth_rate=TERMINAL_GROWTH_RATE,
+        )["implied_share_price"]
+
+    base = price_with(0, 0)
+    assert price_with(0.01, 0) > base
+    assert price_with(0, 0.01) > base
+    assert price_with(-0.01, 0) < base
+    assert price_with(0, -0.01) < base

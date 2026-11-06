@@ -104,3 +104,15 @@ on one page would be confusing, and the rounding in the workbook was a typing sh
 a modelling choice. The cost: the heatmap's middle row will differ from the workbook's table
 by a few tenths of a dollar, and a test for it cannot copy that row from Excel directly. No
 code was changed by this decision; it only settles the question for Phase 5.
+
+## 2026-11-05 — Phase 5 sliders move all five years together: shift_rates in valuation.py
+
+Growth and operating margin are lists of five yearly numbers, so a slider per year would mean
+ten sliders. Instead one slider each will shift every year by the same number of percentage
+points (for example +1.0 point turns 9% growth into 10%), and a shift of 0 gives the base
+case, so the page still opens at $305.60. Terminal growth is a single number and gets an
+ordinary slider. The adding is done by a new function, `shift_rates` in `valuation.py`,
+because it is maths and `app.py` does not compute (guard rail 5). It is its own pull
+request ahead of the sliders. Its tests are worked out by hand, not copied from an Excel
+cell, because the Excel model has no shift; the one Excel-linked test shows that a shift of
+0 still gives $305.60. No new files.
