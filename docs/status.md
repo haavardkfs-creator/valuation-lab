@@ -15,21 +15,22 @@
   Excel cell, checked by `test_assumptions.py`. Merged.
 - Done: `run_multiples` in `valuation.py` runs the whole multiples comparison in one call,
   with three tests matching the Excel Multiples sheet. Merged.
-- Done (in the open pull request): Phase 4 code — `app.py` shows Adobe's DCF ($305.60 vs
-  market $251.47) and multiples ($333.58 / $420.52 / $463.54), with the disclaimer footer.
-  Not yet run inside real Streamlit (this machine has Python 3.9 only); the numbers were
-  checked with a stand-in for `streamlit`.
-- Next: run the app for real, then deploy it to Streamlit Community Cloud (Haavard does the
-  deploy), then Phase 6 puts the live link in the README.
+- Done: Phase 4 — `app.py` shows Adobe's DCF ($305.60 vs market $251.47) and multiples
+  ($333.58 / $420.52 / $463.54), with the disclaimer footer. Merged, run for real in
+  Streamlit (Python 3.12.10, Streamlit 1.64.0), and deployed to Streamlit Community Cloud
+  at https://valuation-l3b.streamlit.app. Every merge to `main` now goes live there.
+- Next: Phase 5 — the full dashboard, in small pull requests. Start with sliders for the
+  assumptions, so changing one visibly moves the $305.60.
 - Open:
   - `README.md` still says "Phase 0 ... No valuation or app code exists yet" and "Nothing to
-    run yet". It needs updating once the app is deployed (Phase 6).
+    run yet". It gets the live link and a rewrite in Phase 6.
   - `docs/model.md`, `docs/glossary.md` and `LEARNING.md` still have their old Phase 0
     placeholder text above the real content (e.g. "It is empty for now"). Haavard's call
     whether to tidy this.
   - The workbook's sensitivity table (valuation sheet, rows 34–38) uses a rounded WACC of
-    10.93% in its middle row, so it shows $305.48, not $305.60. Phase 5's heatmap needs
-    to decide which one it matches.
+    10.93% in its middle row, so it shows $305.48, not $305.60. Decided (see
+    `docs/decisions.md`): the Phase 5 heatmap uses the exact WACC, so its centre cell is
+    $305.60. It will not match the workbook's table in the middle row, on purpose.
   - A live data source is not built yet. Plan: its own pull request, starting with share
     price and beta, then plugged into `SOURCES` in `data.py`. Risk-free rate and equity
     risk premium (Damodaran) have no simple feed and stay typed in by hand.

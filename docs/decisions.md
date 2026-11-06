@@ -93,3 +93,14 @@ sensitivity heatmap, explanation panels, and a ticker box. The company is a name
 added: the numbers it shows come from functions that are already tested against Excel, and
 a page test would be a new file outside CLAUDE.md's folder table. Deployment to Streamlit
 Community Cloud is done by Haavard after this is merged.
+
+## 2026-11-05 — The Phase 5 heatmap uses the exact WACC, not the rounded 10.93%
+
+The Excel sensitivity table (valuation sheet, rows 34–38) builds its middle row from a
+rounded WACC of 10.93%, so its centre cell shows $305.48, while the model's own answer is
+$305.60 (WACC 10.9266%). The Phase 5 heatmap will be centred on the exact WACC, so its
+centre cell equals the headline price. Reason: two different numbers for the same base case
+on one page would be confusing, and the rounding in the workbook was a typing shortcut, not
+a modelling choice. The cost: the heatmap's middle row will differ from the workbook's table
+by a few tenths of a dollar, and a test for it cannot copy that row from Excel directly. No
+code was changed by this decision; it only settles the question for Phase 5.
