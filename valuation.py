@@ -362,3 +362,72 @@ def sensitivity_table(dcf_inputs, base_wacc, wacc_offsets, terminal_growth_rates
         "terminal_growth_rates": list(terminal_growth_rates),
         "prices": prices,
     }
+
+
+# ---------------------------------------------------------------------------
+# Starting point for other companies (docs/model.md: "Starting point for other companies")
+# ---------------------------------------------------------------------------
+
+def last_year_ratios(
+    revenue,
+    prior_revenue,
+    ebit,
+    income_tax,
+    income_before_tax,
+    depreciation_and_amortisation,
+    capex,
+    cash_from_working_capital,
+):
+    """Work out a company's six ratios for its last reported year: revenue growth,
+    operating margin, tax rate, D&A %, capex % and working capital %.
+
+    Capex is the amount spent, as a positive number; cash from working capital is positive
+    when cash comes in. Stops with a plain error if revenue is zero in either year, or if
+    the company made no profit before tax, because the ratios would mean nothing.
+    """
+    if revenue <= 0 or prior_revenue <= 0:
+        raise ValueError("Revenue must be above zero in both years to work out growth and margins.")
+    if income_before_tax <= 0:
+        raise ValueError("A tax rate can't be worked out because the company made no pre-tax profit.")
+    return {
+        "revenue_growth": revenue / prior_revenue - 1,
+        "operating_margin": ebit / revenue,
+        "tax_rate": income_tax / income_before_tax,
+        "da_pct": depreciation_and_amortisation / revenue,
+        "capex_pct": capex / revenue,
+        "wc_pct": cash_from_working_capital / revenue,
+    }
+
+
+def fade_growth_rates(last_year_growth, terminal_growth_rate, years):
+    """Step revenue growth from last year's rate down (or up) to the terminal growth rate in
+    equal steps, reaching it in the last forecast year.
+
+    Returns a list with one growth rate per forecast year.
+    """
+    if years < 1:
+        raise ValueError("The forecast needs at least one year.")
+    step = (terminal_growth_rate - last_year_growth) / years
+    rates = []
+    growth = last_year_growth
+    for _ in range(years):
+        growth = growth + step
+        rates.append(growth)
+    return rates
+
+
+def starting_point_assumptions(ratios, terminal_growth_rate, years):
+    """Turn last year's ratios into a starting forecast: growth fades to the terminal rate,
+    and every other ratio stays at last year's level.
+
+    Returns the assumptions in the same shapes run_full_dcf takes, so they can be passed
+    straight in. This is a starting point, not a forecast.
+    """
+    return {
+        "growth_rates": fade_growth_rates(ratios["revenue_growth"], terminal_growth_rate, years),
+        "operating_margins": [ratios["operating_margin"]] * years,
+        "tax_rate": ratios["tax_rate"],
+        "da_pcts": [ratios["da_pct"]] * years,
+        "capex_pcts": [ratios["capex_pct"]] * years,
+        "wc_pcts": [ratios["wc_pct"]] * years,
+    }

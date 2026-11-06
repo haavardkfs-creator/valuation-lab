@@ -297,3 +297,23 @@ optimistic for a company where that is a one-off; a company that uses cash keeps
 under the same rule. The page will present the result as a starting point, not a forecast.
 The workbook is replaced as a whole file: the six original sheets are identical in formulas
 and values (checked), so the $305.60 result is unchanged. No new files.
+
+## 2026-11-06 — The starting point maths in Python: three functions, one constant, nothing wired in yet
+
+`valuation.py` gets three functions that follow the "starting point" sheet and `docs/model.md`
+exactly: `last_year_ratios` (the six ratios from a company's last-year figures),
+`fade_growth_rates` (equal steps from last year's growth to the terminal rate, reaching it in
+the last forecast year) and `starting_point_assumptions` (the fade plus the other five ratios
+held flat, returned in the shapes `run_full_dcf` already takes). The number of years is
+`STARTING_POINT_YEARS = 5` in `assumptions.py`, pointing at the sheet's cell C13. Agreed with
+Haavard: `last_year_ratios` stops with a plain error if revenue is zero in either year or if
+the company made no profit before tax, because the tax rate and margins would mean nothing
+(the page already warns that loss-making companies are a poor fit); and if last year's
+growth was below the terminal rate, the same rule steps growth up, which is documented in a
+test. Capex is passed in as a positive amount of spending and cash from working capital as
+positive when it is an inflow, as on the `Projection` sheet. The 19 new tests use the
+workbook's own cells as expected values; the one test that has no Excel value (the starting
+point fed through `run_full_dcf`) only checks that the shapes fit and a price comes out. A
+check that the tests can fail: changing the step to divide by years + 1 made five of them
+fail. Not built yet, on purpose: getting last year's figures into `data.py` and putting any of
+this on the page. No new files.

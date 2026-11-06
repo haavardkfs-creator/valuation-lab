@@ -166,3 +166,8 @@ def test_there_is_one_year_label_for_every_forecast_year():
     assert len(a.FORECAST_YEAR_LABELS) == len(a.GROWTH_RATES) == 5
     assert a.FORECAST_YEAR_LABELS[0] == "FY2026"           # the year after the FY2025 base year
     assert a.FORECAST_YEAR_LABELS[-1] == "FY2030"          # Projection H:L, five forecast years
+
+
+def test_starting_point_years_match_the_starting_point_sheet():
+    assert a.STARTING_POINT_YEARS == 5                                  # starting point C13
+    assert a.STARTING_POINT_YEARS == len(a.GROWTH_RATES)                # same length as the Adobe forecast
