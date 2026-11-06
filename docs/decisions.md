@@ -377,3 +377,33 @@ Adobe reply gives the 10-K figures and reproduces the starting point sheet's rat
 4.24% cost of debt; Microsoft works too, with a cost of debt estimate of 7.6% that looks high
 (see status). Not done on purpose: the ticker box and anything else on the page. No new
 files.
+
+## 2026-11-06 — The ticker box: any company, as a starting point; and test_app.py is added
+
+The page gets a "Company ticker" box at the top of the sidebar, opening on ADBE so the page
+is exactly as before. For Adobe nothing changes: hand-chosen assumptions, the cost of debt
+from the 10-K notes, FY2026-FY2030 labels, peer multiples, and the live-or-snapshot source.
+For any other ticker the page uses the `"yahoo"` source (no snapshot fallback, because the
+snapshot only has Adobe) and: the forecast assumptions from `last_year_ratios` and
+`starting_point_assumptions`; the cost of debt estimated from interest expense and debt;
+forecast years labelled "Year 1" to "Year 5" (other companies have other fiscal year-ends;
+agreed with Haavard); no multiples section, because Yahoo cannot say who the peers are; and
+a yellow warning, in wording agreed with Haavard, that this is a starting point and not a
+forecast and that a DCF suits stable, cash-generating companies. The company the hand-chosen
+assumptions belong to is now one named constant, `BASE_CASE_TICKER` in `assumptions.py`. If a
+company cannot be valued (Yahoo knows nothing about the ticker, no pre-tax profit, or a WACC at
+or below terminal growth) the page shows one plain red error naming the ticker and the footer,
+instead of crashing; when Yahoo has no figures at all the message says to check the ticker,
+instead of listing every missing field. One detail to know: the growth fade always ends at
+the base 2.5% terminal growth, as in the Excel sheet, so moving the terminal growth slider
+changes the terminal value but not the fade. The figures are remembered per ticker for 15
+minutes, as before. New file `test_app.py` (not in the folder table in CLAUDE.md; one test
+file per module, as before) runs the real page with Streamlit's built-in test runner and fake
+Yahoo replies, so it adds no dependency and never touches the internet: it checks the Adobe
+page, the fallback, another company, the warning, the missing multiples, the exact price, and
+each error case, and that the footer is always there. One of its tests passed for the wrong
+reason at first (the price differed from Adobe's anyway, because the cost of debt differs); it
+was found by deliberately breaking the page and replaced with one that works the price out
+independently. Run for real on Adobe, Microsoft and a nonsense ticker. Microsoft's result
+(a DCF price 79% below the market price, because last year's capex of about 35% of revenue is
+held for ever) is recorded in `docs/status.md` as a limit of the starting point, not an error.

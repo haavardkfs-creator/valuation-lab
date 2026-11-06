@@ -476,6 +476,15 @@ def test_a_missing_core_line_stops_with_a_plain_error_naming_it(monkeypatch):
     assert "ebit" in str(error.value) and "income_tax" in str(error.value)
 
 
+def test_a_ticker_yahoo_knows_nothing_about_gets_a_plain_error_without_a_list_of_fields(monkeypatch):
+    nothing = fake_statements_ticker(income={}, cash_flow={}, balance={}, info={})
+    monkeypatch.setattr("yfinance.Ticker", nothing)
+    with pytest.raises(ValueError, match="no figures for NOPE") as error:
+        data.get_company_data("nope", source="yahoo")
+    assert "Check that the ticker is right" in str(error.value)
+    assert "long_term_debt" not in str(error.value)
+
+
 def test_a_missing_long_term_debt_line_is_not_guessed_as_zero(monkeypatch):
     balance = without(ADOBE_YAHOO_BALANCE, "Long Term Debt")
     monkeypatch.setattr("yfinance.Ticker", fake_statements_ticker(balance=balance))

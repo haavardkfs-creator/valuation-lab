@@ -1,4 +1,4 @@
-"""The Valuation Lab page: shows Adobe's DCF and multiples results.
+"""The Valuation Lab page: shows a company's DCF (and, for Adobe, its multiples results).
 
 This file only draws. It fetches the figures with data.py, takes the assumptions from
 assumptions.py, hands both to valuation.py, and puts what comes back on the page (guard
@@ -13,8 +13,8 @@ import data
 import explanations
 import valuation
 
-# The company on the page. Phase 4 shows one company; choosing a ticker comes later.
-TICKER = "ADBE"
+# The company the page opens on, and the only one with hand-chosen assumptions and peer multiples.
+DEFAULT_TICKER = assumptions.BASE_CASE_TICKER
 
 # Heatmap colours, as red/green/blue numbers. Chosen for a calm, professional look: a price
 # at the market price is white, and the further above it the greener, the further below it
@@ -52,24 +52,71 @@ def precise_percent(rate):
     return f"{rate:.2%}"
 
 
+def is_base_case(company):
+    """Say whether this is the company the hand-chosen assumptions were made for (Adobe)."""
+    return company["ticker"] == assumptions.BASE_CASE_TICKER
+
+
+def forecast_assumptions(company):
+    """Pick the forecast assumptions for a company: Adobe's hand-chosen ones, or, for any
+    other company, a starting point worked out from its own last reported year.
+
+    Returns growth rates, operating margins, tax rate, D&A %, capex % and working capital %
+    in the shapes the DCF takes. Stops with a plain error if the starting point cannot be
+    worked out, for example when the company made no profit before tax.
+    """
+    if is_base_case(company):
+        return dict(
+            growth_rates=assumptions.GROWTH_RATES,
+            operating_margins=assumptions.OPERATING_MARGINS,
+            tax_rate=assumptions.TAX_RATE,
+            da_pcts=assumptions.DA_PCTS,
+            capex_pcts=assumptions.CAPEX_PCTS,
+            wc_pcts=assumptions.WC_PCTS,
+        )
+    ratios = valuation.last_year_ratios(
+        revenue=company["revenue"],
+        prior_revenue=company["prior_year_revenue"],
+        ebit=company["ebit"],
+        income_tax=company["income_tax"],
+        income_before_tax=company["income_before_tax"],
+        depreciation_and_amortisation=company["depreciation_and_amortisation"],
+        capex=company["capex"],
+        cash_from_working_capital=company["cash_from_working_capital"],
+    )
+    return valuation.starting_point_assumptions(
+        ratios, assumptions.TERMINAL_GROWTH_RATE, assumptions.STARTING_POINT_YEARS
+    )
+
+
+def cost_of_debt(company):
+    """Use the cost of debt from the company's debt notes if its figures have one (Adobe),
+    otherwise estimate it from interest expense and debt.
+    """
+    if "pre_tax_cost_of_debt" in company:
+        return company["pre_tax_cost_of_debt"]
+    return valuation.estimate_pre_tax_cost_of_debt(company["interest_expense"], company["debt"])
+
+
 def build_dcf_inputs(company, growth_shift, margin_shift):
     """Gather every input the DCF needs except the terminal growth rate and the WACC.
 
     The growth and margin shifts move every forecast year by the same amount (0 means the
     base case). The same inputs feed both the headline DCF and the heatmap.
     """
+    base = forecast_assumptions(company)
     return dict(
         base_revenue=company["revenue"],
-        growth_rates=valuation.shift_rates(assumptions.GROWTH_RATES, growth_shift),
-        operating_margins=valuation.shift_rates(assumptions.OPERATING_MARGINS, margin_shift),
-        tax_rate=assumptions.TAX_RATE,
-        da_pcts=assumptions.DA_PCTS,
-        capex_pcts=assumptions.CAPEX_PCTS,
-        wc_pcts=assumptions.WC_PCTS,
+        growth_rates=valuation.shift_rates(base["growth_rates"], growth_shift),
+        operating_margins=valuation.shift_rates(base["operating_margins"], margin_shift),
+        tax_rate=base["tax_rate"],
+        da_pcts=base["da_pcts"],
+        capex_pcts=base["capex_pcts"],
+        wc_pcts=base["wc_pcts"],
         risk_free_rate=company["risk_free_rate"],
         beta=company["beta"],
         equity_risk_premium=company["equity_risk_premium"],
-        pre_tax_cost_of_debt=company["pre_tax_cost_of_debt"],
+        pre_tax_cost_of_debt=cost_of_debt(company),
         share_price=company["share_price"],
         shares=company["shares"],
         debt=company["debt"],
@@ -82,11 +129,14 @@ def run_valuation(company, dcf_inputs, terminal_growth_rate, wacc_override=None)
 
     Leave wacc_override out to use the model's own WACC, or give a rate to use that instead.
     Returns the DCF results and the multiples results, each as a dictionary of named
-    numbers. The multiples need the DCF's net debt and implied price, so the DCF runs first.
+    numbers; the multiples are None for a company without peer figures. The multiples need
+    the DCF's net debt and implied price, so the DCF runs first.
     """
     dcf = valuation.run_full_dcf(
         **dcf_inputs, terminal_growth_rate=terminal_growth_rate, wacc_override=wacc_override
     )
+    if "peer_ev_sales" not in company:
+        return dcf, None
     multiples = valuation.run_multiples(
         revenue=company["revenue"],
         ebit=company["ebit"],
@@ -195,16 +245,17 @@ def tint(price, market_price):
     return f"background-color: rgb({red}, {green}, {blue}); color: #262730"
 
 
-def draw_charts(dcf):
+def draw_charts(dcf, year_labels):
     """Draw the two charts behind the headline price: the five-year forecast of revenue and
-    free cash flow, and the two parts that enterprise value is built from.
+    free cash flow (one label per forecast year), and the two parts that enterprise value is
+    built from.
     """
     st.subheader("Behind the number")
     forecast_column, build_column = st.columns([3, 2])
 
     forecast = pd.DataFrame(
         {"Revenue": dcf["revenues"], "Free cash flow": dcf["free_cash_flows"]},
-        index=assumptions.FORECAST_YEAR_LABELS,
+        index=year_labels,
     )
     forecast_column.markdown("**Forecast: revenue and free cash flow**")
     forecast_column.bar_chart(
@@ -290,19 +341,46 @@ def draw_multiples(multiples):
 
 @st.cache_data(ttl=LIVE_DATA_CACHE_SECONDS, show_spinner=False)
 def load_company(ticker):
-    """Fetch a company's figures (live, or the snapshot if Yahoo fails) and remember them
-    for LIVE_DATA_CACHE_SECONDS, so moving a slider does not ask Yahoo again.
+    """Fetch a company's figures and remember them for LIVE_DATA_CACHE_SECONDS, so moving a
+    slider does not ask Yahoo again.
 
-    Returns the package of figures and the name of the source that supplied it.
+    Adobe comes from the live source, falling back to the snapshot if Yahoo fails. Any other
+    company comes from Yahoo's statements, with no fallback. Returns the package of figures
+    and the name of the source that supplied it; stops with a plain error if it cannot.
     """
-    return data.get_company_data_with_fallback(ticker)
+    if ticker == assumptions.BASE_CASE_TICKER:
+        return data.get_company_data_with_fallback(ticker)
+    return data.get_company_data(ticker, source="yahoo"), "yahoo"
 
 
-def draw_source_note(source_used):
-    """Tell the reader where the share price and beta came from: a quiet line when they are
-    live, a visible warning when the page had to fall back to the frozen snapshot.
+def draw_ticker_box():
+    """Draw the company ticker box at the top of the sidebar and return the ticker typed in,
+    in capitals. An empty box means the default company.
     """
-    if source_used == data.PREFERRED_SOURCE:
+    typed = st.sidebar.text_input(
+        "Company ticker",
+        value=DEFAULT_TICKER,
+        help="A US stock ticker, for example MSFT. Adobe (ADBE) has hand-chosen assumptions and peer multiples; any other company gets a starting point from its own last reported year.",
+    )
+    return typed.strip().upper() or DEFAULT_TICKER
+
+
+def draw_source_note(company, source_used):
+    """Tell the reader where the figures came from and, for any company other than Adobe,
+    that this is a starting point and not a forecast.
+
+    Adobe: a quiet line when the share price and beta are live, a visible warning when the
+    page had to fall back to the frozen snapshot. Other companies: a quiet line, and a visible
+    warning that the forecast is only a starting point.
+    """
+    if source_used == "yahoo":
+        st.caption("All figures are from Yahoo Finance's latest annual statements.")
+        st.warning(
+            f"Starting point, not a forecast: this starts from {company['company_name']}'s own "
+            "last reported year and holds its margins flat. A DCF suits stable, cash-generating "
+            "companies, and is a poor fit for banks, loss-making and early-stage ones."
+        )
+    elif source_used == data.PREFERRED_SOURCE:
         st.caption("Share price and beta are live from Yahoo Finance.")
     else:
         st.warning(
@@ -311,20 +389,38 @@ def draw_source_note(source_used):
         )
 
 
+def draw_error(ticker, error):
+    """Show why a company could not be valued, in plain words, and still show the footer."""
+    st.title("Valuation Lab")
+    st.error(f"Could not value {ticker}. {error}")
+    st.divider()
+    st.caption(FOOTER_TEXT)
+
+
 def draw_page():
-    """Draw the whole page: sliders, title, DCF section, charts, heatmap, multiples and footer."""
-    company, source_used = load_company(TICKER)
+    """Draw the whole page: ticker box, sliders, title, DCF section, charts, heatmap, multiples
+    (Adobe only) and footer. If the company cannot be valued, draw the reason instead.
+    """
+    ticker = draw_ticker_box()
     growth_shift, margin_shift, terminal_growth_rate, wacc_override = draw_sliders()
-    dcf_inputs = build_dcf_inputs(company, growth_shift, margin_shift)
-    dcf, multiples = run_valuation(company, dcf_inputs, terminal_growth_rate, wacc_override)
+    try:
+        company, source_used = load_company(ticker)
+        dcf_inputs = build_dcf_inputs(company, growth_shift, margin_shift)
+        dcf, multiples = run_valuation(company, dcf_inputs, terminal_growth_rate, wacc_override)
+        base_wacc = model_wacc(dcf_inputs)
+    except ValueError as error:
+        draw_error(ticker, error)
+        return
 
     st.title("Valuation Lab")
     st.write(f"{company['company_name']} ({company['ticker']})")
-    draw_source_note(source_used)
+    draw_source_note(company, source_used)
     draw_dcf(company, dcf, wacc_override is not None)
-    draw_charts(dcf)
-    draw_heatmap(company, dcf_inputs, model_wacc(dcf_inputs))
-    draw_multiples(multiples)
+    year_labels = assumptions.FORECAST_YEAR_LABELS if is_base_case(company) else assumptions.GENERIC_YEAR_LABELS
+    draw_charts(dcf, year_labels)
+    draw_heatmap(company, dcf_inputs, base_wacc)
+    if multiples is not None:
+        draw_multiples(multiples)
     st.divider()
     st.caption(FOOTER_TEXT)
 
