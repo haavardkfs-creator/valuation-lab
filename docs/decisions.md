@@ -68,3 +68,14 @@ not `data.py` (facts only), and they are numbers, so not `valuation.py` (maths o
 the single base case is held; slider ranges and scenarios wait for Phase 5. The base case
 block in `test_valuation.py` stays as it is, on purpose: those tests keep their own copy of
 the Excel values so they fail if `assumptions.py` ever drifts.
+
+## 2026-11-05 — run_multiples added to valuation.py before the app is built
+
+The Phase 4 app will show the multiples as well as the DCF. The multiples steps (three peer
+medians, three prices, the middle price and the gap to the DCF) were only chained together
+inside tests, so `app.py` would have had to repeat that chaining, which breaks guard rail 5
+(the app draws, it does not compute). `valuation.py` now has `run_multiples`, which does
+the chaining and returns every number in a dictionary, the same way `run_full_dcf` does for
+the DCF. Reason: the app calls one function per part of the valuation and only draws what
+comes back. It is its own pull request ahead of the app, one idea per pull request. No new
+files: the tests went into `test_valuation.py`, which already holds the base case.

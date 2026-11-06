@@ -258,3 +258,38 @@ def test_full_dcf_multiples_summary_matches_multiples_sheet():
     assert v.dcf_vs_multiples(run_base_case()["implied_share_price"], v.peer_median(prices)) == close(
         -0.27327347732176299
     )                                                                    # Multiples C39
+
+
+def run_base_case_multiples():
+    return v.run_multiples(
+        revenue=BASE_REVENUE,
+        ebit=ADOBE_EBIT,
+        depreciation_and_amortisation=ADOBE_DA,
+        net_income=ADOBE_NET_INCOME,
+        net_debt_amount=v.net_debt(DEBT, CASH_AND_INVESTMENTS),
+        shares=SHARES,
+        peer_ev_sales=PEER_EV_SALES,
+        peer_ev_ebitda=PEER_EV_EBITDA,
+        peer_pe=PEER_PE,
+        dcf_price=run_base_case()["implied_share_price"],
+    )
+
+
+def test_run_multiples_peer_medians_match_multiples_row_12():
+    result = run_base_case_multiples()
+    assert result["median_ev_sales"] == close(5.78)         # D12
+    assert result["median_ev_ebitda"] == close(18.195)      # E12
+    assert result["median_pe"] == close(26.85)              # F12
+
+
+def test_run_multiples_prices_match_multiples_h27_to_h29():
+    result = run_base_case_multiples()
+    assert result["price_ev_sales"] == close(333.58309927360767)     # H27
+    assert result["price_ev_ebitda"] == close(420.51859564164647)    # H28
+    assert result["price_pe"] == close(463.53631961259072)           # H29
+
+
+def test_run_multiples_median_price_and_gap_to_dcf_match_multiples_sheet():
+    result = run_base_case_multiples()
+    assert result["median_price"] == close(420.51859564164647)       # Multiples C37
+    assert result["dcf_vs_multiples"] == close(-0.27327347732176299)  # Multiples C39

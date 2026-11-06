@@ -11,9 +11,12 @@
   frozen snapshot of the Excel model's numbers, through a source that can be swapped. Merged.
   `test_data.py` checks every figure against Excel and proves that data fed into
   `valuation.py` still gives $305.60 and the three multiples prices.
-- Done (in the open pull request): the seven base case forecast assumptions now live in
-  `assumptions.py`, each with its Excel cell, checked by `test_assumptions.py`.
-- Next: Phase 4 — the smallest possible Streamlit app, deployed early.
+- Done: the seven base case forecast assumptions live in `assumptions.py`, each with its
+  Excel cell, checked by `test_assumptions.py`. Merged.
+- Done (in the open pull request): `run_multiples` in `valuation.py` runs the whole multiples
+  comparison in one call, with three tests matching the Excel Multiples sheet.
+- Next: Phase 4 — the smallest possible Streamlit app (DCF and multiples, no sliders),
+  deployed early.
 - Open:
   - `docs/model.md`, `docs/glossary.md` and `LEARNING.md` still have their old Phase 0
     placeholder text above the real content (e.g. "It is empty for now"). Haavard's call
@@ -21,8 +24,6 @@
   - The workbook's sensitivity table (valuation sheet, rows 34–38) uses a rounded WACC of
     10.93% in its middle row, so it shows $305.48, not $305.60. Phase 5's heatmap needs
     to decide which one it matches.
-  - `run_full_dcf` covers the DCF only. The multiples are separate function calls; a
-    single "run everything" function may be wanted for the app in Phase 4 or 5.
   - A live data source is not built yet. Plan: its own pull request, starting with share
     price and beta, then plugged into `SOURCES` in `data.py`. Risk-free rate and equity
     risk premium (Damodaran) have no simple feed and stay typed in by hand.
