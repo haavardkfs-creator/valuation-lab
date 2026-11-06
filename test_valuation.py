@@ -509,3 +509,120 @@ def test_sensitivity_table_prices_fall_as_wacc_rises_and_rise_with_growth():
         assert row == sorted(row)                                    # more growth, higher price
     for column in zip(*table["prices"]):
         assert list(column) == sorted(column, reverse=True)          # higher WACC, lower price
+
+
+# ---------------------------------------------------------------------------
+# Starting point for other companies
+# Adobe FY2025 is the test case. The inputs are the 10-K figures in the workbook; the
+# expected ratios and years are copied from the "starting point" sheet.
+# ---------------------------------------------------------------------------
+
+ADOBE_LAST_YEAR = dict(
+    revenue=23769,                          # Inputs G11
+    prior_revenue=21505,                    # Inputs F11
+    ebit=8706,                              # Inputs G20
+    income_tax=1604,                        # Inputs G25
+    income_before_tax=8734,                 # Inputs G24
+    depreciation_and_amortisation=818,      # Inputs G30
+    capex=179,                              # Projection G14 (spending, positive)
+    cash_from_working_capital=605,          # Projection G16 (inflow, positive)
+)
+
+STARTING_POINT_RATIOS = {
+    "revenue_growth": 0.10527784236224136,      # starting point C5
+    "operating_margin": 0.36627540073204595,    # C6
+    "tax_rate": 0.18365010304556903,            # C7
+    "da_pct": 0.034414573604274475,             # C8
+    "capex_pct": 0.007530817451302116,          # C9
+    "wc_pct": 0.025453321553283687,             # C10
+}
+
+STARTING_POINT_GROWTH = [                       # starting point D17:H17
+    0.08922227388979309,
+    0.07316670541734482,
+    0.05711113694489655,
+    0.041055568472448276,
+    0.025,
+]
+
+
+@pytest.mark.parametrize("name, expected", list(STARTING_POINT_RATIOS.items()))
+def test_last_year_ratios_match_the_starting_point_sheet(name, expected):
+    assert v.last_year_ratios(**ADOBE_LAST_YEAR)[name] == close(expected)
+
+
+def test_last_year_ratios_on_simple_numbers_keep_the_signs():
+    ratios = v.last_year_ratios(
+        revenue=200, prior_revenue=160, ebit=40, income_tax=10, income_before_tax=50,
+        depreciation_and_amortisation=10, capex=8, cash_from_working_capital=-4,
+    )
+    assert ratios == {
+        "revenue_growth": close(0.25),
+        "operating_margin": close(0.2),
+        "tax_rate": close(0.2),
+        "da_pct": close(0.05),
+        "capex_pct": close(0.04),
+        "wc_pct": close(-0.02),         # cash going out stays negative
+    }
+
+
+@pytest.mark.parametrize("pre_tax_profit", [0, -300])
+def test_last_year_ratios_refuse_a_company_with_no_pre_tax_profit(pre_tax_profit):
+    inputs = dict(ADOBE_LAST_YEAR, income_before_tax=pre_tax_profit)
+    with pytest.raises(ValueError, match="no pre-tax profit"):
+        v.last_year_ratios(**inputs)
+
+
+@pytest.mark.parametrize("field", ["revenue", "prior_revenue"])
+def test_last_year_ratios_refuse_zero_revenue(field):
+    with pytest.raises(ValueError, match="Revenue must be above zero"):
+        v.last_year_ratios(**dict(ADOBE_LAST_YEAR, **{field: 0}))
+
+
+def test_fade_growth_rates_match_the_starting_point_sheet():
+    rates = v.fade_growth_rates(STARTING_POINT_RATIOS["revenue_growth"], TERMINAL_GROWTH_RATE, 5)
+    assert rates == [close(expected) for expected in STARTING_POINT_GROWTH]
+
+
+def test_fade_growth_rates_reach_terminal_growth_in_the_last_year():
+    for years in (1, 3, 5, 10):
+        assert v.fade_growth_rates(0.12, 0.025, years)[-1] == close(0.025)
+
+
+def test_fade_growth_rates_steps_are_equal_and_longer_fades_are_slower():
+    five = v.fade_growth_rates(0.10, 0.02, 5)
+    ten = v.fade_growth_rates(0.10, 0.02, 10)
+    assert len(five) == 5 and len(ten) == 10
+    assert [a - b for a, b in zip([0.10] + five, five)] == [close(0.016)] * 5      # 0.08 / 5
+    assert 0.10 - ten[0] == close(0.008)                                          # 0.08 / 10
+
+
+def test_fade_growth_rates_step_up_when_growth_was_below_terminal():
+    assert v.fade_growth_rates(0.01, 0.025, 5) == [
+        close(0.013), close(0.016), close(0.019), close(0.022), close(0.025),
+    ]
+
+
+def test_fade_growth_rates_need_at_least_one_year():
+    with pytest.raises(ValueError, match="at least one year"):
+        v.fade_growth_rates(0.10, 0.025, 0)
+
+
+def test_starting_point_assumptions_hold_the_ratios_flat_like_the_sheet():
+    result = v.starting_point_assumptions(STARTING_POINT_RATIOS, TERMINAL_GROWTH_RATE, 5)
+    assert result["growth_rates"] == [close(expected) for expected in STARTING_POINT_GROWTH]
+    assert result["operating_margins"] == [close(0.36627540073204595)] * 5     # starting point D18:H18
+    assert result["tax_rate"] == close(0.18365010304556903)                    # D19:H19
+    assert result["da_pcts"] == [close(0.034414573604274475)] * 5              # D20:H20
+    assert result["capex_pcts"] == [close(0.007530817451302116)] * 5           # D21:H21
+    assert result["wc_pcts"] == [close(0.025453321553283687)] * 5              # D22:H22
+
+
+def test_starting_point_assumptions_fit_straight_into_run_full_dcf():
+    # The workbook has no DCF price for this starting point, so this only checks that the
+    # shapes fit and the whole chain runs from Adobe's raw 10-K figures to a price.
+    ratios = v.last_year_ratios(**ADOBE_LAST_YEAR)
+    assumptions = v.starting_point_assumptions(ratios, TERMINAL_GROWTH_RATE, 5)
+    result = v.run_full_dcf(**dict(BASE_DCF_INPUTS, **assumptions), terminal_growth_rate=TERMINAL_GROWTH_RATE)
+    assert result["implied_share_price"] > 0
+    assert len(result["revenues"]) == 5

@@ -31,6 +31,11 @@ WC_PCTS = [0.01, 0.01, 0.01, 0.01, 0.01]
 # real growth (see docs/model.md, Terminal value). Excel: valuation C17.
 TERMINAL_GROWTH_RATE = 0.025
 
+# For a company other than Adobe: how many forecast years the starting point lasts, and so
+# how many years revenue growth takes to fade to the terminal growth rate (see docs/model.md,
+# Starting point for other companies). Excel: starting point C13.
+STARTING_POINT_YEARS = 5
+
 
 # ---------------------------------------------------------------------------
 # Slider ranges for the app (Phase 5). These are not forecasts, only how far each slider

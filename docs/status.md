@@ -54,20 +54,26 @@
   `app.py` remembers the answer for 15 minutes and shows a grey line (live) or a yellow
   warning (fell back) under the title. The page no longer shows exactly $305.60 at the
   default sliders, on purpose (see decisions). Five new tests; 166 tests pass.
-- Done (in the open pull request): the "starting point" sheet in
-  `excel/valuation-lab.xlsx`, built by Haavard. It takes Adobe's FY2025 ratios from
-  `Projection`, fades revenue growth in a straight line to terminal growth over five years,
-  and holds operating margin, tax rate, D&A %, capex % and working capital % at last year's
-  level. Only Excel so far: the Python is not written.
-- Next: write `docs/model.md`'s "Starting point for other companies" section (Haavard), then
-  the matching functions in `valuation.py` with tests against the sheet's cells (same way
-  as Phase 2). Other candidate: the optional Phase 7 (saving via Supabase).
+- Done: the "starting point" sheet in `excel/valuation-lab.xlsx`, built by Haavard, and its
+  write-up in `docs/model.md` ("Starting point for other companies"). It takes Adobe's FY2025
+  ratios from `Projection`, fades revenue growth in a straight line to terminal growth over
+  five years, and holds the other five ratios at last year's level. Merged.
+- Done (in the open pull request): the Python for it. `last_year_ratios`,
+  `fade_growth_rates` and `starting_point_assumptions` in `valuation.py`, and
+  `STARTING_POINT_YEARS` in `assumptions.py`, with 19 new tests against the sheet's cells
+  (C5:C10 and D17:H22). 185 tests pass. Nothing calls them yet: `data.py` and `app.py` are
+  unchanged.
+- Next: Haavard's call. The data package for other companies (`data.py`): last year's
+  prior-year revenue, income tax, income before tax, capex and cash from working capital,
+  first for Adobe from the snapshot, then from a live source. After that, a ticker box in the
+  app. Other candidate: the optional Phase 7 (saving via Supabase).
 - Open:
-  - Decided, Excel built, Python not built: for a company other than Adobe, the forecast
+  - Decided, maths built, not yet used: for a company other than Adobe, the forecast
     assumptions start from that company's own last reported year (see `docs/decisions.md`,
-    2026-11-06 and 2026-11-06 "starting point sheet"). The data package will need more
-    fields (last year's capex, tax, prior-year revenue), and the page must warn that a DCF
-    suits stable, cash-generating companies.
+    both 2026-11-06 entries). The data package still needs the new fields above, and the
+    page must warn that a DCF suits stable, cash-generating companies.
+  - A starting point is mechanical. It does not know about one-off years, margins that are
+    still rising or falling, or a company whose last year was unusual. The page must say so.
   - After a deploy that changes a file the app imports (for example `assumptions.py`), the
     live app can crash with an `AttributeError` because the server still holds the old copy
     in memory. This happened after the WACC slider merge. Fix: Manage app, the three dots,
