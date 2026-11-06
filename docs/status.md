@@ -13,11 +13,17 @@
   `valuation.py` still gives $305.60 and the three multiples prices.
 - Done: the seven base case forecast assumptions live in `assumptions.py`, each with its
   Excel cell, checked by `test_assumptions.py`. Merged.
-- Done (in the open pull request): `run_multiples` in `valuation.py` runs the whole multiples
-  comparison in one call, with three tests matching the Excel Multiples sheet.
-- Next: Phase 4 — the smallest possible Streamlit app (DCF and multiples, no sliders),
-  deployed early.
+- Done: `run_multiples` in `valuation.py` runs the whole multiples comparison in one call,
+  with three tests matching the Excel Multiples sheet. Merged.
+- Done (in the open pull request): Phase 4 code — `app.py` shows Adobe's DCF ($305.60 vs
+  market $251.47) and multiples ($333.58 / $420.52 / $463.54), with the disclaimer footer.
+  Not yet run inside real Streamlit (this machine has Python 3.9 only); the numbers were
+  checked with a stand-in for `streamlit`.
+- Next: run the app for real, then deploy it to Streamlit Community Cloud (Haavard does the
+  deploy), then Phase 6 puts the live link in the README.
 - Open:
+  - `README.md` still says "Phase 0 ... No valuation or app code exists yet" and "Nothing to
+    run yet". It needs updating once the app is deployed (Phase 6).
   - `docs/model.md`, `docs/glossary.md` and `LEARNING.md` still have their old Phase 0
     placeholder text above the real content (e.g. "It is empty for now"). Haavard's call
     whether to tidy this.
