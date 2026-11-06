@@ -270,3 +270,49 @@ def run_full_dcf(
         "implied_share_price": price,
         "upside": upside(price, share_price),
     }
+
+
+# ---------------------------------------------------------------------------
+# The whole multiples comparison in one go
+# ---------------------------------------------------------------------------
+
+def run_multiples(
+    revenue,
+    ebit,
+    depreciation_and_amortisation,
+    net_income,
+    net_debt_amount,
+    shares,
+    peer_ev_sales,
+    peer_ev_ebitda,
+    peer_pe,
+    dcf_price,
+):
+    """Value the company from its peers' multiples, then compare with the DCF price.
+
+    Returns a dictionary holding the peer medians, the three prices (EV/Sales, EV/EBITDA
+    and P/E), the middle of those three prices, and how far the DCF price is above or below
+    it, so a page can show any of them.
+    """
+    median_ev_sales = peer_median(peer_ev_sales)
+    median_ev_ebitda = peer_median(peer_ev_ebitda)
+    median_pe = peer_median(peer_pe)
+
+    price_ev_sales = price_from_ev_multiple(revenue, median_ev_sales, net_debt_amount, shares)
+    price_ev_ebitda = price_from_ev_multiple(
+        ebitda(ebit, depreciation_and_amortisation), median_ev_ebitda, net_debt_amount, shares
+    )
+    price_pe = price_from_pe(net_income, median_pe, shares)
+
+    median_price = peer_median([price_ev_sales, price_ev_ebitda, price_pe])
+
+    return {
+        "median_ev_sales": median_ev_sales,
+        "median_ev_ebitda": median_ev_ebitda,
+        "median_pe": median_pe,
+        "price_ev_sales": price_ev_sales,
+        "price_ev_ebitda": price_ev_ebitda,
+        "price_pe": price_pe,
+        "median_price": median_price,
+        "dcf_vs_multiples": dcf_vs_multiples(dcf_price, median_price),
+    }
