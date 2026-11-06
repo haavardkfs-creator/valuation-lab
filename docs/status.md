@@ -7,10 +7,12 @@
 - Done: Phase 2 — `valuation.py` holds all the valuation maths and `test_valuation.py` has
   26 tests that match the Excel model's exact values, including the $305.60 implied price,
   WACC 10.9266% and the three multiples prices. Merged, and CI passes on Python 3.12.
-- Done (in the open pull request): Phase 3 — `data.py` supplies Adobe's figures from a
-  frozen snapshot of the Excel model's numbers, through a source that can be swapped.
+- Done: Phase 3 — `data.py` supplies Adobe's figures from a
+  frozen snapshot of the Excel model's numbers, through a source that can be swapped. Merged.
   `test_data.py` checks every figure against Excel and proves that data fed into
   `valuation.py` still gives $305.60 and the three multiples prices.
+- Done (in the open pull request): the seven base case forecast assumptions now live in
+  `assumptions.py`, each with its Excel cell, checked by `test_assumptions.py`.
 - Next: Phase 4 — the smallest possible Streamlit app, deployed early.
 - Open:
   - `docs/model.md`, `docs/glossary.md` and `LEARNING.md` still have their old Phase 0
@@ -21,9 +23,6 @@
     to decide which one it matches.
   - `run_full_dcf` covers the DCF only. The multiples are separate function calls; a
     single "run everything" function may be wanted for the app in Phase 4 or 5.
-  - The assumptions (growth, margins, tax rate, D&A %, capex %, working capital %, terminal
-    growth) currently live only in `test_valuation.py`. The app needs them in one named
-    place of its own, with their source, before Phase 4.
   - A live data source is not built yet. Plan: its own pull request, starting with share
     price and beta, then plugged into `SOURCES` in `data.py`. Risk-free rate and equity
     risk premium (Damodaran) have no simple feed and stay typed in by hand.

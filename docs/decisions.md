@@ -55,3 +55,16 @@ stay out (they become the sliders in Phase 5). Because `data.py` must not calcul
 showing the sum. Tests for `data.py` go in a new file, `test_data.py`, which is not in
 CLAUDE.md's folder table: one test file per module keeps each easy to find. It imports the
 base case assumptions from `test_valuation.py` so they stay in one named place.
+
+## 2026-11-05 — The forecast assumptions get their own file, assumptions.py
+
+The seven forecast assumptions (revenue growth, operating margins, tax rate, D&A %, capex %,
+working capital % and terminal growth) move out of `test_valuation.py` into a new file,
+`assumptions.py`, one named constant each, with the Excel cell it came from. A matching
+`test_assumptions.py` checks each value against Excel and runs them through `valuation.py`
+to confirm the $305.60 answer. Neither file is in CLAUDE.md's folder table. Reason: the app
+needs these numbers in one named place, and they fit nowhere else: they are judgments, so
+not `data.py` (facts only), and they are numbers, so not `valuation.py` (maths only). Only
+the single base case is held; slider ranges and scenarios wait for Phase 5. The base case
+block in `test_valuation.py` stays as it is, on purpose: those tests keep their own copy of
+the Excel values so they fail if `assumptions.py` ever drifts.
