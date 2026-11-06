@@ -111,7 +111,7 @@ A test that shows how the valuation changes when key assumptions change. In this
 share price is recalculated for different WACC and terminal growth rates to see which
 assumptions matter most.
 ## Upside vs market
-How much higher (or lower) a stock’s expected return is compared with the overall market. A positive upside vs market suggests the stock may outperform if the assumptions are correct.
+The percentage difference between the DCF price and the current market price. A positive value means the model estimates the stock is worth more than its current market price, suggesting potential undervaluation.
 
 ## Revenue growth
 The rate at which a company’s sales increase over time. Higher revenue growth often signals stronger demand for the company’s products or services.
@@ -123,5 +123,4 @@ Operating income divided by revenue. It shows how much profit a company keeps fr
 The middle value of a metric for a group of comparable companies. It is often used as a benchmark when evaluating a company’s valuation or performance.
 
 ## DCF vs multiples
-Two common valuation methods. DCF estimates value based on expected future cash flows, while multiples compare a company’s valuation ratios with similar companies.
-
+The percentage difference between the DCF price and the price implied by peer valuation multiples. A negative value means the DCF valuation is lower than the multiples-based valuation, while a positive value means it is higher.
