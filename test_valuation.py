@@ -660,3 +660,39 @@ def test_financial_debt_matches_wacc_c22():
 
 def test_financial_debt_adds_the_two_lines():
     assert v.financial_debt(9227, 31067) == 40294
+
+
+# ---------------------------------------------------------------------------
+# Capex fades down to D&A (starting point sheet, row 21 and the example in rows 29-32)
+# ---------------------------------------------------------------------------
+
+CAPEX_FADE_EXAMPLE = [0.304, 0.258, 0.212, 0.166, 0.12]        # starting point D32:H32
+
+
+def test_capex_fade_matches_the_sheets_worked_example():
+    # Capex 35% (starting point C30) and D&A 12% (C31): equal steps of 4.6 points down to 12%.
+    assert v.fade_capex_pcts(0.35, 0.12, 5) == [close(x) for x in CAPEX_FADE_EXAMPLE]
+
+
+def test_capex_already_below_da_stays_flat_like_adobes_row_21():
+    adobe = STARTING_POINT_RATIOS
+    result = v.fade_capex_pcts(adobe["capex_pct"], adobe["da_pct"], 5)       # 0.75% against D&A 3.44%
+    assert result == [adobe["capex_pct"]] * 5                                # starting point D21:H21
+
+
+def test_capex_equal_to_da_stays_flat():
+    assert v.fade_capex_pcts(0.05, 0.05, 5) == [0.05] * 5
+
+
+def test_capex_fade_reaches_da_in_the_last_year_whatever_the_length():
+    for years in (1, 3, 10):
+        assert v.fade_capex_pcts(0.40, 0.10, years)[-1] == close(0.10)
+
+
+def test_starting_point_fades_a_high_capex_but_holds_the_other_ratios():
+    heavy = dict(STARTING_POINT_RATIOS, capex_pct=0.35, da_pct=0.12)         # the sheet's example
+    result = v.starting_point_assumptions(heavy, TERMINAL_GROWTH_RATE, 5)
+    assert result["capex_pcts"] == [close(x) for x in CAPEX_FADE_EXAMPLE]
+    assert result["da_pcts"] == [close(0.12)] * 5                            # D&A is still held flat
+    assert result["operating_margins"] == [close(heavy["operating_margin"])] * 5
+    assert result["wc_pcts"] == [close(heavy["wc_pct"])] * 5

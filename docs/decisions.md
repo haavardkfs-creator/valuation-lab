@@ -407,3 +407,26 @@ was found by deliberately breaking the page and replaced with one that works the
 independently. Run for real on Adobe, Microsoft and a nonsense ticker. Microsoft's result
 (a DCF price 79% below the market price, because last year's capex of about 35% of revenue is
 held for ever) is recorded in `docs/status.md` as a limit of the starting point, not an error.
+
+## 2026-11-06 — Capex fades down to D&A in the starting point
+
+Running real companies through the ticker box showed that holding capex at last year's share
+of revenue for ever is too harsh for a company in a heavy-spending year: Microsoft's capex was
+about 35% of revenue against D&A of about 12%, which put its DCF price 79% below the market.
+In the long run a company cannot spend far more than it depreciates, because the terminal
+value assumes a steady state. So capex now fades, in equal steps over the five years, from
+last year's level down to last year's D&A level, the same way growth fades to the terminal rate.
+Haavard built it in Excel first: row 21 of the `starting point` sheet uses
+`=C21+(MIN($C$21,$C$20)-$C$21)/$C$13`, plus a worked example in rows 29-32 (capex 35%, D&A 12%,
+giving 30.4%, 25.8%, 21.2%, 16.6%, 12.0%) that the Python is tested against. The fade is only
+ever downwards: the target is the lower of capex % and D&A %, so a company whose capex is
+already below its D&A stays flat. That matters for Adobe, whose D&A includes amortisation of
+acquired intangibles; pushing its capex up to match would punish asset-light companies for no
+reason. Adobe's starting point and page are unchanged (its capex row is flat, checked in the
+tests; the page uses its hand-chosen assumptions anyway). In Python, `fade_capex_pcts` reuses
+the same equal-steps function as the growth fade, and `starting_point_assumptions` calls it.
+Result on real data on 6 Nov 2026: Microsoft's DCF price moves from 79% below its market price
+to 48% below. Real companies also showed two further problems, recorded in `docs/status.md`
+and not fixed here: working capital held at last year's level sinks Coca-Cola (a -15% of
+revenue outflow held for ever), and Apple has no interest expense on Yahoo at all, so it cannot
+be valued. No new files.
