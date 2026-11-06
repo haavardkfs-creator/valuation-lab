@@ -277,3 +277,23 @@ the page no longer shows the Excel model's $305.60 at the default sliders, becau
 changes the WACC. This is on purpose. The tests still match Excel to the cent, because they
 run on the snapshot, which stays the default source in `data.py`. Only the fetching is
 covered by tests; how the page looks was checked by running it. No new files.
+
+## 2026-11-06 — The Excel "starting point" sheet: how a forecast starts from a company's last year
+
+Haavard built a new sheet, `starting point`, in `excel/valuation-lab.xlsx` (Excel first, as in
+Phase 1; the Python comes after and must match it to the cent). It uses Adobe's FY2025 as
+the test case and links to `Projection` column G for last year's ratios (no new 10-K figures
+are needed). The rules, from the 2026-11-06 design decision: revenue growth steps down in a
+straight line from last year's rate to the terminal growth rate, reaching it in the last of
+five forecast years (each year = the year before + (terminal growth - last year's growth) /
+years in the forecast; for Adobe 10.53%, 8.92%, 7.32%, 5.71%, 4.11%, 2.50%); operating
+margin, tax rate, D&A % and capex % stay at last year's level. Terminal growth is a link to
+`valuation` C17, so it lives in one place; the number of years (5) is the one typed input
+(`starting point` C13). Working capital % also stays at last year's level. That was Haavard's
+call, made over the alternative of setting it to zero: he judged holding it more realistic.
+The trade-off, for the record: Adobe's working capital is a cash inflow (2.55% of revenue)
+because customers pay for subscriptions up front, and carrying an inflow forward is
+optimistic for a company where that is a one-off; a company that uses cash keeps using it
+under the same rule. The page will present the result as a starting point, not a forecast.
+The workbook is replaced as a whole file: the six original sheets are identical in formulas
+and values (checked), so the $305.60 result is unchanged. No new files.
