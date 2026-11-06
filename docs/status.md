@@ -61,24 +61,29 @@
 - Done: the Python for it. `last_year_ratios`, `fade_growth_rates` and
   `starting_point_assumptions` in `valuation.py`, and `STARTING_POINT_YEARS` in
   `assumptions.py`, with 19 new tests against the sheet's cells (C5:C10 and D17:H22). Merged.
-- Done (in the open pull request): `data.py`'s package now carries last year's figures:
-  `prior_year_revenue`, `income_tax`, `income_before_tax`, `capex` and
-  `cash_from_working_capital`, filled in for Adobe in the snapshot with their 10-K pages.
-  A new test feeds the snapshot through `last_year_ratios` and expects the `starting point`
-  sheet's C5:C10, and through `starting_point_assumptions` for D17:H17. 192 tests pass.
-  The page is unchanged.
-- Next: Haavard's call. A live source for other companies: these five figures plus revenue,
-  EBIT and D&A from Yahoo's financial statements (new tests with fake replies). After that,
-  a ticker box in the app. Other candidate: the optional Phase 7 (saving via Supabase).
+- Done: `data.py`'s package carries last year's figures: `prior_year_revenue`, `income_tax`,
+  `income_before_tax`, `capex` and `cash_from_working_capital`, filled in for Adobe in the
+  snapshot with their 10-K pages, and tested through `last_year_ratios` and
+  `starting_point_assumptions` against the sheet. Merged.
+- Done (in the open pull request): the cost of debt for other companies. Haavard added rows
+  24-27 to the `starting point` sheet (interest expense 263 / debt 6,210 = 4.24%), and
+  `estimate_pre_tax_cost_of_debt` in `valuation.py` matches C27, with 5 new tests. 197 tests
+  pass. `.gitignore` now ignores Excel's `~$` lock files. The page is unchanged.
+- Next: Haavard's call. `data.py` for other companies: an `interest_expense` field in the
+  package, and a function that fetches a company's statements from Yahoo and fills the
+  package (new tests with fake replies; multiples stay Adobe-only for now, see decisions).
+  After that, a ticker box in the app. Other candidate: the optional Phase 7 (saving via
+  Supabase).
 - Open:
   - Decided, maths and Adobe data built, not yet used: for a company other than Adobe, the
     forecast assumptions start from that company's own last reported year (see
     `docs/decisions.md`, the 2026-11-06 entries). Only Adobe has these figures so far, and the
     page must warn that a DCF suits stable, cash-generating companies.
-  - Yahoo's "working capital" line may not be the same six lines Haavard adds up on the
-    `Projection` sheet (receivables, prepaid expenses, payables, accrued expenses, income
-    taxes payable, deferred revenue). The live source for other companies must check this
-    and say how the two differ before the figures are trusted.
+  - Yahoo's "Change In Working Capital" for Adobe is 605, the same as the six lines Haavard
+    adds up on the `Projection` sheet (checked 6 Nov 2026), so the definitions agree at least
+    for Adobe. Yahoo's "Total Debt" includes leases (6,648), so the live source must use long
+    term plus current debt (6,210) instead. Yahoo's share count (389.2m) is more recent than
+    the 10-K year-end count the model uses (413m).
   - A starting point is mechanical. It does not know about one-off years, margins that are
     still rising or falling, or a company whose last year was unusual. The page must say so.
   - After a deploy that changes a file the app imports (for example `assumptions.py`), the
