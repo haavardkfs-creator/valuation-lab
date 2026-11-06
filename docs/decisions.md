@@ -188,3 +188,20 @@ labels are a named constant, `FORECAST_YEAR_LABELS`, in `assumptions.py` with a 
 dollar signs in the caption must be escaped (`\$`), because Streamlit reads text between two
 dollar signs as a maths formula; and the charts zoom if the mouse wheel is turned over
 them, which is a Streamlit feature, not a bug. No new files.
+
+## 2026-11-05 — Phase 5: plain-language boxes from the glossary, and test_explanations.py is added
+
+`explanations.py` (already in CLAUDE.md's folder table for Phase 5+) holds twelve terms, each
+copied word for word from Haavard's `docs/glossary.md`: its name, and its explanation. A
+closed "What do these terms mean?" box under each of the four sections (DCF, Behind the
+number, Sensitivity, Peer multiples) lists the terms that section uses, drawn by
+`draw_explanations` in `app.py`. Only the glossary's definition sentences are used, not its
+"in this model..." sentences, because those quote base-case numbers ($305.60, about 70%)
+that the sliders change, and a panel that says $305.60 beside a price of $318 would mislead.
+The glossary stays the source and stays Haavard's: Claude did not write or edit it. Tests for
+this go in a new file, `test_explanations.py`, which is not in the folder table (one test
+file per module, as before). It checks that every text is word for word in the glossary (so
+the panels cannot drift from his wording), that no text contains a digit, `$` or `%`, and
+that every term is used. Still to come as a follow-up pull request, once Haavard has written
+the glossary entries: Upside vs market, Revenue growth, Operating margin, Peer median and
+DCF vs multiples.
