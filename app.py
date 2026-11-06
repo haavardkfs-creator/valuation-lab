@@ -10,6 +10,7 @@ import streamlit as st
 
 import assumptions
 import data
+import explanations
 import valuation
 
 # The company on the page. Phase 4 shows one company; choosing a ticker comes later.
@@ -155,6 +156,16 @@ def draw_sliders():
     return growth_shift, margin_shift, terminal_growth_rate, wacc_override
 
 
+def draw_explanations(section):
+    """Draw a closed box that explains, in plain language, the terms used in one section of
+    the page. The wording comes from explanations.py.
+    """
+    with st.expander("What do these terms mean?"):
+        for term in explanations.SECTION_TERMS[section]:
+            title, text = explanations.EXPLANATIONS[term]
+            st.markdown(f"**{title}**  \n{text}")
+
+
 def draw_dcf(company, dcf, wacc_is_set_by_user):
     """Draw the DCF section: the implied price next to the market price, the upside, and WACC
     (labelled as the user's own when it comes from the slider).
@@ -165,6 +176,7 @@ def draw_dcf(company, dcf, wacc_is_set_by_user):
     market_column.metric("Market price", dollars(company["share_price"]))
     upside_column.metric("Upside vs market", percent(dcf["upside"]))
     wacc_column.metric("WACC (your setting)" if wacc_is_set_by_user else "WACC", percent(dcf["wacc"]))
+    draw_explanations("dcf")
 
 
 def tint(price, market_price):
@@ -215,6 +227,7 @@ def draw_charts(dcf):
         f"years (\\${dcf['pv_of_forecast']:,.0f} million) plus everything after year 5, the "
         f"terminal value (\\${dcf['pv_of_terminal_value']:,.0f} million), both discounted to today."
     )
+    draw_explanations("behind_the_number")
 
 
 def draw_heatmap(company, dcf_inputs, base_wacc):
@@ -252,6 +265,7 @@ def draw_heatmap(company, dcf_inputs, base_wacc):
         f"Green means above today's market price of {dollars(company['share_price'])}, red below it. "
         "The bold price is the base case. The growth and margin sliders move the whole table."
     )
+    draw_explanations("sensitivity")
 
 
 def draw_multiples(multiples):
@@ -266,6 +280,7 @@ def draw_multiples(multiples):
     median_column, gap_column = st.columns(2)
     median_column.metric("Middle of the three", dollars(multiples["median_price"]))
     gap_column.metric("DCF vs multiples", percent(multiples["dcf_vs_multiples"]))
+    draw_explanations("multiples")
 
 
 def draw_page():

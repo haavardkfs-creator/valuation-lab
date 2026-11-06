@@ -32,11 +32,16 @@
 - Done: Phase 5, step 5 — a "Set the WACC myself" tick box and WACC slider in the sidebar.
   Unticked, the model's exact WACC is used. The heatmap stays centred on the model's WACC.
   Merged and live.
-- Done (in the open pull request): Phase 5, step 6 — a "Behind the number" section with two
-  charts: revenue and free cash flow for FY2026-30, and the two parts of enterprise value
-  (five forecast years and terminal value). Checked in real Streamlit.
-- Next: Phase 5, last piece: the plain-language panel under every metric
-  (`explanations.py`, drafted from `docs/glossary.md`; Haavard reviews the wording).
+- Done: Phase 5, step 6 — a "Behind the number" section with two charts: revenue and free
+  cash flow for FY2026-30, and the two parts of enterprise value (five forecast years and
+  terminal value). Merged and live.
+- Done (in the open pull request): Phase 5, step 7 — `explanations.py` and a closed "What do
+  these terms mean?" box under each of the four sections, using Haavard's glossary wording
+  word for word (definition sentences only). `test_explanations.py` checks the wording
+  against `docs/glossary.md`.
+- Next: Haavard writes five glossary entries (Upside vs market, Revenue growth, Operating
+  margin, Peer median, DCF vs multiples); then a small pull request adds them to the boxes.
+  After that Phase 5 is complete and Phase 6 gives the README the live link.
 - Open:
   - After a deploy that changes a file the app imports (for example `assumptions.py`), the
     live app can crash with an `AttributeError` because the server still holds the old copy
