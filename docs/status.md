@@ -85,6 +85,14 @@
   (Adobe's 0.75% against D&A of 3.44% stays flat); `starting_point_assumptions` uses it. 5 new
   tests against the sheet's cells; 235 tests pass. On real data Microsoft moves from a DCF price
   79% below the market to 48% below.
+- Done (in the open pull request): currency. Aker ASA (AKER.OL) showed kroner with dollar
+  signs, and Novo Nordisk and Shell mixed currencies (statements in DKK with a USD price;
+  statements in USD with a price in pence). The `"yahoo"` source now asks Yahoo for the
+  statement currency, the price currency and the exchange rate for each, and converts every
+  money figure and the share price to US dollars (`valuation.convert_currency`); pence go
+  through pounds. The page says what was converted and at what rate. Ratios do not change.
+  Also fixed: a low-WACC company could crash the page through the heatmap; it now says why the
+  table is missing. New tests for kroner, DKK/USD, pence, a missing rate and the low-WACC page.
 - Next: Haavard's call. Two problems the real companies showed (see Open): working capital held
   forever, and companies without an interest expense line. Other options: a way to choose peers
   so other companies get multiples, or the optional Phase 7 (saving via Supabase).
@@ -94,6 +102,12 @@
     point holds that outflow for ever; with that, the DCF price is $25 against a market price of
     $96 (-74%). Haavard chose to hold working capital (decisions, 6 Nov); this is the downside
     of that choice. Options, none built: fade it to zero like capex fades, or cap it.
+  - Currency limits: every figure is converted at today's rate, including last year's
+    statements (a standard simplification). Share counts are used as Yahoo gives them, so a
+    foreign company traded in the US as an ADR whose ratio is not one-to-one will still be off.
+  - Very low betas give very low WACCs. Shell on 6 Nov 2026 has a WACC of 4.5% and a DCF
+    price of $138 against a market price of $50. The method is working as designed, but the
+    result is not believable; a floor on the WACC, or a warning, would be a decision for later.
   - Apple cannot be valued: Yahoo has no interest expense at all for it (every interest line
     is empty), so the cost of debt cannot be estimated and the page shows a plain error. Needs
     a decision: a fallback cost of debt (for example the risk-free rate plus a spread), or

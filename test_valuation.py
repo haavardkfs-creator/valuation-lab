@@ -696,3 +696,9 @@ def test_starting_point_fades_a_high_capex_but_holds_the_other_ratios():
     assert result["da_pcts"] == [close(0.12)] * 5                            # D&A is still held flat
     assert result["operating_margins"] == [close(heavy["operating_margin"])] * 5
     assert result["wc_pcts"] == [close(heavy["wc_pct"])] * 5
+
+
+def test_convert_currency_multiplies_by_the_rate():
+    assert v.convert_currency(1000, 0.10564258) == close(105.64258)     # 1,000 NOK at a rate of 0.1056
+    assert v.convert_currency(1000, 1.0) == 1000                        # dollars stay dollars
+    assert v.convert_currency(-50, 0.5) == -25                          # signs are kept

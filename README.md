@@ -12,9 +12,9 @@ This is a learning project, not investment advice.
 ## What it does today
 
 The app opens on **Adobe (ADBE)**, and a **Company ticker** box in the sidebar lets you value
-any other US-listed company. Adobe's forecast is hand-chosen and checked against the Excel
+any other company on Yahoo Finance. Adobe's forecast is hand-chosen and checked against the Excel
 model. For any other company, every figure comes from Yahoo Finance's latest annual statements
-and the forecast is only a **starting point, not a forecast**: revenue growth fades in equal
+converted to US dollars at today's exchange rate if the company reports or trades in another currency, and the forecast is only a **starting point, not a forecast**: revenue growth fades in equal
 steps to the terminal growth rate, capex fades down to the D&A level if it was above it, and
 margins, tax rate, D&A and working capital stay at last year's level. Other companies get the DCF only (no peer multiples), and a DCF
 suits stable, cash-generating companies, not banks, loss-making or early-stage ones.

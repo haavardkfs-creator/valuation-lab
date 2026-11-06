@@ -232,3 +232,49 @@ def test_the_year_labels_for_other_companies_are_numbered_and_as_long_as_the_for
     assert assumptions.GENERIC_YEAR_LABELS == ["Year 1", "Year 2", "Year 3", "Year 4", "Year 5"]
     assert len(assumptions.GENERIC_YEAR_LABELS) == assumptions.STARTING_POINT_YEARS
     assert len(assumptions.GENERIC_YEAR_LABELS) == len(assumptions.FORECAST_YEAR_LABELS)
+
+
+# ---------------------------------------------------------------------------
+# Currency: a company that does not report in dollars says so
+# ---------------------------------------------------------------------------
+
+def krone_company():
+    """A stand-in for Yahoo's reply about a company that reports and trades in kroner."""
+    info = dict(ADOBE_YAHOO_INFO, longName="Krone Corp", financialCurrency="NOK", currency="NOK")
+    return fake_statements_ticker(info=info, fx_rates={"NOKUSD=X": 0.10})
+
+
+def test_a_company_in_kroner_is_shown_in_dollars_with_a_conversion_note(monkeypatch):
+    page = run_page(monkeypatch, ticker="krn.ol", yahoo=krone_company())
+    assert_footer_and_no_crash(page)
+    assert "Converted from NOK to US dollars at today's exchange rate (1 NOK = $0.1)." in texts(page.caption)
+    assert metrics(page)["Market price"] == "$24.07"        # 240.74 kroner at 10 US cents each
+
+
+def test_a_dollar_company_gets_no_conversion_note(monkeypatch):
+    page = run_page(monkeypatch, ticker="exmp", yahoo=other_company())
+    assert not any(caption.startswith("Converted") for caption in texts(page.caption))
+
+
+def test_the_conversion_note_names_what_was_converted():
+    adobe = data.get_company_data("ADBE")
+    assert app.currency_note(adobe) is None                 # the snapshot has no currency fields
+    both = dict(statement_currency="NOK", price_currency="NOK", usd_per_statement_unit=0.1056, usd_per_price_unit=0.1056)
+    assert app.currency_note(both) == "Converted from NOK to US dollars at today's exchange rate (1 NOK = $0.1056)."
+    mixed = dict(statement_currency="DKK", price_currency="USD", usd_per_statement_unit=0.149, usd_per_price_unit=1.0)
+    assert app.currency_note(mixed) == "Converted to US dollars at today's exchange rates: the statements from DKK (1 DKK = $0.149)."
+    pence = dict(statement_currency="USD", price_currency="GBp", usd_per_statement_unit=1.0, usd_per_price_unit=0.01335)
+    assert app.currency_note(pence) == "Converted to US dollars at today's exchange rates: the share price from GBp (1 GBp = $0.01335)."
+
+
+def test_a_very_low_wacc_still_shows_the_dcf_and_explains_the_missing_heatmap(monkeypatch):
+    # A negative beta pulls the WACC to about 4%: fine for the DCF, but the heatmap's lowest
+    # row (a point lower) falls below its highest terminal growth rate (3.5%).
+    low_beta = fake_statements_ticker(info=dict(ADOBE_YAHOO_INFO, beta=-0.3))
+    page = run_page(monkeypatch, ticker="lowb", yahoo=low_beta)
+    assert_footer_and_no_crash(page)
+    assert not page.error
+    assert "DCF implied price" in metrics(page)
+    assert "Sensitivity: price at different WACC and terminal growth" in texts(page.subheader)
+    assert any("This table cannot be drawn" in caption for caption in texts(page.caption))
+    assert not page.dataframe

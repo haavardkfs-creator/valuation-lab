@@ -172,6 +172,13 @@ def enterprise_value(pv_of_forecast, pv_of_terminal_value):
 # From enterprise value to a share price
 # ---------------------------------------------------------------------------
 
+def convert_currency(amount, usd_per_unit):
+    """Turn an amount in another currency into US dollars, given how many dollars one unit of
+    that currency is worth (for example 0.106 dollars per Norwegian krone).
+    """
+    return amount * usd_per_unit
+
+
 def financial_debt(current_debt, long_term_debt):
     """Add the current portion of debt to long-term debt to get financial debt, with
     leases left out (docs/model.md: "Discount rate (WACC)").
