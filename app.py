@@ -67,13 +67,16 @@ def build_dcf_inputs(company, growth_shift, margin_shift):
     )
 
 
-def run_valuation(company, dcf_inputs, terminal_growth_rate):
+def run_valuation(company, dcf_inputs, terminal_growth_rate, wacc_override=None):
     """Run the DCF and the multiples comparison for one company's figures.
 
+    Leave wacc_override out to use the model's own WACC, or give a rate to use that instead.
     Returns the DCF results and the multiples results, each as a dictionary of named
     numbers. The multiples need the DCF's net debt and implied price, so the DCF runs first.
     """
-    dcf = valuation.run_full_dcf(**dcf_inputs, terminal_growth_rate=terminal_growth_rate)
+    dcf = valuation.run_full_dcf(
+        **dcf_inputs, terminal_growth_rate=terminal_growth_rate, wacc_override=wacc_override
+    )
     multiples = valuation.run_multiples(
         revenue=company["revenue"],
         ebit=company["ebit"],
@@ -89,9 +92,19 @@ def run_valuation(company, dcf_inputs, terminal_growth_rate):
     return dcf, multiples
 
 
+def model_wacc(dcf_inputs):
+    """Find the model's own WACC, worked out from the company's figures, ignoring any WACC
+    the user has set with the slider. The heatmap stays centred on this one.
+    """
+    return valuation.run_full_dcf(
+        **dcf_inputs, terminal_growth_rate=assumptions.TERMINAL_GROWTH_RATE
+    )["wacc"]
+
+
 def draw_sliders():
-    """Draw the three sliders in the sidebar and return what they are set to: the growth
-    shift, the margin shift and the terminal growth rate. Each starts at the base case.
+    """Draw the sliders in the sidebar and return what they are set to: the growth shift,
+    the margin shift, the terminal growth rate and the WACC the user chose (None when the
+    box is unticked, meaning the model uses its own). Each starts at the base case.
     """
     st.sidebar.header("Change the assumptions")
     growth_shift = st.sidebar.slider(
@@ -121,17 +134,33 @@ def draw_sliders():
         format="percent",
         help="How fast cash flow is assumed to grow forever after year 5. The base case is 2.5%.",
     )
-    return growth_shift, margin_shift, terminal_growth_rate
+    wacc_override = None
+    if st.sidebar.checkbox(
+        "Set the WACC myself",
+        help="Unticked, the model works out its own WACC from the company's figures. Ticked, the slider sets it.",
+    ):
+        wacc_override = st.sidebar.slider(
+            "WACC",
+            min_value=assumptions.WACC_SLIDER_MIN,
+            max_value=assumptions.WACC_SLIDER_MAX,
+            value=assumptions.WACC_SLIDER_START,
+            step=assumptions.WACC_SLIDER_STEP,
+            format="percent",
+            help="The rate that cash flows are discounted at. Higher means a lower price.",
+        )
+    return growth_shift, margin_shift, terminal_growth_rate, wacc_override
 
 
-def draw_dcf(company, dcf):
-    """Draw the DCF section: the implied price next to the market price, the upside, and WACC."""
+def draw_dcf(company, dcf, wacc_is_set_by_user):
+    """Draw the DCF section: the implied price next to the market price, the upside, and WACC
+    (labelled as the user's own when it comes from the slider).
+    """
     st.subheader("Discounted cash flow (DCF)")
     price_column, market_column, upside_column, wacc_column = st.columns(4)
     price_column.metric("DCF implied price", dollars(dcf["implied_share_price"]))
     market_column.metric("Market price", dollars(company["share_price"]))
     upside_column.metric("Upside vs market", percent(dcf["upside"]))
-    wacc_column.metric("WACC", percent(dcf["wacc"]))
+    wacc_column.metric("WACC (your setting)" if wacc_is_set_by_user else "WACC", percent(dcf["wacc"]))
 
 
 def tint(price, market_price):
@@ -199,14 +228,14 @@ def draw_multiples(multiples):
 def draw_page():
     """Draw the whole page: sliders, title, DCF section, heatmap, multiples section and footer."""
     company = data.get_company_data(TICKER)
-    growth_shift, margin_shift, terminal_growth_rate = draw_sliders()
+    growth_shift, margin_shift, terminal_growth_rate, wacc_override = draw_sliders()
     dcf_inputs = build_dcf_inputs(company, growth_shift, margin_shift)
-    dcf, multiples = run_valuation(company, dcf_inputs, terminal_growth_rate)
+    dcf, multiples = run_valuation(company, dcf_inputs, terminal_growth_rate, wacc_override)
 
     st.title("Valuation Lab")
     st.write(f"{company['company_name']} ({company['ticker']})")
-    draw_dcf(company, dcf)
-    draw_heatmap(company, dcf_inputs, dcf["wacc"])
+    draw_dcf(company, dcf, wacc_override is not None)
+    draw_heatmap(company, dcf_inputs, model_wacc(dcf_inputs))
     draw_multiples(multiples)
     st.divider()
     st.caption(FOOTER_TEXT)

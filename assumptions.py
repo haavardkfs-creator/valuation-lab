@@ -65,3 +65,19 @@ HEATMAP_WACC_OFFSETS = [-0.01, -0.005, 0.0, 0.005, 0.01]
 
 # The terminal growth rate of each column of the heatmap. Excel: valuation D33:H33.
 HEATMAP_TERMINAL_GROWTH_RATES = [0.015, 0.02, 0.025, 0.03, 0.035]
+
+
+# ---------------------------------------------------------------------------
+# The WACC slider (Phase 5). Only used when the box "Set the WACC myself" is ticked; unticked,
+# the model works out its own WACC (10.9266%).
+# ---------------------------------------------------------------------------
+
+# Range of the WACC slider. The bottom is 6% so it always stays above the top of the terminal
+# growth slider (4%), because the Gordon growth formula breaks down when terminal growth
+# reaches the WACC. Chosen for Phase 5.
+WACC_SLIDER_MIN = 0.06
+WACC_SLIDER_MAX = 0.14
+WACC_SLIDER_STEP = 0.0025
+
+# Where the slider starts when first ticked: close to the model's own 10.93%.
+WACC_SLIDER_START = 0.11

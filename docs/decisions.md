@@ -161,3 +161,16 @@ agreed with Haavard). `matplotlib` is not needed because the colours are picked 
 function in `app.py`. The table's pandas styling cannot draw a cell outline, so the base case
 is shown in bold. Done as one pull request, not two, because the function and the table are
 one idea and Haavard was short on time. No new files.
+
+## 2026-11-05 — Phase 5: a WACC slider behind a "Set the WACC myself" box
+
+The sidebar gets a fourth control: a tick box, "Set the WACC myself", and, only when it is
+ticked, a WACC slider (6% to 14% in steps of 0.25%, starting at 11%) that is passed to
+`run_full_dcf` as `wacc_override`. Unticked, the model uses its own exact WACC, so the page
+still opens at $305.60 and the user can always get back to the exact base case, which a
+slider alone could not do (its steps never land on 10.9266%). When the slider is in use the
+WACC tile is labelled "WACC (your setting)". The heatmap stays centred on the model's own
+WACC whether or not the slider is used, so it always shows the same base case; only the
+headline moves. The slider's bottom is 6% so it always stays above the 4% top of the terminal
+growth slider. Ranges are named constants in `assumptions.py` with tests. No new files and
+no change to `valuation.py`: this reuses `wacc_override` from the earlier pull request.
