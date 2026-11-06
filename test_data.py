@@ -108,6 +108,84 @@ def test_a_source_that_leaves_figures_out_is_caught(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
+# The live source (tested with fake Yahoo replies, never the internet)
+# ---------------------------------------------------------------------------
+
+def fake_quote(price=240.74, beta=1.383):
+    """Return a stand-in for fetch_yahoo_quote that gives these figures."""
+    return lambda ticker: {"share_price": price, "beta": beta}
+
+
+class FakeYahooTicker:
+    """Stands in for yfinance.Ticker: its .info looks like a real Yahoo reply."""
+
+    def __init__(self, ticker):
+        self.info = {"currentPrice": 240.74, "beta": 1.383, "shortName": "Adobe Inc."}
+
+
+def test_live_source_replaces_only_the_share_price_and_beta():
+    live = data.live_source("ADBE", fetch_quote=fake_quote(240.74, 1.383))
+    assert live["share_price"] == 240.74
+    assert live["beta"] == 1.383
+    for field, expected in EXPECTED_SNAPSHOT.items():
+        if field not in ("share_price", "beta"):
+            assert live[field] == expected
+
+
+def test_live_source_is_complete_enough_to_pass_the_package_check():
+    data.check_package(data.live_source("ADBE", fetch_quote=fake_quote()))
+
+
+def test_live_source_still_refuses_companies_the_snapshot_does_not_have():
+    with pytest.raises(ValueError, match="only has Adobe"):
+        data.live_source("MSFT", fetch_quote=fake_quote())
+
+
+@pytest.mark.parametrize("bad_price", [None, 0, -5])
+def test_live_source_refuses_a_missing_or_impossible_share_price(bad_price):
+    with pytest.raises(ValueError, match="usable share price"):
+        data.live_source("ADBE", fetch_quote=fake_quote(price=bad_price))
+
+
+def test_live_source_refuses_a_missing_beta():
+    with pytest.raises(ValueError, match="did not give a beta"):
+        data.live_source("ADBE", fetch_quote=fake_quote(beta=None))
+
+
+def test_live_source_gives_a_plain_error_when_yahoo_cannot_be_reached():
+    def broken_fetch(ticker):
+        raise ConnectionError("no internet")
+
+    with pytest.raises(ValueError, match="Yahoo Finance.*no internet"):
+        data.live_source("ADBE", fetch_quote=broken_fetch)
+
+
+def test_fetch_yahoo_quote_picks_the_price_and_beta_out_of_yahoos_reply(monkeypatch):
+    monkeypatch.setattr("yfinance.Ticker", FakeYahooTicker)
+    assert data.fetch_yahoo_quote("ADBE") == {"share_price": 240.74, "beta": 1.383}
+
+
+def test_fetch_yahoo_quote_gives_none_for_figures_yahoo_leaves_out(monkeypatch):
+    class EmptyTicker:
+        def __init__(self, ticker):
+            self.info = {}
+
+    monkeypatch.setattr("yfinance.Ticker", EmptyTicker)
+    assert data.fetch_yahoo_quote("ADBE") == {"share_price": None, "beta": None}
+
+
+def test_the_live_source_can_be_chosen_by_name(monkeypatch):
+    monkeypatch.setattr("yfinance.Ticker", FakeYahooTicker)
+    live = data.get_company_data("adbe", source="live")
+    assert live["share_price"] == 240.74
+    assert live["beta"] == 1.383
+
+
+def test_the_default_source_is_still_the_snapshot():
+    assert data.DEFAULT_SOURCE == "snapshot"
+
+
+# ---------------------------------------------------------------------------
 # The whole chain: data.py -> valuation.py gives the Excel answers
 # ---------------------------------------------------------------------------
 
