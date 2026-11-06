@@ -54,8 +54,7 @@
   `app.py` remembers the answer for 15 minutes and shows a grey line (live) or a yellow
   warning (fell back) under the title. The page no longer shows exactly $305.60 at the
   default sliders, on purpose (see decisions). Five new tests; 166 tests pass.
-- Next: Haavard's call. Candidates: the optional Phase 7 (saving via Supabase), tidying the
-  old placeholder text, or more live figures so other tickers can be valued.
+- Next: Haavard's call. Candidates: the optional Phase 7 (saving via Supabase).
 - Open:
   - Decided, not built: for a company other than Adobe, the forecast assumptions start from
     that company's own last reported year (see `docs/decisions.md`, 2026-11-06). The data
