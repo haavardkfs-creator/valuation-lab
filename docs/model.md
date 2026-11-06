@@ -153,3 +153,7 @@ Held at last year's level in every forecast year:
 - Working capital is held too, not set to zero. Adobe's is a cash inflow because customers
   pay for subscriptions up front, so for a company where that inflow is a one-off, this is
   optimistic. A company that uses cash keeps using it under the same rule.
+
+Cost of debt is estimated as interest expense divided by total debt. This gives the company's implied pre-tax borrowing rate based on its most recent financials.
+If a company has no debt, the cost of debt is set to 0 because there are no borrowing costs to estimate.
+
