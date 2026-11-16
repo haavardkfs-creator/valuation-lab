@@ -102,7 +102,7 @@ def other_company():
     return fake_statements_ticker(info=dict(ADOBE_YAHOO_INFO, longName="Example Corp"))
 
 
-def test_another_company_gets_a_starting_point_with_a_warning_and_no_multiples(monkeypatch):
+def test_another_company_gets_a_starting_point_with_a_warning_and_no_multiples_without_peers(monkeypatch):
     page = run_page(monkeypatch, ticker="exmp", yahoo=other_company())      # lower case on purpose
     assert_footer_and_no_crash(page)
     assert "Example Corp (EXMP)" in texts(page.markdown)
@@ -114,8 +114,11 @@ def test_another_company_gets_a_starting_point_with_a_warning_and_no_multiples(m
     subheaders = texts(page.subheader)
     assert "Discounted cash flow (DCF)" in subheaders
     assert "Behind the number" in subheaders
-    assert "Peer multiples" not in subheaders
+    # The fake Yahoo has no industry, so no peers are suggested: the section says how to add some
+    # instead of showing prices.
+    assert "Peer multiples" in subheaders
     assert "EV/Sales price" not in metrics(page)
+    assert any("No suitable peers were found" in caption for caption in texts(page.caption))
     assert metrics(page)["Market price"] == "$240.74"
 
 
@@ -347,3 +350,205 @@ def test_a_low_wacc_company_gets_the_cautions_on_the_page(monkeypatch):
     warnings = texts(page.warning)
     assert any("only" in warning and "points above terminal growth" in warning for warning in warnings)
     assert any("comes from after year 5" in warning for warning in warnings)
+
+
+# ---------------------------------------------------------------------------
+# Peers for another company: suggested, editable, with the multiples that follow
+# ---------------------------------------------------------------------------
+
+def peer_info(market_cap_billions, ev_sales, ev_ebitda, pe, currency="USD"):
+    """What Yahoo says about a made-up peer."""
+    return {
+        "marketCap": market_cap_billions * 1_000_000_000, "currency": currency,
+        "enterpriseToRevenue": ev_sales, "enterpriseToEbitda": ev_ebitda, "trailingPE": pe,
+    }
+
+
+# Example Corp is worth about $94bn (price 240.74 times 389.2m shares). LOSS has no P/E, SMALL is
+# far too small, FOREIGN trades in pence.
+PEERS_IN_THE_INDUSTRY = {
+    "AAA": peer_info(80, 2.0, 12.0, 20.0),
+    "BBB": peer_info(120, 3.0, 16.0, 30.0),
+    "CCC": peer_info(60, 4.0, 10.0, 25.0),
+    "LOSS": peer_info(90, 5.0, 14.0, None),
+    "SMALL": peer_info(1, 1.0, 1.0, 1.0),
+    "FOREIGN": peer_info(95, 9.0, 9.0, 9.0, currency="GBp"),
+}
+
+
+class FakeIndustry:
+    """A stand-in for yfinance.Industry: Example Corp's industry holds the peers above."""
+    def __init__(self, key):
+        import pandas as pandas_
+        self.top_companies = pandas_.DataFrame(
+            {"name": ["x"] * (len(PEERS_IN_THE_INDUSTRY) + 1)}, index=["EXMP", *PEERS_IN_THE_INDUSTRY]
+        )
+
+
+def example_with_peers():
+    """Yahoo's reply about Example Corp and its industry's peers."""
+    base = fake_statements_ticker(info=dict(ADOBE_YAHOO_INFO, longName="Example Corp", industryKey="widgets"))
+
+    class Fake(base):
+        def __init__(self, ticker):
+            super().__init__(ticker)
+            if ticker in PEERS_IN_THE_INDUSTRY:
+                self.info = dict(PEERS_IN_THE_INDUSTRY[ticker])
+
+    return Fake
+
+
+def run_example_page(monkeypatch, ticker="exmp"):
+    monkeypatch.setattr("yfinance.Industry", FakeIndustry)
+    return run_page(monkeypatch, ticker=ticker, yahoo=example_with_peers())
+
+
+def peer_box(page):
+    return page.sidebar.text_input(key="peers_EXMP")
+
+
+def example_prices(peer_ev_sales, peer_ev_ebitda, peer_pe):
+    """Work out Example Corp's three multiples prices straight from valuation.py."""
+    company = data.get_company_data("EXMP", source="yahoo")
+    net_debt = valuation.net_debt(company["debt"], company["cash_and_investments"])
+    return (
+        valuation.price_from_ev_multiple(
+            company["revenue"], valuation.median_of_usable_multiples(peer_ev_sales, 2), net_debt, company["shares"]
+        ),
+        valuation.price_from_ev_multiple(
+            valuation.ebitda(company["ebit"], company["depreciation_and_amortisation"]),
+            valuation.median_of_usable_multiples(peer_ev_ebitda, 2), net_debt, company["shares"],
+        ),
+        None if valuation.median_of_usable_multiples(peer_pe, 2) is None else valuation.price_from_pe(
+            company["net_income"], valuation.median_of_usable_multiples(peer_pe, 2), company["shares"]
+        ),
+    )
+
+
+def test_the_peer_box_starts_with_the_closest_dollar_peers_and_the_multiples_follow(monkeypatch):
+    page = run_example_page(monkeypatch)
+    assert_footer_and_no_crash(page)
+    # LOSS 1.04 times smaller, AAA 1.17, BBB 1.28, CCC 1.56. SMALL is too small, FOREIGN is in pence.
+    assert peer_box(page).value == "LOSS, AAA, BBB, CCC"
+    sales, ebitda, pe = example_prices([5.0, 2.0, 3.0, 4.0], [14.0, 12.0, 16.0, 10.0], [None, 20.0, 30.0, 25.0])
+    assert metrics(page)["EV/Sales price"] == app.dollars(sales)
+    assert metrics(page)["EV/EBITDA price"] == app.dollars(ebitda)
+    assert metrics(page)["P/E price"] == app.dollars(pe)      # LOSS has no P/E, so the median is of three
+    assert metrics(page)["Middle of the prices"] == app.dollars(sorted([sales, ebitda, pe])[1])
+    assert any("Peers suggested from Yahoo's industry list" in caption for caption in texts(page.caption))
+
+
+def test_the_peer_table_shows_a_dash_for_a_multiple_that_is_left_out(monkeypatch):
+    page = run_example_page(monkeypatch)
+    table = page.dataframe[-1].value                       # the heatmap comes first
+    assert list(table.index) == ["LOSS", "AAA", "BBB", "CCC"]
+    assert table.loc["LOSS", "P/E"] == "–" and table.loc["LOSS", "EV/Sales"] == "5.0x"
+    assert table.loc["AAA", "P/E"] == "20.0x"
+
+
+def test_the_reader_can_change_the_peers(monkeypatch):
+    page = run_example_page(monkeypatch)
+    peer_box(page).set_value("aaa  ccc").run()             # lower case and spaces on purpose
+    assert not page.exception
+    sales, ebitda, pe = example_prices([2.0, 4.0], [12.0, 10.0], [20.0, 25.0])
+    assert metrics(page)["EV/Sales price"] == app.dollars(sales)
+    assert metrics(page)["P/E price"] == app.dollars(pe)
+    assert list(page.dataframe[-1].value.index) == ["AAA", "CCC"]
+
+
+def test_with_one_peer_the_prices_say_there_are_not_enough_peers(monkeypatch):
+    page = run_example_page(monkeypatch)
+    peer_box(page).set_value("AAA").run()
+    assert not page.exception
+    for label in ("EV/Sales price", "EV/EBITDA price", "P/E price", "Middle of the prices"):
+        assert metrics(page)[label] == "Not enough peers"
+    assert metrics(page)["DCF vs multiples"] == "Not available"
+
+
+def test_a_multiple_with_too_few_peers_is_skipped_and_the_others_still_count(monkeypatch):
+    page = run_example_page(monkeypatch)
+    peer_box(page).set_value("LOSS, AAA").run()            # LOSS has no P/E: only AAA's is usable
+    assert metrics(page)["P/E price"] == "Not enough peers"
+    sales, ebitda, _ = example_prices([5.0, 2.0], [14.0, 12.0], [None, 20.0])
+    assert metrics(page)["EV/Sales price"] == app.dollars(sales)
+    assert metrics(page)["Middle of the prices"] == app.dollars((sales + ebitda) / 2)
+
+
+def test_an_empty_peer_box_shows_how_to_add_peers_instead_of_prices(monkeypatch):
+    page = run_example_page(monkeypatch)
+    peer_box(page).set_value("").run()
+    assert not page.exception
+    assert "EV/Sales price" not in metrics(page)
+    assert any("Type at least 2 peer tickers" in caption for caption in texts(page.caption))
+    assert app.FOOTER_TEXT in texts(page.caption)
+
+
+def test_a_ticker_yahoo_knows_nothing_about_is_named_and_left_out(monkeypatch):
+    page = run_example_page(monkeypatch)
+    peer_box(page).set_value("AAA, BBB, ZZZZ").run()
+    assert not page.exception
+    assert any("Yahoo Finance has no multiples for ZZZZ" in caption for caption in texts(page.caption))
+    assert metrics(page)["EV/Sales price"] != "Not enough peers"       # AAA and BBB are enough
+
+
+def test_only_the_first_eight_peers_are_used(monkeypatch):
+    page = run_example_page(monkeypatch)
+    peer_box(page).set_value("AAA, BBB, CCC, LOSS, P5, P6, P7, P8, P9").run()
+    assert not page.exception
+    assert any("Only the first 8 peers are used." in caption for caption in texts(page.caption))
+    assert len(page.dataframe[-1].value) == 8
+
+
+def test_when_yahoos_industry_lookup_fails_the_page_warns_and_the_box_starts_empty(monkeypatch):
+    class BrokenIndustry:
+        def __init__(self, key):
+            raise ConnectionError("no internet")
+
+    monkeypatch.setattr("yfinance.Industry", BrokenIndustry)
+    page = run_page(monkeypatch, ticker="exmp", yahoo=example_with_peers())
+    assert_footer_and_no_crash(page)
+    assert any("Could not get peers from Yahoo Finance" in warning for warning in texts(page.warning))
+    assert peer_box(page).value == ""
+    assert "DCF implied price" in metrics(page)               # the DCF is still shown
+
+
+def test_adobe_has_no_peer_box_and_keeps_its_four_peers(monkeypatch):
+    page = run_page(monkeypatch)
+    assert len(page.sidebar.text_input) == 1                   # only the company ticker
+    assert list(page.dataframe[-1].value.index) == ["ADSK", "INTU", "CRM", "SNPS"]
+    assert metrics(page)["EV/Sales price"] == "$333.58"
+    assert not any("Peers suggested" in caption for caption in texts(page.caption))
+
+
+def test_each_company_gets_its_own_peer_box(monkeypatch):
+    page = run_example_page(monkeypatch)
+    assert page.sidebar.text_input(key="peers_EXMP").value == "LOSS, AAA, BBB, CCC"
+
+
+# The small helpers.
+
+def test_parse_peer_tickers_handles_commas_spaces_capitals_repeats_and_the_companys_own_ticker():
+    got, cut = app.parse_peer_tickers(" pep, kdp  MDLZ,PEP ,ko", "KO", 8)
+    assert got == ["PEP", "KDP", "MDLZ"] and cut is False
+
+
+def test_parse_peer_tickers_cuts_off_after_the_limit_and_says_so():
+    got, cut = app.parse_peer_tickers("A B C D", "KO", 3)
+    assert got == ["A", "B", "C"] and cut is True
+    assert app.parse_peer_tickers("A B C", "KO", 3) == (["A", "B", "C"], False)     # exactly the limit
+    assert app.parse_peer_tickers("", "KO", 3) == ([], False)
+
+
+def test_the_peer_table_shows_dashes_for_missing_zero_and_negative_multiples():
+    peers = {
+        "peer_tickers": ["A", "B"], "peer_ev_sales": [2.0, None],
+        "peer_ev_ebitda": [-5.0, 12.34], "peer_pe": [0, float("nan")],
+    }
+    table = app.peer_table(peers)
+    assert table.loc["A"].tolist() == ["2.0x", "–", "–"]
+    assert table.loc["B"].tolist() == ["–", "12.3x", "–"]
+
+
+def test_a_price_that_could_not_be_worked_out_says_so():
+    assert app.price_or_note(None) == "Not enough peers"
+    assert app.price_or_note(305.6) == "$305.60"

@@ -137,6 +137,18 @@ other than Adobe, the page suggests peers, which the reader can change:
   own industry list gives Snowflake, Intuit, ServiceNow, Cadence and ADP (Adobe keeps its
   hand-chosen peers); Apple and Microsoft get fewer than 2 and would need typed peers.
 
+How the page uses them (companies other than Adobe; Adobe keeps its four peers and has no box):
+- The sidebar has a "Peer tickers" box, filled in with the suggestions the first time a company
+  is shown. The reader can change it: tickers are separated by commas or spaces, capitals or
+  not, repeats and the company's own ticker are dropped, and at most 8 are used.
+- The page fetches each peer's three multiples and applies the rules above: a multiple needs
+  at least 2 usable peers, otherwise its price says "Not enough peers" and the middle of the
+  prices is taken over the ones that exist.
+- A table under the prices lists every peer's multiples, with a dash where a figure is missing,
+  zero or negative, so the reader can see exactly what the medians use.
+- Where no suitable peers are found (Apple), the box starts empty and the section says to type
+  at least 2. If Yahoo cannot be reached, the page warns and the DCF is still shown.
+
 ## Base case inputs
 
 | Input | Value |

@@ -1,4 +1,4 @@
-"""The Valuation Lab page: shows a company's DCF (and, for Adobe, its multiples results).
+"""The Valuation Lab page: shows a company's DCF and its peer multiples.
 
 This file only draws. It fetches the figures with data.py, takes the assumptions from
 assumptions.py, hands both to valuation.py, and puts what comes back on the page (guard
@@ -27,6 +27,9 @@ HEATMAP_STRONGEST_TINT = 0.7        # below 1 so the numbers stay easy to read o
 # Chart colours: the theme blue from .streamlit/config.toml, and a lighter blue to sit beside it.
 CHART_BLUE = "#2E5077"
 CHART_LIGHT_BLUE = "#8FB0D1"
+
+# The four figures that make up a company's peers in a data package.
+PEER_KEYS = ["peer_tickers", "peer_ev_sales", "peer_ev_ebitda", "peer_pe"]
 
 # Guard rail 13: the footer every page of the app must show.
 FOOTER_TEXT = "Valuation Lab is a learning project, not investment advice."
@@ -362,18 +365,61 @@ def draw_heatmap(company, dcf_inputs, base_wacc):
     draw_explanations("sensitivity")
 
 
-def draw_multiples(multiples):
-    """Draw the multiples section: the price each peer multiple gives, their middle value,
-    and how far the DCF price is from it.
+def price_or_note(price):
+    """Write a price in dollars, or say there were not enough peers to work one out."""
+    return "Not enough peers" if price is None else dollars(price)
+
+
+def peer_table(peers):
+    """Make the table of the peers and the three multiples each one has, as text: a multiple
+    that is missing, or zero or negative, shows as a dash because it is left out of the median.
+    """
+    def show(multiple):
+        return f"{multiple:.1f}x" if valuation.usable_multiples([multiple]) else "–"
+
+    return pd.DataFrame(
+        {
+            "EV/Sales": [show(multiple) for multiple in peers["peer_ev_sales"]],
+            "EV/EBITDA": [show(multiple) for multiple in peers["peer_ev_ebitda"]],
+            "P/E": [show(multiple) for multiple in peers["peer_pe"]],
+        },
+        index=pd.Index(peers["peer_tickers"], name="Peer"),
+    )
+
+
+def draw_multiples(multiples, peers, notes, peers_are_suggested):
+    """Draw the multiples section: the price each peer multiple gives, their middle value, how
+    far the DCF price is from it, and the table of peers behind them.
+
+    `multiples` is None when there are no peers to compare with, and then the section says how
+    to add some. A price that could not be worked out (too few peers with that multiple) says
+    so. `notes` are the messages from the peer box, and peers_are_suggested says whether to
+    point out that the peers were suggested by Yahoo's industry list.
     """
     st.subheader("Peer multiples")
+    for kind, text in notes:
+        (st.warning if kind == "warning" else st.caption)(text)
+    if multiples is None:
+        draw_explanations("multiples")
+        return
     sales_column, ebitda_column, pe_column = st.columns(3)
-    sales_column.metric("EV/Sales price", dollars(multiples["price_ev_sales"]))
-    ebitda_column.metric("EV/EBITDA price", dollars(multiples["price_ev_ebitda"]))
-    pe_column.metric("P/E price", dollars(multiples["price_pe"]))
+    sales_column.metric("EV/Sales price", price_or_note(multiples["price_ev_sales"]))
+    ebitda_column.metric("EV/EBITDA price", price_or_note(multiples["price_ev_ebitda"]))
+    pe_column.metric("P/E price", price_or_note(multiples["price_pe"]))
     median_column, gap_column = st.columns(2)
-    median_column.metric("Middle of the three", dollars(multiples["median_price"]))
-    gap_column.metric("DCF vs multiples", percent(multiples["dcf_vs_multiples"]))
+    median_column.metric("Middle of the prices", price_or_note(multiples["median_price"]))
+    gap = multiples["dcf_vs_multiples"]
+    gap_column.metric("DCF vs multiples", "Not available" if gap is None else percent(gap))
+    st.dataframe(peer_table(peers))
+    st.caption(
+        f"Each multiple needs at least {assumptions.MINIMUM_PEERS} peers with a usable figure; "
+        "a peer with no figure (a dash) is left out of that multiple only."
+    )
+    if peers_are_suggested:
+        st.caption(
+            "Peers suggested from Yahoo's industry list, closest in size. Closest in size is "
+            "not the same as most similar business, so change them in the sidebar if you know better."
+        )
     draw_explanations("multiples")
 
 
@@ -391,6 +437,100 @@ def load_company(ticker):
     return data.get_company_data(ticker, source="yahoo"), "yahoo"
 
 
+@st.cache_data(ttl=LIVE_DATA_CACHE_SECONDS, show_spinner=False)
+def load_suggested_peers(ticker, market_value):
+    """Ask Yahoo for suggested peers for a company and remember the answer for
+    LIVE_DATA_CACHE_SECONDS. The market value is in $ millions. Stops with a plain error if
+    Yahoo cannot be reached.
+    """
+    return data.suggest_peers(
+        ticker,
+        market_value,
+        assumptions.PEER_CANDIDATES_TO_CHECK,
+        assumptions.PEER_BIGGEST_SIZE_GAP,
+        assumptions.SUGGESTED_PEERS,
+    )
+
+
+@st.cache_data(ttl=LIVE_DATA_CACHE_SECONDS, show_spinner=False)
+def load_peer_multiples(tickers):
+    """Fetch the multiples of the peers in the box (a tuple of tickers) and remember them for
+    LIVE_DATA_CACHE_SECONDS. Stops with a plain error if Yahoo cannot be reached.
+    """
+    return data.peer_multiples(list(tickers))
+
+
+def parse_peer_tickers(text, own_ticker, how_many):
+    """Turn what was typed in the peer box into a list of tickers: split at commas and spaces,
+    in capitals, no repeats, without the company's own ticker, and no more than how_many.
+
+    Returns the tickers, and whether some were left out for being more than how_many.
+    """
+    tickers = []
+    for word in text.replace(",", " ").split():
+        ticker = word.upper()
+        if ticker != own_ticker and ticker not in tickers:
+            tickers.append(ticker)
+    return tickers[:how_many], len(tickers) > how_many
+
+
+def draw_peer_box(company):
+    """Draw the peer ticker box in the sidebar, filled in with suggestions from Yahoo's
+    industry list the first time a company is shown (the reader can change them), and fetch
+    the multiples of the peers in it.
+
+    Returns the peers' figures (None when the box is empty or Yahoo failed) and a list of notes
+    for the multiples section, each a pair: "warning" or "caption", and its text.
+    """
+    notes = []
+    market_value = round(company["share_price"] * company["shares"])
+    try:
+        suggested = load_suggested_peers(company["ticker"], market_value)["peer_tickers"]
+    except ValueError as error:
+        suggested = []
+        notes.append(("warning", f"{error} Type peer tickers in the sidebar yourself."))
+
+    st.sidebar.header("Peers")
+    typed = st.sidebar.text_input(
+        "Peer tickers",
+        value=", ".join(suggested),
+        key=f"peers_{company['ticker']}",      # one box per company, so peers are not carried over
+        help=(
+            "Companies to compare with, separated by commas. Suggested from Yahoo's industry "
+            f"list, closest in size; change them as you like (up to {assumptions.MAX_TYPED_PEERS})."
+        ),
+    )
+    tickers, cut_off = parse_peer_tickers(typed, company["ticker"], assumptions.MAX_TYPED_PEERS)
+    if cut_off:
+        notes.append(("caption", f"Only the first {assumptions.MAX_TYPED_PEERS} peers are used."))
+    if not tickers:
+        if not any(kind == "warning" for kind, _ in notes):
+            notes.append((
+                "caption",
+                "No suitable peers were found in Yahoo's industry list for this company. "
+                "Type at least 2 peer tickers in the sidebar to compare with peers.",
+            ))
+        return None, notes
+    try:
+        figures = load_peer_multiples(tuple(tickers))
+    except ValueError as error:
+        notes.append(("warning", str(error)))
+        return None, notes
+    unknown = [
+        ticker
+        for ticker, sales, ebitda, pe in zip(
+            figures["peer_tickers"], figures["peer_ev_sales"], figures["peer_ev_ebitda"], figures["peer_pe"]
+        )
+        if sales is None and ebitda is None and pe is None
+    ]
+    if unknown:
+        notes.append((
+            "caption",
+            f"Yahoo Finance has no multiples for {', '.join(unknown)}. Check the ticker.",
+        ))
+    return figures, notes
+
+
 def draw_ticker_box():
     """Draw the company ticker box at the top of the sidebar and return the ticker typed in,
     in capitals. An empty box means the default company.
@@ -398,7 +538,7 @@ def draw_ticker_box():
     typed = st.sidebar.text_input(
         "Company ticker",
         value=DEFAULT_TICKER,
-        help="A US stock ticker, for example MSFT. Adobe (ADBE) has hand-chosen assumptions and peer multiples; any other company gets a starting point from its own last reported year.",
+        help="A US stock ticker, for example MSFT. Adobe (ADBE) has hand-chosen assumptions and peers; any other company gets a starting point from its own last reported year and suggested peers.",
     )
     return typed.strip().upper() or DEFAULT_TICKER
 
@@ -467,13 +607,20 @@ def draw_error(ticker, error):
 
 
 def draw_page():
-    """Draw the whole page: ticker box, sliders, title, DCF section, charts, heatmap, multiples
-    (Adobe only) and footer. If the company cannot be valued, draw the reason instead.
+    """Draw the whole page: ticker box, sliders, peer box (companies other than Adobe), title,
+    DCF section, charts, heatmap, multiples and footer. If the company cannot be valued, draw
+    the reason instead.
     """
     ticker = draw_ticker_box()
     growth_shift, margin_shift, terminal_growth_rate, wacc_override = draw_sliders()
     try:
         company, source_used = load_company(ticker)
+        if is_base_case(company):
+            peers, peer_notes = {key: company[key] for key in PEER_KEYS}, []      # Adobe's own peers
+        else:
+            peers, peer_notes = draw_peer_box(company)
+            if peers is not None:
+                company = dict(company, **peers)
         dcf_inputs = build_dcf_inputs(company, growth_shift, margin_shift)
         dcf, multiples = run_valuation(company, dcf_inputs, terminal_growth_rate, wacc_override)
         base_wacc = model_wacc(dcf_inputs)
@@ -488,8 +635,7 @@ def draw_page():
     year_labels = assumptions.FORECAST_YEAR_LABELS if is_base_case(company) else assumptions.GENERIC_YEAR_LABELS
     draw_charts(dcf, year_labels, terminal_growth_rate)
     draw_heatmap(company, dcf_inputs, base_wacc)
-    if multiples is not None:
-        draw_multiples(multiples)
+    draw_multiples(multiples, peers, peer_notes, peers_are_suggested=not is_base_case(company))
     st.divider()
     st.caption(FOOTER_TEXT)
 

@@ -553,3 +553,24 @@ error. A company with no suitable peers gets empty lists, not an error. Nothing 
 Known limits: a company with fewer than 2 suitable peers (Apple, Microsoft) gets no multiples until
 the reader types peers; non-US-dollar peers are not suggested; "closest in size" is not the same as
 "most similar business". No new files.
+
+## 2026-11-16 — The peer box: suggested, editable, and the multiples section for every company
+
+The last piece of the peers feature that Haavard asked for: other companies now get peer multiples
+on the page. Agreed with Haavard: Adobe is unchanged (its four hand-chosen peers, no box); any
+other company gets a "Peer tickers" sidebar box, filled in the first time with the suggestions
+from the previous pull request and editable; a small table of the peers' multiples under the prices;
+and a cap of 8 typed peers. The box has its own state per company (key `peers_<ticker>`), so
+switching companies does not carry the peers over. Suggestions and peer multiples are remembered
+for 15 minutes like the company's own figures. Where a multiple has fewer than 2 usable peers its
+price says "Not enough peers" and "DCF vs multiples" says "Not available". With no peers at all
+(Apple) the section stays, with a note on how to add some; this replaces the old behaviour of
+hiding the section for other companies, so `test_app.py`'s test of that case now expects the
+section and the note, and still expects no prices. The label "Middle of the three" became "Middle
+of the prices", because it can be the middle of two. If Yahoo's industry lookup fails the page
+shows a yellow warning and an empty box; if the typed peers cannot be fetched it warns too; a
+ticker Yahoo knows nothing about is named in a note and left out. No Excel change: the maths
+(`run_multiples`, the usable-peer median) was already matched to the Multiples sheet. On real data
+(16 Nov 2026): Coca-Cola gets PEP, MNST, KDP and prices $36.05 / $54.80 / $99.38 against a market
+price of $99.18; Apple gets an empty box; Pfizer gets five peers, with Gilead's missing P/E left
+out. No new files.

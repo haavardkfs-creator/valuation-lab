@@ -188,3 +188,7 @@ def test_the_peer_suggestion_settings_are_the_ones_agreed_with_haavard():
     # 16 Nov 2026: check the first 20 companies in the industry, keep those a tenth to ten times
     # the company's size, and suggest the 5 closest.
     assert (a.PEER_CANDIDATES_TO_CHECK, a.PEER_BIGGEST_SIZE_GAP, a.SUGGESTED_PEERS) == (20, 10, 5)
+
+
+def test_the_peer_box_takes_at_most_eight_peers():
+    assert a.MAX_TYPED_PEERS == 8        # agreed with Haavard on 16 Nov 2026

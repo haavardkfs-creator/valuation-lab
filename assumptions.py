@@ -53,6 +53,10 @@ PEER_CANDIDATES_TO_CHECK = 20
 PEER_BIGGEST_SIZE_GAP = 10
 SUGGESTED_PEERS = 5
 
+# The most peers the page will use from the peer box, so the page stays quick (about 0.2 seconds
+# a peer). Chosen with Haavard on 16 Nov 2026.
+MAX_TYPED_PEERS = 8
+
 # The company the hand-chosen forecast assumptions above were made for. The page uses them
 # only for this company; any other ticker gets a starting point from its own last year.
 BASE_CASE_TICKER = "ADBE"
