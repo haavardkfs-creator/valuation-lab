@@ -37,6 +37,7 @@ TERMINAL_GROWTH_RATE = 0.025          # valuation C17
 PEER_EV_SALES = [6.71, 4.35, 4.85, 10.19]
 PEER_EV_EBITDA = [22.94, 13.45, 12.63, 26.18]
 PEER_PE = [32.73, 20.72, 20.97, 82.62]
+MINIMUM_PEERS = 2                     # assumptions.MINIMUM_PEERS: fewest peers a multiple needs
 
 # Adobe FY2025 figures used by the multiples (Multiples sheet C17:C21).
 ADOBE_EBIT = 8706
@@ -272,6 +273,7 @@ def run_base_case_multiples():
         peer_ev_ebitda=PEER_EV_EBITDA,
         peer_pe=PEER_PE,
         dcf_price=run_base_case()["implied_share_price"],
+        minimum_peers=MINIMUM_PEERS,
     )
 
 
@@ -792,3 +794,85 @@ def test_the_two_checks_agree_with_the_full_base_case_dcf():
     assert v.wacc_minus_terminal_growth(result["wacc"], TERMINAL_GROWTH_RATE) == close(
         0.084266318697565512                                  # valuation C32
     )
+
+
+# ---------------------------------------------------------------------------
+# Peers with a missing multiple (Multiples sheet, worked example rows 41-49: Coca-Cola's
+# peers PepsiCo, Keurig Dr Pepper and Mondelez, with Keurig's P/E left blank on purpose)
+# ---------------------------------------------------------------------------
+
+COCA_COLA_EV_SALES = [2.434, 3.854, 2.663]              # D43:D45
+COCA_COLA_EV_EBITDA = [12.472, 16.631, 14.749]          # E43:E45
+COCA_COLA_PE = [18.50692, None, 21.381702]              # F43:F45 (F44 is blank)
+
+
+def test_median_of_usable_multiples_matches_the_multiples_sheet_example():
+    assert v.median_of_usable_multiples(COCA_COLA_EV_SALES, MINIMUM_PEERS) == close(2.663)       # D46
+    assert v.median_of_usable_multiples(COCA_COLA_EV_EBITDA, MINIMUM_PEERS) == close(14.749)     # E46
+    # The blank P/E is skipped: the median of PepsiCo and Mondelez only (F46, and F48 proves it).
+    assert v.median_of_usable_multiples(COCA_COLA_PE, MINIMUM_PEERS) == close(19.944310999999999)
+
+
+def test_the_count_of_usable_pes_matches_the_multiples_sheet_example():
+    assert len(v.usable_multiples(COCA_COLA_PE)) == 2       # F47
+
+
+def test_with_every_peer_usable_the_median_is_the_plain_median():
+    # Adobe's peers: nothing is left out, so the answer is the old peer_median (Multiples D12:F12).
+    assert v.median_of_usable_multiples(PEER_EV_SALES, MINIMUM_PEERS) == close(5.78)
+    assert v.median_of_usable_multiples(PEER_PE, MINIMUM_PEERS) == close(26.85)
+
+
+@pytest.mark.parametrize("unusable", [None, float("nan"), 0, -3.5])
+def test_a_missing_zero_or_negative_multiple_is_left_out(unusable):
+    assert v.usable_multiples([10, unusable, 12]) == [10, 12]
+
+
+def test_fewer_peers_than_the_minimum_gives_no_median():
+    assert v.median_of_usable_multiples([18.5, None, None], MINIMUM_PEERS) is None
+    assert v.median_of_usable_multiples([None, None], MINIMUM_PEERS) is None
+    assert v.median_of_usable_multiples([], MINIMUM_PEERS) is None
+
+
+def test_exactly_the_minimum_number_of_peers_is_enough():
+    assert v.median_of_usable_multiples([10, None, 12], MINIMUM_PEERS) == close(11)
+
+
+def multiples_with_peers(ev_sales, ev_ebitda, pe):
+    """Run the multiples for Adobe's own figures against the given peer multiples."""
+    return v.run_multiples(
+        revenue=BASE_REVENUE,
+        ebit=ADOBE_EBIT,
+        depreciation_and_amortisation=ADOBE_DA,
+        net_income=ADOBE_NET_INCOME,
+        net_debt_amount=v.net_debt(DEBT, CASH_AND_INVESTMENTS),
+        shares=SHARES,
+        peer_ev_sales=ev_sales,
+        peer_ev_ebitda=ev_ebitda,
+        peer_pe=pe,
+        dcf_price=run_base_case()["implied_share_price"],
+        minimum_peers=MINIMUM_PEERS,
+    )
+
+
+def test_run_multiples_skips_a_multiple_that_has_too_few_peers_and_uses_the_rest():
+    result = multiples_with_peers(PEER_EV_SALES, PEER_EV_EBITDA, [26.85, None, None, None])
+    assert result["median_pe"] is None and result["price_pe"] is None
+    assert result["price_ev_sales"] == close(333.58309927360767)         # unchanged (H27)
+    assert result["price_ev_ebitda"] == close(420.51859564164647)        # unchanged (H28)
+    # The middle of the two prices left is their average.
+    assert result["median_price"] == close((333.58309927360767 + 420.51859564164647) / 2)
+    assert result["dcf_vs_multiples"] is not None
+
+
+def test_run_multiples_with_no_usable_peers_at_all_gives_nothing_to_compare():
+    result = multiples_with_peers([None, None], [None, -2.0], [0, None])
+    assert result["median_price"] is None and result["dcf_vs_multiples"] is None
+    assert result["price_ev_sales"] is None and result["price_ev_ebitda"] is None
+
+
+def test_a_peer_dropped_from_one_multiple_still_counts_in_the_others():
+    # Keurig has no P/E here, but its EV/Sales and EV/EBITDA still count.
+    result = multiples_with_peers(COCA_COLA_EV_SALES, COCA_COLA_EV_EBITDA, COCA_COLA_PE)
+    assert result["median_ev_sales"] == close(2.663) and result["median_ev_ebitda"] == close(14.749)
+    assert result["median_pe"] == close(19.944310999999999)

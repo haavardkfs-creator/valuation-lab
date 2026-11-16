@@ -104,16 +104,24 @@
   `data.py` match it. When Yahoo has no interest expense, `yahoo_source` uses the fallback and
   the page shows a yellow note. Apple's WACC is 10.010% with it and 10.002% with its own AA
   rating, a gap of 0.009 points. 9 new tests; 260 tests pass.
-- Done (in the open pull request): the low-WACC caution. Haavard added "Terminal value checks"
+- Done: the low-WACC caution (merged, PR #30). Haavard added "Terminal value checks"
   to the `valuation` sheet (rows 30-32: terminal value share 70.0%, WACC minus terminal growth
   8.4 points). `terminal_value_share` and `wacc_minus_terminal_growth` in `valuation.py` match
   them; the limits (75% and 4 points) are in `assumptions.py`. The page says what share of the
   value is terminal value and shows a yellow caution when a limit is crossed (Coca-Cola: both;
   Microsoft: the share; Adobe and Apple: none). 11 new tests; 271 tests pass.
-- Next, agreed with Haavard (in order): (1) the low-WACC caution (this one); (2) peer
-  multiples for other companies, with peer tickers typed into a sidebar box and multiples
-  fetched from Yahoo; (3) later, an adjusted beta (two thirds of the raw beta plus one third
-  of 1), built in Excel first. Haavard also has ideas for improving the website afterwards.
+- Done (in the open pull request): peer medians that skip missing peers. Haavard built a worked
+  example on the `Multiples` sheet (rows 41-49: PepsiCo, Keurig Dr Pepper, Mondelez, with
+  Keurig's P/E blank on purpose). `usable_multiples` and `median_of_usable_multiples` in
+  `valuation.py` match it; `MINIMUM_PEERS = 2` is in `assumptions.py`; `run_multiples` returns
+  None for a multiple with too few peers. Adobe is unchanged. 13 new tests; 284 tests pass.
+- Next, agreed with Haavard (peers for other companies, in four pull requests): (1) peer medians
+  that skip missing peers (this one); (2) fetching a peer's multiples from Yahoo, and suggesting
+  peers (same Yahoo industry, between a tenth and ten times the company's market value, closest
+  five); (3) a sidebar peer box, pre-filled with the suggestions and editable, and the multiples
+  section for other companies; (4) a chart of the peers' multiples. After that, an adjusted beta
+  (two thirds of the raw beta plus one third of 1), built in Excel first. Haavard also has ideas
+  for improving the website afterwards.
 - Open:
   - Even after the capex fade, Microsoft's DCF price is 48% below its market price ($278 vs
     $532, 6 Nov 2026). A starting point from one year is not a forecast, and a 17.8% grower

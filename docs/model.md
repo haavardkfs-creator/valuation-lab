@@ -107,6 +107,19 @@ one outlier (Synopsys P/E of 82.6x) cannot dominate.
 - P/E: equity value = FY2025 net income × peer median P/E, price = equity value ÷ shares
 - DCF vs multiples = DCF share price ÷ median multiples share price − 1
 
+Peers with a missing multiple (workbook: `Multiples` rows 41-49, a worked example with Coca-Cola's
+peers PepsiCo, Keurig Dr Pepper and Mondelez). A peer does not always have all three multiples: a
+loss-making peer has no P/E, and a negative EBITDA gives no real EV/EBITDA. The rule:
+- A peer whose multiple is missing, zero or negative is left out of that one multiple only. It
+  still counts in the other two.
+- The peer median is the median of the peers that are left. Excel's `MEDIAN` already skips blank
+  cells. In the example Keurig's P/E is blank, so the P/E median is the middle of PepsiCo (18.51x)
+  and Mondelez (21.38x), 19.94x (F46, and F48 proves it: F49 = 0).
+- At least 2 peers must be left for a multiple to be used. With fewer, the middle of what remains
+  is not a real peer median, so that multiple is skipped and the price from the others is shown.
+- The middle of the three prices becomes the middle of the prices that exist. Adobe's four peers
+  all have all three multiples, so nothing changes for it.
+
 ## Base case inputs
 
 | Input | Value |
