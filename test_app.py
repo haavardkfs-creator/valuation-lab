@@ -297,3 +297,53 @@ def test_a_very_low_wacc_still_shows_the_dcf_and_explains_the_missing_heatmap(mo
     assert "Sensitivity: price at different WACC and terminal growth" in texts(page.subheader)
     assert any("This table cannot be drawn" in caption for caption in texts(page.caption))
     assert not page.dataframe
+
+
+# ---------------------------------------------------------------------------
+# A price that rests mostly on the far future gets a caution
+# ---------------------------------------------------------------------------
+
+def dcf_figures(share, wacc):
+    """Just the figures terminal_value_cautions reads, with the terminal value at this share of
+    an enterprise value of 1,000.
+    """
+    return {"pv_of_terminal_value": share * 1000, "enterprise_value": 1000, "wacc": wacc}
+
+
+def test_no_caution_when_both_checks_are_within_their_limits():
+    # Like Adobe: 70% from the terminal value, WACC 8.4 points above terminal growth.
+    assert app.terminal_value_cautions(dcf_figures(0.70, 0.1093), 0.025) == []
+
+
+def test_a_high_terminal_value_share_gets_a_caution():
+    [caution] = app.terminal_value_cautions(dcf_figures(0.88, 0.1093), 0.025)      # like Coca-Cola
+    assert caution.startswith("88% of this company's value comes from after year 5")
+
+
+def test_a_small_gap_between_wacc_and_terminal_growth_gets_a_caution():
+    [caution] = app.terminal_value_cautions(dcf_figures(0.60, 0.05), 0.025)
+    assert "WACC (5.00%) is only 2.5 points above terminal growth (2.50%)" in caution
+
+
+def test_both_cautions_can_appear_together():
+    assert len(app.terminal_value_cautions(dcf_figures(0.90, 0.05), 0.025)) == 2
+
+
+def test_the_limits_themselves_do_not_trigger_a_caution():
+    # Exactly 75% and exactly 4 points apart are still fine: the warning is for more / less.
+    assert app.terminal_value_cautions(dcf_figures(0.75, 0.065), 0.025) == []
+
+
+def test_adobes_page_says_how_much_of_its_value_is_terminal_value_and_has_no_caution(monkeypatch):
+    page = run_page(monkeypatch)
+    assert not page.warning
+    assert any("The terminal value is 70% of the enterprise value." in caption for caption in texts(page.caption))
+
+
+def test_a_low_wacc_company_gets_the_cautions_on_the_page(monkeypatch):
+    low_beta = fake_statements_ticker(info=dict(ADOBE_YAHOO_INFO, beta=-0.3))      # WACC about 4%
+    page = run_page(monkeypatch, ticker="lowb", yahoo=low_beta)
+    assert_footer_and_no_crash(page)
+    warnings = texts(page.warning)
+    assert any("only" in warning and "points above terminal growth" in warning for warning in warnings)
+    assert any("comes from after year 5" in warning for warning in warnings)

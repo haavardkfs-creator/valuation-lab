@@ -176,6 +176,20 @@ def enterprise_value(pv_of_forecast, pv_of_terminal_value):
     return pv_of_forecast + pv_of_terminal_value
 
 
+def terminal_value_share(pv_of_terminal_value, enterprise_value_amount):
+    """Work out how much of the company's value comes from after the forecast years, as a
+    share of the whole: the higher it is, the more the price depends on the far future.
+    """
+    return pv_of_terminal_value / enterprise_value_amount
+
+
+def wacc_minus_terminal_growth(wacc_rate, terminal_growth_rate):
+    """Work out the gap between the discount rate and the terminal growth rate. A small gap
+    makes the terminal value, and so the price, very sensitive to small changes.
+    """
+    return wacc_rate - terminal_growth_rate
+
+
 # ---------------------------------------------------------------------------
 # From enterprise value to a share price
 # ---------------------------------------------------------------------------

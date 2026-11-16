@@ -245,10 +245,33 @@ def tint(price, market_price):
     return f"background-color: rgb({red}, {green}, {blue}); color: #262730"
 
 
-def draw_charts(dcf, year_labels):
+def terminal_value_cautions(dcf, terminal_growth_rate):
+    """List, in plain words, the reasons to treat this price with care because it rests mostly
+    on the far future. Returns an empty list when neither check (the terminal value's share of
+    enterprise value, and the gap between WACC and terminal growth) is past its limit.
+    """
+    cautions = []
+    share = valuation.terminal_value_share(dcf["pv_of_terminal_value"], dcf["enterprise_value"])
+    if share > assumptions.TERMINAL_VALUE_SHARE_WARNING:
+        cautions.append(
+            f"{share:.0%} of this company's value comes from after year 5 (the terminal value). "
+            "The more a price rests on the far future, the less it can be trusted: small changes "
+            "in the assumptions can move it a lot."
+        )
+    gap = valuation.wacc_minus_terminal_growth(dcf["wacc"], terminal_growth_rate)
+    if gap < assumptions.WACC_GAP_WARNING:
+        cautions.append(
+            f"The WACC ({precise_percent(dcf['wacc'])}) is only {gap * 100:.1f} points above "
+            f"terminal growth ({precise_percent(terminal_growth_rate)}). With a gap this small the "
+            "terminal value is very sensitive: a small change in either number can move the price a lot."
+        )
+    return cautions
+
+
+def draw_charts(dcf, year_labels, terminal_growth_rate):
     """Draw the two charts behind the headline price: the five-year forecast of revenue and
     free cash flow (one label per forecast year), and the two parts that enterprise value is
-    built from.
+    built from, with a caution when the price rests mostly on the far future.
     """
     st.subheader("Behind the number")
     forecast_column, build_column = st.columns([3, 2])
@@ -281,8 +304,13 @@ def draw_charts(dcf, year_labels):
     st.caption(
         f"Enterprise value of \\${dcf['enterprise_value']:,.0f} million is the five forecast "
         f"years (\\${dcf['pv_of_forecast']:,.0f} million) plus everything after year 5, the "
-        f"terminal value (\\${dcf['pv_of_terminal_value']:,.0f} million), both discounted to today."
+        f"terminal value (\\${dcf['pv_of_terminal_value']:,.0f} million), both discounted to today. "
+        f"The terminal value is "
+        f"{valuation.terminal_value_share(dcf['pv_of_terminal_value'], dcf['enterprise_value']):.0%} "
+        "of the enterprise value."
     )
+    for caution in terminal_value_cautions(dcf, terminal_growth_rate):
+        st.warning(caution)
     draw_explanations("behind_the_number")
 
 
@@ -457,7 +485,7 @@ def draw_page():
     draw_source_note(company, source_used)
     draw_dcf(company, dcf, wacc_override is not None)
     year_labels = assumptions.FORECAST_YEAR_LABELS if is_base_case(company) else assumptions.GENERIC_YEAR_LABELS
-    draw_charts(dcf, year_labels)
+    draw_charts(dcf, year_labels, terminal_growth_rate)
     draw_heatmap(company, dcf_inputs, base_wacc)
     if multiples is not None:
         draw_multiples(multiples)
