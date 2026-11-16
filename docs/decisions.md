@@ -492,3 +492,24 @@ only for companies that use the fallback, so `test_expected_snapshot_lists_every
 now leaves it out of what Adobe's snapshot must list, as it does the currency fields. Known
 limit: the fallback uses one spread for every company, so it is least accurate for heavily
 indebted ones. No new files.
+
+## 2026-11-16 — A caution when the price rests mostly on the far future
+
+Coca-Cola's WACC is 6.14% (a low beta), only 3.6 points above terminal growth, and 88% of its
+enterprise value comes from the terminal value. Asked what an analyst would do, the answer was to
+sanity-check the discount rate and to look at how much of the value is terminal value (above
+roughly 75% is a red flag), and not to cap the WACC. Planned as a warning for WACCs close to
+terminal growth, but trying four real companies (6 Nov data) showed that a 2-point limit would
+miss Coca-Cola, whose gap is 3.6 points, so Haavard chose 4 points. Terminal value share: Adobe
+70%, Apple 72%, Microsoft 78%, Coca-Cola 88%. Built Excel first: `valuation` rows 30-32, C31
+(`=C19/C20`, 70.0%) and C32 (`=C8-C17`, 8.4 points). In Python, `terminal_value_share` and
+`wacc_minus_terminal_growth` in `valuation.py` match them, the two limits
+(`TERMINAL_VALUE_SHARE_WARNING` 75%, `WACC_GAP_WARNING` 4 points) are named constants in
+`assumptions.py`, and `terminal_value_cautions` in `app.py` turns them into plain sentences. The
+page always says what share of enterprise value is terminal value, and shows a yellow caution when
+a limit is crossed. The caution is not an error: the price is still shown. The limits are not part
+of the Excel valuation, so they have no Excel cell. Adding these rows moved the workbook's
+sensitivity table from `valuation` rows 34-38 to rows 37-41 (growth rates in row 36); the numbers
+are the same, and the cell references in the comments of `test_valuation.py` and `assumptions.py`
+were updated. An adjusted beta, the usual cure for a very low beta, is a separate pull request
+later. No new files.

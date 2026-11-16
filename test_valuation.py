@@ -369,39 +369,39 @@ def test_higher_growth_and_margins_give_a_higher_price():
 # Using a WACC of your own (new in Phase 5): the workbook's sensitivity table
 # ---------------------------------------------------------------------------
 
-# valuation sheet D34:H38. Rows are the WACC in column C (rounded, as typed in the workbook),
-# columns are the terminal growth rate in row 33. Each cell is the implied share price.
+# valuation sheet D37:H41. Rows are the WACC in column C (rounded, as typed in the workbook),
+# columns are the terminal growth rate in row 36. Each cell is the implied share price.
 SENSITIVITY_TABLE = {
-    # WACC 9.93% (valuation C34)
-    (0.0993, 0.015): 315.66445331601653,    # D34
-    (0.0993, 0.02): 330.75181395646274,    # E34
-    (0.0993, 0.025): 347.8697749522851,    # F34
-    (0.0993, 0.03): 367.45786018992914,    # G34
-    (0.0993, 0.035): 390.09230394042595,    # H34
-    # WACC 10.43% (valuation C35)
-    (0.1043, 0.015): 297.3577483674705,    # D35
-    (0.1043, 0.02): 310.5145892756557,    # E35
-    (0.1043, 0.025): 325.3305526186687,    # F35
-    (0.1043, 0.03): 342.14058908994735,    # G35
-    (0.1043, 0.035): 361.3763162497221,    # H35
-    # WACC 10.93% (valuation C36)
-    (0.1093, 0.015): 281.0039574367139,    # D36
-    (0.1093, 0.02): 292.55496163903973,    # E36
-    (0.1093, 0.025): 305.47619172538987,    # F36
-    (0.1093, 0.03): 320.02683291972875,    # G36
-    (0.1093, 0.035): 336.5358376664685,    # H36
-    # WACC 11.43% (valuation C37)
-    (0.1143, 0.015): 266.3078209079082,    # D37
-    (0.1143, 0.02): 276.51038853451223,    # E37
-    (0.1143, 0.025): 287.85546093453206,    # F37
-    (0.1143, 0.03): 300.5463307722768,    # G37
-    (0.1143, 0.035): 314.83756250633235,    # H37
-    # WACC 11.93% (valuation C38)
-    (0.1193, 0.015): 253.03070350815184,    # D38
-    (0.1193, 0.02): 262.0913539028656,    # E38
-    (0.1193, 0.025): 272.11283678906545,    # F38
-    (0.1193, 0.03): 283.25654620227533,    # G38
-    (0.1193, 0.035): 295.72216657790625,    # H38
+    # WACC 9.93% (valuation C37)
+    (0.0993, 0.015): 315.66445331601653,    # D37
+    (0.0993, 0.02): 330.75181395646274,    # E37
+    (0.0993, 0.025): 347.8697749522851,    # F37
+    (0.0993, 0.03): 367.45786018992914,    # G37
+    (0.0993, 0.035): 390.09230394042595,    # H37
+    # WACC 10.43% (valuation C38)
+    (0.1043, 0.015): 297.3577483674705,    # D38
+    (0.1043, 0.02): 310.5145892756557,    # E38
+    (0.1043, 0.025): 325.3305526186687,    # F38
+    (0.1043, 0.03): 342.14058908994735,    # G38
+    (0.1043, 0.035): 361.3763162497221,    # H38
+    # WACC 10.93% (valuation C39)
+    (0.1093, 0.015): 281.0039574367139,    # D39
+    (0.1093, 0.02): 292.55496163903973,    # E39
+    (0.1093, 0.025): 305.47619172538987,    # F39
+    (0.1093, 0.03): 320.02683291972875,    # G39
+    (0.1093, 0.035): 336.5358376664685,    # H39
+    # WACC 11.43% (valuation C40)
+    (0.1143, 0.015): 266.3078209079082,    # D40
+    (0.1143, 0.02): 276.51038853451223,    # E40
+    (0.1143, 0.025): 287.85546093453206,    # F40
+    (0.1143, 0.03): 300.5463307722768,    # G40
+    (0.1143, 0.035): 314.83756250633235,    # H40
+    # WACC 11.93% (valuation C41)
+    (0.1193, 0.015): 253.03070350815184,    # D41
+    (0.1193, 0.02): 262.0913539028656,    # E41
+    (0.1193, 0.025): 272.11283678906545,    # F41
+    (0.1193, 0.03): 283.25654620227533,    # G41
+    (0.1193, 0.035): 295.72216657790625,    # H41
 }
 
 
@@ -477,8 +477,8 @@ BASE_DCF_INPUTS = dict(
     cash_and_investments=CASH_AND_INVESTMENTS,
 )
 
-WORKBOOK_WACC_OFFSETS = [-0.01, -0.005, 0.0, 0.005, 0.01]       # valuation C34:C38 around 10.93%
-WORKBOOK_GROWTH_RATES = [0.015, 0.02, 0.025, 0.03, 0.035]       # valuation D33:H33
+WORKBOOK_WACC_OFFSETS = [-0.01, -0.005, 0.0, 0.005, 0.01]       # valuation C37:C41 around 10.93%
+WORKBOOK_GROWTH_RATES = [0.015, 0.02, 0.025, 0.03, 0.035]       # valuation D36:H36
 
 
 def test_sensitivity_table_matches_the_whole_excel_table():
@@ -768,3 +768,27 @@ def test_working_capital_of_zero_stays_zero():
 def test_working_capital_reaches_zero_in_the_last_year_whatever_the_length():
     for years in (1, 3, 10):
         assert v.fade_working_capital_pcts(-0.15, years)[-1] == pytest.approx(0, abs=1e-12)
+
+
+# ---------------------------------------------------------------------------
+# Terminal value checks (valuation sheet, rows 30-32)
+# ---------------------------------------------------------------------------
+
+def test_terminal_value_share_matches_the_valuation_sheet():
+    # PV of terminal value (valuation C19) over enterprise value (C20) gives C31 (70.0%).
+    assert v.terminal_value_share(88114.971353505796, 125828.63291039423) == close(0.70027758639207904)
+
+
+def test_wacc_minus_terminal_growth_matches_the_valuation_sheet():
+    # WACC (valuation C8) minus terminal growth (C17) gives C32 (8.4 points).
+    assert v.wacc_minus_terminal_growth(0.10926631869756551, 0.025) == close(0.084266318697565512)
+
+
+def test_the_two_checks_agree_with_the_full_base_case_dcf():
+    result = run_base_case()
+    assert v.terminal_value_share(result["pv_of_terminal_value"], result["enterprise_value"]) == close(
+        0.70027758639207904                                   # valuation C31
+    )
+    assert v.wacc_minus_terminal_growth(result["wacc"], TERMINAL_GROWTH_RATE) == close(
+        0.084266318697565512                                  # valuation C32
+    )

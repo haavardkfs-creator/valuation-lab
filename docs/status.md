@@ -98,18 +98,22 @@
   in `valuation.py` matches it. On real data (6 Nov 2026): Coca-Cola goes from a DCF price 74%
   below the market to 28% below, Aker from 31% below to 2% above. Adobe's page is unchanged.
   251 tests pass.
-- Done (in the open pull request): the fallback cost of debt. Haavard added rows 34-58 to the
+- Done: the fallback cost of debt (merged, PR #29). Haavard added rows 34-58 to the
   `starting point` sheet (risk-free 5.29% + BBB credit spread 1.11% = 6.40%, plus an Apple
   worked example). `fallback_pre_tax_cost_of_debt` in `valuation.py` and `CREDIT_SPREAD` in
   `data.py` match it. When Yahoo has no interest expense, `yahoo_source` uses the fallback and
   the page shows a yellow note. Apple's WACC is 10.010% with it and 10.002% with its own AA
   rating, a gap of 0.009 points. 9 new tests; 260 tests pass.
-- Next, agreed with Haavard (4 pull requests, in order): (1) the fallback cost of debt (this
-  one); (2) a warning for very low WACCs, showing the terminal value's share of enterprise value
-  and a yellow note when WACC is within about 2 points of terminal growth; (3) peer multiples
-  for other companies, with peer tickers typed into a sidebar box and multiples fetched from
-  Yahoo; (4) later, an adjusted beta (two thirds of the raw beta plus one third of 1), built in
-  Excel first. Haavard also has ideas for improving the website afterwards.
+- Done (in the open pull request): the low-WACC caution. Haavard added "Terminal value checks"
+  to the `valuation` sheet (rows 30-32: terminal value share 70.0%, WACC minus terminal growth
+  8.4 points). `terminal_value_share` and `wacc_minus_terminal_growth` in `valuation.py` match
+  them; the limits (75% and 4 points) are in `assumptions.py`. The page says what share of the
+  value is terminal value and shows a yellow caution when a limit is crossed (Coca-Cola: both;
+  Microsoft: the share; Adobe and Apple: none). 11 new tests; 271 tests pass.
+- Next, agreed with Haavard (in order): (1) the low-WACC caution (this one); (2) peer
+  multiples for other companies, with peer tickers typed into a sidebar box and multiples
+  fetched from Yahoo; (3) later, an adjusted beta (two thirds of the raw beta plus one third
+  of 1), built in Excel first. Haavard also has ideas for improving the website afterwards.
 - Open:
   - Even after the capex fade, Microsoft's DCF price is 48% below its market price ($278 vs
     $532, 6 Nov 2026). A starting point from one year is not a forecast, and a 17.8% grower
@@ -120,7 +124,7 @@
     live app can crash with an `AttributeError` because the server still holds the old copy
     in memory. This happened after the WACC slider merge. Fix: Manage app, the three dots,
     Reboot app. It is not a code bug.
-  - The workbook's sensitivity table (valuation sheet, rows 34–38) uses a rounded WACC of
+  - The workbook's sensitivity table (valuation sheet, rows 37–41 since the terminal value checks were added above it) uses a rounded WACC of
     10.93% in its middle row, so it shows $305.48, not $305.60. Decided (see
     `docs/decisions.md`): the Phase 5 heatmap uses the exact WACC, so its centre cell is
     $305.60. It will not match the workbook's table in the middle row, on purpose.

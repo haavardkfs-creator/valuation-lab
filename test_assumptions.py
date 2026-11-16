@@ -171,3 +171,9 @@ def test_there_is_one_year_label_for_every_forecast_year():
 def test_starting_point_years_match_the_starting_point_sheet():
     assert a.STARTING_POINT_YEARS == 5                                  # starting point C13
     assert a.STARTING_POINT_YEARS == len(a.GROWTH_RATES)                # same length as the Adobe forecast
+
+
+def test_the_two_warning_thresholds_are_the_ones_agreed_with_haavard():
+    # 75% share from the terminal value, and a gap of less than 4 points, chosen 16 Nov 2026.
+    assert a.TERMINAL_VALUE_SHARE_WARNING == 0.75
+    assert a.WACC_GAP_WARNING == 0.04

@@ -74,6 +74,16 @@ Where each piece comes from:
 - Terminal growth 2.5%: roughly long-run inflation plus a little real growth. No company
   can outgrow the economy forever, and it must stay well below WACC.
 
+Two checks on how far to trust the price (workbook: `valuation` rows 30-32, "Terminal value
+checks"). They do not change the price; they say how much of it rests on the far future.
+- Terminal value share of enterprise value = PV of terminal value ÷ enterprise value (C19 ÷ C20).
+  Adobe: 70.0%.
+- WACC minus terminal growth = WACC − terminal growth rate (C8 − C17). Adobe: 8.4 points.
+- The page shows the first one under the "What the company is worth today" chart, and a
+  yellow caution when the share is above 75% (a rule of thumb: above about that, the price is
+  fragile) or the gap is below 4 points (the terminal value becomes very sensitive to small
+  changes). The limits are rules of thumb, not part of the valuation maths.
+
 ## From enterprise value to a share price
 
 - PV of forecast FCF = sum of PV of FCF, years 1–5

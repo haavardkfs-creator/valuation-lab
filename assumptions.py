@@ -63,16 +63,23 @@ TERMINAL_GROWTH_MIN = 0.0
 TERMINAL_GROWTH_MAX = 0.04
 TERMINAL_GROWTH_STEP = 0.0025
 
+# When to warn that a price rests mostly on the far future (the page shows a yellow note).
+# Both are rules of thumb, not part of the Excel valuation: the Excel rows they check are
+# valuation C31 and C32. Chosen with Haavard on 16 Nov 2026 after trying real companies
+# (Coca-Cola: 88% and a gap of 3.6 points; Adobe: 70% and 8.4 points).
+TERMINAL_VALUE_SHARE_WARNING = 0.75      # analysts' rule of thumb: above about 75% the price is fragile
+WACC_GAP_WARNING = 0.04                  # below 4 points between WACC and terminal growth is too tight
+
 
 # ---------------------------------------------------------------------------
 # The sensitivity heatmap (Phase 5)
 # ---------------------------------------------------------------------------
 
 # How far above and below the model's own WACC each row of the heatmap sits. Same spacing as
-# the workbook's sensitivity table (valuation C34:C38): half a percentage point a row.
+# the workbook's sensitivity table (valuation C37:C41): half a percentage point a row.
 HEATMAP_WACC_OFFSETS = [-0.01, -0.005, 0.0, 0.005, 0.01]
 
-# The terminal growth rate of each column of the heatmap. Excel: valuation D33:H33.
+# The terminal growth rate of each column of the heatmap. Excel: valuation D36:H36.
 HEATMAP_TERMINAL_GROWTH_RATES = [0.015, 0.02, 0.025, 0.03, 0.035]
 
 
