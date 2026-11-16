@@ -182,3 +182,9 @@ def test_the_two_warning_thresholds_are_the_ones_agreed_with_haavard():
 def test_the_minimum_number_of_peers_is_two():
     # Agreed with Haavard on 16 Nov 2026: the Multiples sheet's worked example has two P/Es left.
     assert a.MINIMUM_PEERS == 2
+
+
+def test_the_peer_suggestion_settings_are_the_ones_agreed_with_haavard():
+    # 16 Nov 2026: check the first 20 companies in the industry, keep those a tenth to ten times
+    # the company's size, and suggest the 5 closest.
+    assert (a.PEER_CANDIDATES_TO_CHECK, a.PEER_BIGGEST_SIZE_GAP, a.SUGGESTED_PEERS) == (20, 10, 5)

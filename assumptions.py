@@ -43,6 +43,16 @@ STARTING_POINT_YEARS = 5
 # example uses two peers for its P/E.
 MINIMUM_PEERS = 2
 
+# Suggesting peers for another company (see docs/model.md, "Suggesting peers"). The page looks up
+# the first PEER_CANDIDATES_TO_CHECK companies in the company's Yahoo industry, keeps those that
+# are no more than PEER_BIGGEST_SIZE_GAP times bigger or smaller than it (a tenth to ten times
+# its market value), and suggests the SUGGESTED_PEERS closest in size. Chosen with Haavard on
+# 16 Nov 2026; Yahoo's lists are ordered by importance, so the first 20 are enough and keep the
+# first load to a few seconds.
+PEER_CANDIDATES_TO_CHECK = 20
+PEER_BIGGEST_SIZE_GAP = 10
+SUGGESTED_PEERS = 5
+
 # The company the hand-chosen forecast assumptions above were made for. The page uses them
 # only for this company; any other ticker gets a starting point from its own last year.
 BASE_CASE_TICKER = "ADBE"

@@ -532,3 +532,24 @@ the peers box. The whole peers feature is split into four pull requests: this ma
 a peer's multiples from Yahoo and suggesting peers (same industry, between a tenth and ten times
 the company's size, closest five by market value), then the sidebar box and the multiples section
 for other companies, then a chart of the peers. No new files.
+
+## 2026-11-16 — Suggesting peers from Yahoo's industry list, by size
+
+Haavard wanted the app to find similar companies itself. Yahoo's industry lists were tried on three
+companies: good for Coca-Cola (PepsiCo, Monster, Keurig Dr Pepper), loose for Adobe (Uber, Shopify
+and ADP mixed in with Salesforce and Intuit), useless for Apple (only tiny companies). Asked what
+an analyst would do, the answer was to screen by industry, then narrow by size, so the design is
+suggest-then-edit: the app suggests up to 5 peers and the reader can change them (the box comes in
+the next pull request). Rule: the first 20 companies in the industry list, US-dollar listings only,
+within 10 times the company's market value, the 5 closest in size. 20 candidates keep the first
+load to about 4 seconds (about 0.2 seconds per company), and the same Yahoo call gives a peer's
+market value and its three multiples. No Excel example, by Haavard's choice: it is a screening
+rule, so it lives in `docs/model.md` ("Suggesting peers"). In Python, `size_gap` and `closest_peers`
+in `valuation.py` do the picking; `fetch_peer_candidates`, `fetch_peer_quote`, `peer_multiples` and
+`suggest_peers` in `data.py` do the fetching, and can be swapped for the tests; the three numbers
+(20, 10, 5) are `PEER_CANDIDATES_TO_CHECK`, `PEER_BIGGEST_SIZE_GAP` and `SUGGESTED_PEERS` in
+`assumptions.py`. One peer Yahoo cannot read is skipped; if none can be read, there is a plain
+error. A company with no suitable peers gets empty lists, not an error. Nothing is on the page yet.
+Known limits: a company with fewer than 2 suitable peers (Apple, Microsoft) gets no multiples until
+the reader types peers; non-US-dollar peers are not suggested; "closest in size" is not the same as
+"most similar business". No new files.

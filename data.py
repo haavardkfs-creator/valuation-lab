@@ -361,6 +361,107 @@ def yahoo_source(ticker, fetch_statements=fetch_yahoo_statements):
 
 
 # ---------------------------------------------------------------------------
+# Peers: suggested from Yahoo's industry list, with their multiples
+# ---------------------------------------------------------------------------
+
+def fetch_peer_candidates(ticker, how_many):
+    """Ask Yahoo Finance which companies are in the same industry as this one, and return the
+    tickers of the first how_many (Yahoo lists the most important first), leaving out the
+    company itself. Returns an empty list if Yahoo does not know the company's industry.
+    This is the only function that looks up an industry on the internet.
+    """
+    import yfinance
+
+    industry_key = yfinance.Ticker(ticker).info.get("industryKey")
+    if not industry_key:
+        return []
+    top_companies = yfinance.Industry(industry_key).top_companies
+    if top_companies is None:
+        return []
+    return [symbol for symbol in top_companies.index if symbol != ticker][:how_many]
+
+
+def fetch_peer_quote(ticker):
+    """Ask Yahoo Finance for one peer's market value (in $ millions), the currency it trades in
+    and its three multiples (EV/Sales, EV/EBITDA and P/E, trailing twelve months). A figure
+    Yahoo does not have comes back as None. This is the only function that looks up a peer on
+    the internet.
+    """
+    import yfinance
+
+    info = yfinance.Ticker(ticker).info
+    market_cap = info.get("marketCap")
+    return {
+        "ticker": ticker,
+        "market_cap": None if market_cap is None else market_cap / 1_000_000,
+        "currency": info.get("currency"),
+        "ev_sales": info.get("enterpriseToRevenue"),
+        "ev_ebitda": info.get("enterpriseToEbitda"),
+        "pe": info.get("trailingPE"),
+    }
+
+
+def peer_figures(quotes):
+    """Lay peers' quotes out the way a data package holds peers: their tickers, and one list
+    for each multiple, in the same order. A multiple Yahoo did not have stays None.
+    """
+    return {
+        "peer_tickers": [quote["ticker"] for quote in quotes],
+        "peer_ev_sales": [quote["ev_sales"] for quote in quotes],
+        "peer_ev_ebitda": [quote["ev_ebitda"] for quote in quotes],
+        "peer_pe": [quote["pe"] for quote in quotes],
+    }
+
+
+def peer_multiples(tickers, fetch_quote=fetch_peer_quote):
+    """Get the multiples of peers the reader chose, in the order given. A ticker Yahoo knows
+    nothing about comes back with every multiple None, so it is simply left out of the medians.
+    `fetch_quote` can be swapped, which is how the tests run without the internet.
+    """
+    try:
+        return peer_figures([fetch_quote(ticker) for ticker in tickers])
+    except Exception as error:      # Yahoo can fail in many ways; the reader needs one clear message
+        raise ValueError("Could not get peer figures from Yahoo Finance: %s" % error) from error
+
+
+def suggest_peers(
+    ticker,
+    company_market_value,
+    candidates_to_check,
+    biggest_size_gap,
+    how_many,
+    fetch_candidates=fetch_peer_candidates,
+    fetch_quote=fetch_peer_quote,
+):
+    """Suggest peers for a company: look at the first candidates_to_check companies in its
+    Yahoo industry, keep those that trade in US dollars and are within biggest_size_gap times
+    of the company's market value ($ millions), and return the how_many closest in size, with
+    their multiples (see peer_figures). Returns empty lists when nothing suitable is found.
+
+    One peer Yahoo cannot look up is skipped. Stops with a plain error if Yahoo cannot be
+    reached at all. The two fetch functions can be swapped, which is how the tests run without
+    the internet.
+    """
+    try:
+        symbols = fetch_candidates(ticker, candidates_to_check)
+    except Exception as error:      # Yahoo can fail in many ways; the reader needs one clear message
+        raise ValueError("Could not get peers from Yahoo Finance: %s" % error) from error
+
+    quotes = []
+    for symbol in symbols:
+        try:
+            quotes.append(fetch_quote(symbol))
+        except Exception:           # one unreadable peer should not hide the others
+            continue
+    if symbols and not quotes:
+        raise ValueError("Could not get peers from Yahoo Finance: none of the %d candidates could be read." % len(symbols))
+
+    in_dollars = [quote for quote in quotes if quote["currency"] == "USD"]
+    chosen = valuation.closest_peers(company_market_value, in_dollars, biggest_size_gap, how_many)
+    return peer_figures(chosen)
+
+
+# ---------------------------------------------------------------------------
 # Choosing a source and fetching
 # ---------------------------------------------------------------------------
 

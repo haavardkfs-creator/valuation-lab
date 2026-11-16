@@ -876,3 +876,52 @@ def test_a_peer_dropped_from_one_multiple_still_counts_in_the_others():
     result = multiples_with_peers(COCA_COLA_EV_SALES, COCA_COLA_EV_EBITDA, COCA_COLA_PE)
     assert result["median_ev_sales"] == close(2.663) and result["median_ev_ebitda"] == close(14.749)
     assert result["median_pe"] == close(19.944310999999999)
+
+
+# ---------------------------------------------------------------------------
+# Picking peers by size (not a cell in the Excel model: a screening rule, so the expected
+# numbers are worked out by hand; see docs/model.md, "Suggesting peers")
+# ---------------------------------------------------------------------------
+
+def test_size_gap_is_the_same_whether_the_other_company_is_bigger_or_smaller():
+    assert v.size_gap(100, 200) == close(2)
+    assert v.size_gap(100, 50) == close(2)
+    assert v.size_gap(100, 100) == close(1)
+
+
+# Like Coca-Cola ($427bn) and some Yahoo candidates, market values in $ millions.
+CANDIDATES = [
+    {"ticker": "PEP", "market_cap": 200_000},       # 2.1 times smaller
+    {"ticker": "MNST", "market_cap": 90_000},       # 4.7 times smaller
+    {"ticker": "KDP", "market_cap": 49_000},        # 8.7 times smaller
+    {"ticker": "COKE", "market_cap": 14_000},       # 30 times smaller: too small
+    {"ticker": "GIANT", "market_cap": 5_000_000},   # 11.7 times bigger: too big
+    {"ticker": "NONE", "market_cap": None},         # no market value at all
+]
+
+
+def test_closest_peers_keeps_only_those_within_the_size_gap_closest_first():
+    chosen = v.closest_peers(427_000, CANDIDATES, biggest_size_gap=10, how_many=5)
+    assert [peer["ticker"] for peer in chosen] == ["PEP", "MNST", "KDP"]
+
+
+def test_closest_peers_returns_no_more_than_asked_for():
+    chosen = v.closest_peers(427_000, CANDIDATES, biggest_size_gap=10, how_many=2)
+    assert [peer["ticker"] for peer in chosen] == ["PEP", "MNST"]
+
+
+def test_closest_peers_orders_by_how_many_times_bigger_or_smaller_not_by_which_side():
+    # 70 is 1.43 times smaller than 100, but 130 is only 1.3 times bigger: the bigger one is closer.
+    candidates = [{"ticker": "SMALL", "market_cap": 70}, {"ticker": "BIG", "market_cap": 130}]
+    assert [peer["ticker"] for peer in v.closest_peers(100, candidates, 10, 5)] == ["BIG", "SMALL"]
+
+
+def test_a_candidate_exactly_at_the_size_gap_is_still_included():
+    assert v.closest_peers(100, [{"ticker": "EDGE", "market_cap": 1000}], 10, 5) == [
+        {"ticker": "EDGE", "market_cap": 1000}
+    ]
+
+
+def test_closest_peers_with_nothing_suitable_gives_an_empty_list():
+    assert v.closest_peers(5_000_000, [{"ticker": "TINY", "market_cap": 100}], 10, 5) == []
+    assert v.closest_peers(100, [], 10, 5) == []

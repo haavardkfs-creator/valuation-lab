@@ -120,6 +120,23 @@ loss-making peer has no P/E, and a negative EBITDA gives no real EV/EBITDA. The 
 - The middle of the three prices becomes the middle of the prices that exist. Adobe's four peers
   all have all three multiples, so nothing changes for it.
 
+Suggesting peers (not in the workbook: a screening rule, not valuation maths). For a company
+other than Adobe, the page suggests peers, which the reader can change:
+- Take the company's industry from Yahoo Finance and look at the first 20 companies in its list
+  (Yahoo lists the most important first). The company itself is left out.
+- Keep only peers that trade in US dollars, because a market value in another currency cannot be
+  compared with a dollar company's.
+- Keep only peers within 10 times the company's market value, bigger or smaller: a peer a tenth
+  of its size, or ten times its size, is the limit. A company twice as big and one half the size
+  are both "2 away".
+- Suggest the 5 closest in size. A company with fewer than 5 suitable peers gets fewer, and one
+  with none (Apple, whose Yahoo industry holds only tiny companies) gets none, and types its own.
+- The peers' EV/Sales, EV/EBITDA and P/E come from the same Yahoo lookup (trailing twelve months).
+  A peer with no usable multiple is dealt with by the rule above.
+- On real data (16 Nov 2026): Coca-Cola gets PepsiCo, Monster and Keurig Dr Pepper; Adobe's
+  own industry list gives Snowflake, Intuit, ServiceNow, Cadence and ADP (Adobe keeps its
+  hand-chosen peers); Apple and Microsoft get fewer than 2 and would need typed peers.
+
 ## Base case inputs
 
 | Input | Value |
