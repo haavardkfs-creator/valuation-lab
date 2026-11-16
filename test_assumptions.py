@@ -177,3 +177,8 @@ def test_the_two_warning_thresholds_are_the_ones_agreed_with_haavard():
     # 75% share from the terminal value, and a gap of less than 4 points, chosen 16 Nov 2026.
     assert a.TERMINAL_VALUE_SHARE_WARNING == 0.75
     assert a.WACC_GAP_WARNING == 0.04
+
+
+def test_the_minimum_number_of_peers_is_two():
+    # Agreed with Haavard on 16 Nov 2026: the Multiples sheet's worked example has two P/Es left.
+    assert a.MINIMUM_PEERS == 2

@@ -513,3 +513,22 @@ sensitivity table from `valuation` rows 34-38 to rows 37-41 (growth rates in row
 are the same, and the cell references in the comments of `test_valuation.py` and `assumptions.py`
 were updated. An adjusted beta, the usual cure for a very low beta, is a separate pull request
 later. No new files.
+
+## 2026-11-16 — Peers: a missing multiple drops that peer from that one multiple, and 2 peers are the minimum
+
+Haavard wants other companies to get peer multiples too, with the peers suggested automatically
+and editable. The first step is the maths for peers that have no usable multiple, because Yahoo
+gives all three multiples for ordinary peers but not for loss-making ones. Asked what an analyst
+would do, the answer was to drop that peer from that one multiple only, take the median of the
+rest, and not to show a "median" of a single number. Haavard agreed to a minimum of 2 peers.
+Built Excel first: `Multiples` rows 41-49, a worked example with PepsiCo, Keurig Dr Pepper and
+Mondelez where Keurig's P/E is blank on purpose (medians 2.663, 14.749 and 19.944; the P/E count
+is 2; the check F49 is 0). In Python, `usable_multiples` and `median_of_usable_multiples` in
+`valuation.py` match D46:F46 and F47, and `MINIMUM_PEERS = 2` is a named constant in
+`assumptions.py`. `run_multiples` now takes `minimum_peers`. A multiple with too few peers gives
+None for its median and its price, and the middle price is taken over the prices that exist (None
+if none do). Adobe is unchanged. The page does not use the new None results yet; that comes with
+the peers box. The whole peers feature is split into four pull requests: this maths, then fetching
+a peer's multiples from Yahoo and suggesting peers (same industry, between a tenth and ten times
+the company's size, closest five by market value), then the sidebar box and the multiples section
+for other companies, then a chart of the peers. No new files.

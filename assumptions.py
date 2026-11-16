@@ -36,6 +36,13 @@ TERMINAL_GROWTH_RATE = 0.025
 # Starting point for other companies). Excel: starting point C13.
 STARTING_POINT_YEARS = 5
 
+# The fewest peers a multiple needs before the page uses it. Peers with a missing or meaningless
+# multiple (no P/E, or a negative EBITDA) are left out of that one multiple, and with fewer than
+# this many left, the middle of what remains is not a real peer median. Chosen with Haavard on
+# 16 Nov 2026 (see docs/model.md, "Peers with a missing multiple"); the Multiples sheet's worked
+# example uses two peers for its P/E.
+MINIMUM_PEERS = 2
+
 # The company the hand-chosen forecast assumptions above were made for. The page uses them
 # only for this company; any other ticker gets a starting point from its own last year.
 BASE_CASE_TICKER = "ADBE"

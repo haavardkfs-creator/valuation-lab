@@ -8,6 +8,7 @@ Conventions: money is in $ millions, shares are in millions, and rates and perce
 are decimals (0.09 means 9%).
 """
 
+import math
 import statistics
 
 
@@ -243,6 +244,29 @@ def peer_median(multiples):
     return statistics.median(multiples)
 
 
+def usable_multiples(multiples):
+    """Keep only the peer multiples that mean something: a missing one, or one that is zero
+    or negative (a loss-making peer has no real P/E, and a negative EBITDA gives no real
+    EV/EBITDA), is left out.
+    """
+    return [
+        multiple
+        for multiple in multiples
+        if multiple is not None and not math.isnan(multiple) and multiple > 0
+    ]
+
+
+def median_of_usable_multiples(multiples, minimum_peers):
+    """Find the middle value of the peers' multiples after leaving out the ones that are
+    missing or not meaningful. Returns None when fewer than minimum_peers are left, because
+    the middle of one number is not a real peer median.
+    """
+    usable = usable_multiples(multiples)
+    if len(usable) < minimum_peers:
+        return None
+    return peer_median(usable)
+
+
 def ebitda(ebit, depreciation_and_amortisation):
     """Work out earnings before interest, tax, depreciation and amortisation: operating
     profit plus D&A.
@@ -355,24 +379,36 @@ def run_multiples(
     peer_ev_ebitda,
     peer_pe,
     dcf_price,
+    minimum_peers,
 ):
     """Value the company from its peers' multiples, then compare with the DCF price.
 
-    Returns a dictionary holding the peer medians, the three prices (EV/Sales, EV/EBITDA
-    and P/E), the middle of those three prices, and how far the DCF price is above or below
-    it, so a page can show any of them.
+    Peers with a missing or meaningless multiple are left out of that one multiple, and a
+    multiple with fewer than minimum_peers peers left is not used: its median and price come
+    back as None. Returns a dictionary holding the peer medians, the three prices (EV/Sales,
+    EV/EBITDA and P/E), the middle of the prices that exist (None if none do), and how far the
+    DCF price is above or below it, so a page can show any of them.
     """
-    median_ev_sales = peer_median(peer_ev_sales)
-    median_ev_ebitda = peer_median(peer_ev_ebitda)
-    median_pe = peer_median(peer_pe)
+    median_ev_sales = median_of_usable_multiples(peer_ev_sales, minimum_peers)
+    median_ev_ebitda = median_of_usable_multiples(peer_ev_ebitda, minimum_peers)
+    median_pe = median_of_usable_multiples(peer_pe, minimum_peers)
 
-    price_ev_sales = price_from_ev_multiple(revenue, median_ev_sales, net_debt_amount, shares)
-    price_ev_ebitda = price_from_ev_multiple(
-        ebitda(ebit, depreciation_and_amortisation), median_ev_ebitda, net_debt_amount, shares
+    price_ev_sales = (
+        None
+        if median_ev_sales is None
+        else price_from_ev_multiple(revenue, median_ev_sales, net_debt_amount, shares)
     )
-    price_pe = price_from_pe(net_income, median_pe, shares)
+    price_ev_ebitda = (
+        None
+        if median_ev_ebitda is None
+        else price_from_ev_multiple(
+            ebitda(ebit, depreciation_and_amortisation), median_ev_ebitda, net_debt_amount, shares
+        )
+    )
+    price_pe = None if median_pe is None else price_from_pe(net_income, median_pe, shares)
 
-    median_price = peer_median([price_ev_sales, price_ev_ebitda, price_pe])
+    prices = [price for price in (price_ev_sales, price_ev_ebitda, price_pe) if price is not None]
+    median_price = peer_median(prices) if prices else None
 
     return {
         "median_ev_sales": median_ev_sales,
@@ -382,7 +418,7 @@ def run_multiples(
         "price_ev_ebitda": price_ev_ebitda,
         "price_pe": price_pe,
         "median_price": median_price,
-        "dcf_vs_multiples": dcf_vs_multiples(dcf_price, median_price),
+        "dcf_vs_multiples": None if median_price is None else dcf_vs_multiples(dcf_price, median_price),
     }
 
 

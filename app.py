@@ -148,6 +148,7 @@ def run_valuation(company, dcf_inputs, terminal_growth_rate, wacc_override=None)
         peer_ev_ebitda=company["peer_ev_ebitda"],
         peer_pe=company["peer_pe"],
         dcf_price=dcf["implied_share_price"],
+        minimum_peers=assumptions.MINIMUM_PEERS,
     )
     return dcf, multiples
 
