@@ -79,13 +79,13 @@
   not a forecast" warning. A ticker Yahoo does not know, a company with no pre-tax profit, or a
   WACC at or below terminal growth shows a plain red error and the footer. `test_app.py` runs
   the page with fake Yahoo data. Merged and live.
-- Done (in the open pull request): capex fades. Haavard changed row 21 of the `starting point`
+- Done: capex fades. Haavard changed row 21 of the `starting point`
   sheet and added a worked example (rows 29-32: capex 35%, D&A 12%, fading to 12%). In Python,
   `fade_capex_pcts` steps capex down to the D&A level in equal steps, and never pushes it up
   (Adobe's 0.75% against D&A of 3.44% stays flat); `starting_point_assumptions` uses it. 5 new
   tests against the sheet's cells; 235 tests pass. On real data Microsoft moves from a DCF price
   79% below the market to 48% below.
-- Done (in the open pull request): working capital fades to zero, and currency. Aker ASA (AKER.OL) showed kroner with dollar
+- Done: working capital fades to zero, and currency. Aker ASA (AKER.OL) showed kroner with dollar
   signs, and Novo Nordisk and Shell mixed currencies (statements in DKK with a USD price;
   statements in USD with a price in pence). The `"yahoo"` source now asks Yahoo for the
   statement currency, the price currency and the exchange rate for each, and converts every
@@ -98,14 +98,19 @@
   in `valuation.py` matches it. On real data (6 Nov 2026): Coca-Cola goes from a DCF price 74%
   below the market to 28% below, Aker from 31% below to 2% above. Adobe's page is unchanged.
   251 tests pass.
-- Next: Haavard's call. Problems the real companies showed (see Open): companies without an
-  interest expense line, and very low WACCs. Other options: a way to choose peers
-  so other companies get multiples, or the optional Phase 7 (saving via Supabase).
+- Done (in the open pull request): the fallback cost of debt. Haavard added rows 34-58 to the
+  `starting point` sheet (risk-free 5.29% + BBB credit spread 1.11% = 6.40%, plus an Apple
+  worked example). `fallback_pre_tax_cost_of_debt` in `valuation.py` and `CREDIT_SPREAD` in
+  `data.py` match it. When Yahoo has no interest expense, `yahoo_source` uses the fallback and
+  the page shows a yellow note. Apple's WACC is 10.010% with it and 10.002% with its own AA
+  rating, a gap of 0.009 points. 9 new tests; 260 tests pass.
+- Next, agreed with Haavard (4 pull requests, in order): (1) the fallback cost of debt (this
+  one); (2) a warning for very low WACCs, showing the terminal value's share of enterprise value
+  and a yellow note when WACC is within about 2 points of terminal growth; (3) peer multiples
+  for other companies, with peer tickers typed into a sidebar box and multiples fetched from
+  Yahoo; (4) later, an adjusted beta (two thirds of the raw beta plus one third of 1), built in
+  Excel first. Haavard also has ideas for improving the website afterwards.
 - Open:
-  - Apple cannot be valued: Yahoo has no interest expense at all for it (every interest line
-    is empty), so the cost of debt cannot be estimated and the page shows a plain error. Needs
-    a decision: a fallback cost of debt (for example the risk-free rate plus a spread), or
-    leave it as an honest error.
   - Even after the capex fade, Microsoft's DCF price is 48% below its market price ($278 vs
     $532, 6 Nov 2026). A starting point from one year is not a forecast, and a 17.8% grower
     fading to 2.5% over five years is a conservative path for it.

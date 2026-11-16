@@ -663,6 +663,40 @@ def test_estimated_cost_of_debt_refuses_a_negative_amount(interest_expense, debt
         v.estimate_pre_tax_cost_of_debt(interest_expense, debt)
 
 
+# ---------------------------------------------------------------------------
+# Fallback cost of debt (starting point sheet, rows 34-37 and the Apple example, rows 39-58)
+# ---------------------------------------------------------------------------
+
+def test_fallback_cost_of_debt_matches_the_starting_point_sheet():
+    # Risk-free rate (starting point C35, which links to WACC C8) plus the BBB credit spread
+    # (C36) gives C37.
+    assert v.fallback_pre_tax_cost_of_debt(0.0529, 0.0111) == close(0.064)
+
+
+def test_fallback_cost_of_debt_on_simple_numbers():
+    assert v.fallback_pre_tax_cost_of_debt(0.04, 0.01) == close(0.05)
+
+
+def test_apples_wacc_with_the_fallback_matches_the_sheet_and_barely_moves():
+    # Apple's figures from starting point C40:C52. Debt is 1.85% of its capital, so swapping
+    # Apple's own rating (AA, spread 0.55%, D55) for the BBB fallback moves the WACC by only
+    # 0.0087 points (C58).
+    share_price, shares = 355.02, 14776.352999999999           # C40, C41
+    debt = 98657                                               # C45
+    cost_of_equity_rate = v.cost_of_equity(0.0529, 1.09, 0.0441)   # C50
+    assert cost_of_equity_rate == close(0.100969)
+
+    def apple_wacc(pre_tax_cost_of_debt):
+        after_tax = v.after_tax_cost_of_debt(pre_tax_cost_of_debt, 0.156)       # C51
+        return v.wacc(share_price, shares, debt, cost_of_equity_rate, after_tax)
+
+    with_fallback = apple_wacc(v.fallback_pre_tax_cost_of_debt(0.0529, 0.0111))
+    with_own_rating = apple_wacc(v.fallback_pre_tax_cost_of_debt(0.0529, 0.0055))   # D55
+    assert with_fallback == close(0.10010227869996172)          # C57
+    assert with_own_rating == close(0.10001503248454416)        # D57
+    assert with_fallback - with_own_rating == close(8.7246215417557949e-05)     # C58
+
+
 def test_financial_debt_matches_wacc_c22():
     assert v.financial_debt(0, 6210) == 6210                  # Inputs G47 (0) + G48 (6,210)
 

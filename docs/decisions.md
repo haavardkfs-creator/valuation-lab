@@ -471,3 +471,24 @@ hand-chosen 1% a year, so it is unchanged. The starting point now has four movin
 capex and working capital fade; margin, tax rate and D&A are held), all following the sheet.
 Result on real data: Coca-Cola from 74% below the market to 28% below, Aker from 31% below to 2%
 above. No new files.
+
+## 2026-11-16 — A fallback cost of debt when Yahoo has no interest expense
+
+Apple could not be valued: Yahoo has no interest expense for it, so interest expense divided by
+debt could not be worked out and the page stopped with a red error. Asked what an analyst would
+do, the answer was to estimate the cost of debt from the market, as the risk-free rate plus a
+credit spread for the company's rating, and not to give up. Haavard agreed. Built Excel first:
+`starting point` C35 (risk-free rate, linked to WACC C8), C36 (spread 1.11%, Damodaran synthetic
+rating spreads, Jan 2026, Baa2/BBB, a middle-of-the-road choice) and C37 (their sum, 6.40%). A
+worked example in rows 39-58 values Apple's WACC both ways: 10.010% with the BBB fallback and
+10.002% with Apple's own AA spread (0.55%), a gap of 0.009 points, because debt is only 1.85% of
+Apple's capital. In Python, `fallback_pre_tax_cost_of_debt` in `valuation.py` matches C37 and
+D55, `CREDIT_SPREAD` in `data.py` holds the spread, and `yahoo_source` uses the fallback only
+when Yahoo has no interest expense (it is no longer a required figure). The package then has
+`interest_expense` set to None, the estimated `pre_tax_cost_of_debt`, and
+`cost_of_debt_is_fallback` set to True, and the page shows a yellow note saying the cost of debt
+is an estimate. A company that does have an interest expense is unchanged. The new field is
+only for companies that use the fallback, so `test_expected_snapshot_lists_every_package_field`
+now leaves it out of what Adobe's snapshot must list, as it does the currency fields. Known
+limit: the fallback uses one spread for every company, so it is least accurate for heavily
+indebted ones. No new files.

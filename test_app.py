@@ -21,6 +21,7 @@ from test_data import (
     ADOBE_YAHOO_INCOME,
     ADOBE_YAHOO_INFO,
     fake_statements_ticker,
+    no_interest_expense_company,
 )
 
 APP_FILE = str(Path(__file__).parent / "app.py")
@@ -116,6 +117,24 @@ def test_another_company_gets_a_starting_point_with_a_warning_and_no_multiples(m
     assert "Peer multiples" not in subheaders
     assert "EV/Sales price" not in metrics(page)
     assert metrics(page)["Market price"] == "$240.74"
+
+
+def test_a_company_with_no_interest_expense_is_valued_with_a_note_about_the_estimate(monkeypatch):
+    # Like Apple: Yahoo has no interest expense, so the cost of debt is the risk-free rate plus
+    # a credit spread (starting point C37) and the page says so.
+    page = run_page(monkeypatch, ticker="aapl", yahoo=no_interest_expense_company())
+    assert_footer_and_no_crash(page)
+    assert not page.error
+    note, warning = texts(page.warning)
+    assert "no interest expense" in note
+    assert "6.40%" in note and "1.11%" in note
+    assert warning.startswith("Starting point, not a forecast")
+    assert "Discounted cash flow (DCF)" in texts(page.subheader)
+
+
+def test_a_company_with_an_interest_expense_gets_no_estimate_note(monkeypatch):
+    page = run_page(monkeypatch, ticker="exmp", yahoo=other_company())
+    assert not any("no interest expense" in warning for warning in texts(page.warning))
 
 
 def test_another_companys_price_is_the_starting_point_dcf(monkeypatch):

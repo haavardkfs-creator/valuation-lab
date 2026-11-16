@@ -30,7 +30,7 @@ PACKAGE_FIELDS = {
     "prior_year_revenue": "Total revenue of the full year before the latest one, $ millions",
     "income_tax": "Latest full-year income tax expense (provision for income taxes), $ millions",
     "income_before_tax": "Latest full-year income before income taxes, $ millions",
-    "interest_expense": "Latest full-year interest expense, as a positive amount, $ millions",
+    "interest_expense": "Latest full-year interest expense, as a positive amount, $ millions; None when the source has none, in which case the package carries a fallback cost of debt",
     "capex": "Latest full-year capital spending, as a positive amount, $ millions",
     "cash_from_working_capital": "Latest full-year cash from working capital, positive when cash comes in, $ millions",
     "debt": "Financial debt: current portion plus long-term debt, leases excluded, $ millions",
@@ -47,6 +47,7 @@ PACKAGE_FIELDS = {
 # the DCF only (see docs/decisions.md).
 OPTIONAL_FIELDS = {
     "pre_tax_cost_of_debt": "Weighted average effective interest rate on the company's debt, decimal",
+    "cost_of_debt_is_fallback": "True when pre_tax_cost_of_debt is the risk-free rate plus a credit spread, because the company's interest expense was not available",
     "peer_tickers": "Tickers of the peer companies, in the same order as the three lists below",
     "peer_ev_sales": "Each peer's EV/Sales multiple",
     "peer_ev_ebitda": "Each peer's EV/EBITDA multiple",
@@ -66,6 +67,11 @@ OPTIONAL_FIELDS = {
 # Damodaran publishes new ones.
 RISK_FREE_RATE = 0.0529             # Damodaran, US Treasury rate used in his implied ERP, 1 Nov 2026
 EQUITY_RISK_PREMIUM = 0.0441        # Damodaran, implied ERP (trailing 12 months, adjusted payout), 1 Nov 2026
+
+# Used only when Yahoo has no interest expense for a company (Apple, for one), so its cost of
+# debt cannot be estimated from its own figures. It is a middle-of-the-road spread: the extra a
+# BBB-rated (Baa2) company pays over the risk-free rate.
+CREDIT_SPREAD = 0.0111              # Damodaran synthetic rating spreads, Jan 2026 (Baa2/BBB); starting point C36
 
 
 # ---------------------------------------------------------------------------
@@ -257,12 +263,14 @@ def fetch_yahoo_statements(ticker):
     }
 
 
-# Figures Yahoo must supply for a company to be valued. Current debt is the one exception:
-# Yahoo leaves it out when a company has none, so a missing one counts as 0.
+# Figures Yahoo must supply for a company to be valued. Current debt is one exception: Yahoo
+# leaves it out when a company has none, so a missing one counts as 0. Interest expense is the
+# other: when Yahoo has none (Apple), the cost of debt falls back to the risk-free rate plus a
+# credit spread.
 YAHOO_REQUIRED = [
     "company_name", "statement_currency", "price_currency", "usd_per_statement_unit",
     "usd_per_price_unit", "revenue", "prior_year_revenue", "ebit", "net_income", "income_tax",
-    "income_before_tax", "interest_expense", "depreciation_and_amortisation", "capex",
+    "income_before_tax", "depreciation_and_amortisation", "capex",
     "cash_from_working_capital", "long_term_debt", "cash_and_investments", "shares",
     "share_price", "beta",
 ]
@@ -284,8 +292,10 @@ def yahoo_source(ticker, fetch_statements=fetch_yahoo_statements):
     the exchange rate Yahoo gives today: the statement figures at the statement currency's
     rate, and the share price at the price currency's rate. The risk-free rate and equity risk
     premium are the market-wide figures typed in above. The package has no cost of debt from
-    the debt notes and no peer multiples, because Yahoo cannot supply them. Stops with a plain
-    error naming any figure Yahoo did not supply, or if Yahoo cannot be reached.
+    the debt notes and no peer multiples, because Yahoo cannot supply them. When Yahoo has no
+    interest expense either (Apple), the package carries a fallback cost of debt, the risk-free
+    rate plus a credit spread, and says so. Stops with a plain error naming any other figure
+    Yahoo did not supply, or if Yahoo cannot be reached.
     `fetch_statements` can be swapped, which is how the tests run without the internet.
     """
     try:
@@ -319,7 +329,18 @@ def yahoo_source(ticker, fetch_statements=fetch_yahoo_statements):
     if current_debt is None:
         current_debt = 0
 
-    package = {name: to_usd(statements[name], statement_rate) for name in YAHOO_MONEY_FIELDS}
+    package = {
+        name: to_usd(statements[name], statement_rate)
+        for name in YAHOO_MONEY_FIELDS
+        if statements.get(name) is not None
+    }
+    if statements.get("interest_expense") is None:
+        # No interest expense to divide by debt, so estimate the cost of debt from the market.
+        package["interest_expense"] = None
+        package["pre_tax_cost_of_debt"] = valuation.fallback_pre_tax_cost_of_debt(
+            RISK_FREE_RATE, CREDIT_SPREAD
+        )
+        package["cost_of_debt_is_fallback"] = True
     package.update(
         company_name=statements["company_name"],
         ticker=ticker,
