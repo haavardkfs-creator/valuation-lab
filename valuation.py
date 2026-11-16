@@ -103,6 +103,14 @@ def estimate_pre_tax_cost_of_debt(interest_expense, debt):
     return interest_expense / debt
 
 
+def fallback_pre_tax_cost_of_debt(risk_free_rate, credit_spread):
+    """Estimate what a company pays to borrow when its interest expense is not available:
+    the risk-free rate plus a credit spread, which is the extra a lender asks for lending to a
+    company instead of to the government.
+    """
+    return risk_free_rate + credit_spread
+
+
 def wacc(share_price, shares, debt, cost_of_equity_rate, after_tax_cost_of_debt_rate):
     """Blend the cost of equity and the after-tax cost of debt into one discount rate,
     weighting each by how much of the company's market value it funds.

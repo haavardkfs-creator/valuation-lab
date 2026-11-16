@@ -156,3 +156,16 @@ For Yahoo-sourced companies, all financial figures and the share price are conve
 Cost of debt is estimated as interest expense divided by total debt. This gives the company's implied pre-tax borrowing rate based on its most recent financials.
 If a company has no debt, the cost of debt is set to 0 because there are no borrowing costs to estimate.
 
+Fallback when there is no interest expense (workbook: `starting point` rows 34-37). Some
+companies, Apple for one, have no interest expense line that the data source can read, so the
+estimate above cannot be made. The fallback is a market-based estimate:
+- Fallback pre-tax cost of debt = risk-free rate + credit spread
+- Risk-free rate = 5.29% (linked to WACC C8). Credit spread = 1.11%, the Damodaran synthetic
+  rating spread for a BBB (Baa2) company, Jan 2026. BBB is a middle-of-the-road choice. Result: 6.40%.
+- The after-tax cost of debt and the WACC are then worked out as usual.
+
+How much it matters (workbook rows 39-58, Apple): debt is only 1.85% of Apple's capital, so
+the WACC is 10.010% with the fallback and 10.002% with Apple's own AA spread (0.55%). The
+difference is 0.009 percentage points. The fallback is least accurate for companies with a lot
+of debt, where the cost of debt carries more weight.
+

@@ -409,6 +409,12 @@ def draw_source_note(company, source_used):
         conversion = currency_note(company)
         if conversion:
             st.caption(conversion)
+        if company.get("cost_of_debt_is_fallback"):
+            st.warning(
+                f"Yahoo Finance has no interest expense for {company['company_name']}, so its cost "
+                f"of debt ({precise_percent(company['pre_tax_cost_of_debt'])}) is an estimate: the "
+                f"risk-free rate plus a typical credit spread of {precise_percent(data.CREDIT_SPREAD)}."
+            )
         st.warning(
             f"Starting point, not a forecast: this starts from {company['company_name']}'s own "
             "last reported year and holds its margins flat. A DCF suits stable, cash-generating "

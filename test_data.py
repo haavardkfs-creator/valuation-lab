@@ -48,8 +48,10 @@ CURRENCY_FIELDS = {"statement_currency", "price_currency", "usd_per_statement_un
 
 
 def test_expected_snapshot_lists_every_package_field():
-    # Adobe reports and trades in dollars, so its snapshot has no currency fields.
-    assert set(EXPECTED_SNAPSHOT) == set(data.PACKAGE_FIELDS) | (set(data.OPTIONAL_FIELDS) - CURRENCY_FIELDS)
+    # Adobe reports and trades in dollars, so its snapshot has no currency fields. It has a real
+    # cost of debt from the 10-K, so it does not have the fallback flag either.
+    not_in_adobes_snapshot = CURRENCY_FIELDS | {"cost_of_debt_is_fallback"}
+    assert set(EXPECTED_SNAPSHOT) == set(data.PACKAGE_FIELDS) | (set(data.OPTIONAL_FIELDS) - not_in_adobes_snapshot)
 
 
 def test_required_and_optional_fields_do_not_overlap():
@@ -625,3 +627,41 @@ def test_fetch_yahoo_statements_returns_the_currencies_and_rates(monkeypatch):
     assert got["usd_per_statement_unit"] == 0.15
     assert got["usd_per_price_unit"] == 1.0
     assert got["revenue"] == pytest.approx(23769)                   # still in kroner here: the source converts
+
+
+# ---------------------------------------------------------------------------
+# A company with no interest expense on Yahoo (Apple): the cost of debt falls back
+# ---------------------------------------------------------------------------
+
+def no_interest_expense_company(**kwargs):
+    """A stand-in for Yahoo's reply about a company whose income statement has no interest lines."""
+    return fake_statements_ticker(income=without(ADOBE_YAHOO_INCOME, "Interest Expense"), **kwargs)
+
+
+def test_a_company_with_no_interest_expense_gets_the_fallback_cost_of_debt(monkeypatch):
+    monkeypatch.setattr("yfinance.Ticker", no_interest_expense_company())
+    package = data.get_company_data("AAPL", source="yahoo")         # runs check_package: no error
+    assert package["interest_expense"] is None
+    assert package["pre_tax_cost_of_debt"] == pytest.approx(0.064)      # starting point C37
+    assert package["cost_of_debt_is_fallback"] is True
+
+
+def test_the_credit_spread_is_the_sheets_bbb_spread():
+    assert data.CREDIT_SPREAD == 0.0111                             # starting point C36
+
+
+def test_a_company_with_an_interest_expense_gets_no_fallback(monkeypatch):
+    monkeypatch.setattr("yfinance.Ticker", fake_statements_ticker())
+    package = data.get_company_data("ADBE", source="yahoo")
+    assert "pre_tax_cost_of_debt" not in package and "cost_of_debt_is_fallback" not in package
+    assert package["interest_expense"] == pytest.approx(263)
+
+
+def test_the_fallback_cost_of_debt_is_the_same_in_every_currency(monkeypatch):
+    # A rate is not an amount of money, so converting the statements must not touch it.
+    info = dict(ADOBE_YAHOO_INFO, financialCurrency="NOK", currency="NOK")
+    monkeypatch.setattr(
+        "yfinance.Ticker", no_interest_expense_company(info=info, fx_rates={"NOKUSD=X": 0.09})
+    )
+    package = data.get_company_data("AKER.OL", source="yahoo")
+    assert package["pre_tax_cost_of_debt"] == pytest.approx(0.064)
