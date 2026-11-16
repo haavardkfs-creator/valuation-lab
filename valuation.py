@@ -267,6 +267,33 @@ def median_of_usable_multiples(multiples, minimum_peers):
     return peer_median(usable)
 
 
+def size_gap(company_value, other_value):
+    """Say how many times bigger or smaller one company is than another, always as a number of
+    1 or more: a company twice as big and a company half the size are both 2 away.
+    """
+    ratio = other_value / company_value
+    return max(ratio, 1 / ratio)
+
+
+def closest_peers(company_value, candidates, biggest_size_gap, how_many):
+    """From the candidate peers, pick the ones closest in size (market value) to the company.
+
+    Each candidate is a dictionary with a "market_cap". A candidate with no market value, or
+    one more than biggest_size_gap times bigger or smaller than the company, is left out; the
+    rest are ordered from closest to furthest, and the first how_many are returned. The
+    candidates come back unchanged.
+    """
+    in_range = [
+        candidate
+        for candidate in candidates
+        if candidate.get("market_cap")
+        and candidate["market_cap"] > 0
+        and size_gap(company_value, candidate["market_cap"]) <= biggest_size_gap
+    ]
+    in_range.sort(key=lambda candidate: size_gap(company_value, candidate["market_cap"]))
+    return in_range[:how_many]
+
+
 def ebitda(ebit, depreciation_and_amortisation):
     """Work out earnings before interest, tax, depreciation and amortisation: operating
     profit plus D&A.

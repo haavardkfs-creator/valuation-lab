@@ -110,18 +110,23 @@
   them; the limits (75% and 4 points) are in `assumptions.py`. The page says what share of the
   value is terminal value and shows a yellow caution when a limit is crossed (Coca-Cola: both;
   Microsoft: the share; Adobe and Apple: none). 11 new tests; 271 tests pass.
-- Done (in the open pull request): peer medians that skip missing peers. Haavard built a worked
+- Done: peer medians that skip missing peers (merged, PR #31). Haavard built a worked
   example on the `Multiples` sheet (rows 41-49: PepsiCo, Keurig Dr Pepper, Mondelez, with
   Keurig's P/E blank on purpose). `usable_multiples` and `median_of_usable_multiples` in
   `valuation.py` match it; `MINIMUM_PEERS = 2` is in `assumptions.py`; `run_multiples` returns
   None for a multiple with too few peers. Adobe is unchanged. 13 new tests; 284 tests pass.
+- Done (in the open pull request): suggesting peers. `size_gap` and `closest_peers` in
+  `valuation.py` pick the peers closest in size; `fetch_peer_candidates`, `fetch_peer_quote`,
+  `peer_multiples` and `suggest_peers` in `data.py` look them up on Yahoo (swappable for tests);
+  `PEER_CANDIDATES_TO_CHECK` (20), `PEER_BIGGEST_SIZE_GAP` (10) and `SUGGESTED_PEERS` (5) are in
+  `assumptions.py`. On real data: Coca-Cola gets PEP, MNST, KDP; Apple none; Microsoft one. Nothing
+  is on the page yet. 23 new tests; 307 tests pass.
 - Next, agreed with Haavard (peers for other companies, in four pull requests): (1) peer medians
-  that skip missing peers (this one); (2) fetching a peer's multiples from Yahoo, and suggesting
-  peers (same Yahoo industry, between a tenth and ten times the company's market value, closest
-  five); (3) a sidebar peer box, pre-filled with the suggestions and editable, and the multiples
-  section for other companies; (4) a chart of the peers' multiples. After that, an adjusted beta
-  (two thirds of the raw beta plus one third of 1), built in Excel first. Haavard also has ideas
-  for improving the website afterwards.
+  that skip missing peers (merged); (2) suggesting peers and fetching their multiples (this one);
+  (3) a sidebar peer box, pre-filled with the suggestions and editable, and the multiples section
+  for other companies (it must cope with `None` prices and say why a multiple is missing); (4) a
+  chart of the peers' multiples. After that, an adjusted beta (two thirds of the raw beta plus one
+  third of 1), built in Excel first. Haavard also has ideas for improving the website afterwards.
 - Open:
   - Even after the capex fade, Microsoft's DCF price is 48% below its market price ($278 vs
     $532, 6 Nov 2026). A starting point from one year is not a forecast, and a 17.8% grower

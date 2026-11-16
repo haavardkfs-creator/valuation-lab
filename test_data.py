@@ -665,3 +665,177 @@ def test_the_fallback_cost_of_debt_is_the_same_in_every_currency(monkeypatch):
     )
     package = data.get_company_data("AKER.OL", source="yahoo")
     assert package["pre_tax_cost_of_debt"] == pytest.approx(0.064)
+
+
+# ---------------------------------------------------------------------------
+# Peers: suggested from Yahoo's industry list, with their multiples
+# ---------------------------------------------------------------------------
+
+def quote(ticker, market_cap, ev_sales=2.0, ev_ebitda=12.0, pe=20.0, currency="USD"):
+    """A peer's quote as fetch_peer_quote returns it (market value in $ millions)."""
+    return {
+        "ticker": ticker, "market_cap": market_cap, "currency": currency,
+        "ev_sales": ev_sales, "ev_ebitda": ev_ebitda, "pe": pe,
+    }
+
+
+# The same peers as Coca-Cola's worked example on the Multiples sheet (rows 43-45), so the
+# multiples are ones already checked against Excel.
+COCA_COLA_PEER_QUOTES = {
+    "PEP": quote("PEP", 200_000, 2.434, 12.472, 18.50692),
+    "KDP": quote("KDP", 49_000, 3.854, 16.631, None),           # no P/E: blank on purpose (F44)
+    "MDLZ": quote("MDLZ", 70_000, 2.663, 14.749, 21.381702),
+    "COKE": quote("COKE", 14_000),                              # far too small
+    "SHEL": quote("SHEL", 200_000, currency="GBp"),             # not traded in US dollars
+}
+
+
+def fake_candidates(ticker, how_many):
+    return ["PEP", "KDP", "MDLZ", "COKE", "SHEL"][:how_many]
+
+
+def suggest_for_coca_cola(**kwargs):
+    arguments = dict(
+        ticker="KO", company_market_value=427_000, candidates_to_check=20, biggest_size_gap=10,
+        how_many=5, fetch_candidates=fake_candidates, fetch_quote=COCA_COLA_PEER_QUOTES.__getitem__,
+    )
+    arguments.update(kwargs)
+    return data.suggest_peers(**arguments)
+
+
+def test_suggested_peers_are_the_closest_in_size_that_trade_in_dollars():
+    got = suggest_for_coca_cola()
+    # PEP is 2.1 times smaller, MDLZ 6.1, KDP 8.7. COKE is too small, SHEL is in pence.
+    assert got["peer_tickers"] == ["PEP", "MDLZ", "KDP"]
+
+
+def test_suggested_peers_come_with_their_multiples_in_the_same_order():
+    got = suggest_for_coca_cola()
+    assert got["peer_ev_sales"] == [2.434, 2.663, 3.854]
+    assert got["peer_ev_ebitda"] == [12.472, 14.749, 16.631]
+    assert got["peer_pe"] == [18.50692, 21.381702, None]        # Keurig's blank P/E stays None
+
+
+def test_suggested_peers_give_the_medians_checked_against_the_multiples_sheet():
+    got = suggest_for_coca_cola()
+    assert v.median_of_usable_multiples(got["peer_ev_sales"], 2) == pytest.approx(2.663)      # D46
+    assert v.median_of_usable_multiples(got["peer_ev_ebitda"], 2) == pytest.approx(14.749)    # E46
+    assert v.median_of_usable_multiples(got["peer_pe"], 2) == pytest.approx(19.944311)        # F46
+
+
+def test_suggested_peers_are_capped_at_how_many_are_asked_for():
+    assert suggest_for_coca_cola(how_many=2)["peer_tickers"] == ["PEP", "MDLZ"]
+
+
+def test_only_the_first_candidates_to_check_are_looked_at():
+    # With 2 candidates checked, only PEP and KDP are looked up.
+    assert suggest_for_coca_cola(candidates_to_check=2)["peer_tickers"] == ["PEP", "KDP"]
+
+
+def test_a_company_with_no_suitable_peers_gets_empty_lists_not_an_error():
+    got = suggest_for_coca_cola(company_market_value=5_000_000)      # like Apple: nothing close in size
+    assert got == {"peer_tickers": [], "peer_ev_sales": [], "peer_ev_ebitda": [], "peer_pe": []}
+
+
+def test_a_company_whose_industry_yahoo_does_not_know_gets_empty_lists():
+    got = suggest_for_coca_cola(fetch_candidates=lambda ticker, how_many: [])
+    assert got["peer_tickers"] == []
+
+
+def test_one_peer_yahoo_cannot_read_is_skipped():
+    def flaky(symbol):
+        if symbol == "MDLZ":
+            raise ConnectionError("no answer")
+        return COCA_COLA_PEER_QUOTES[symbol]
+
+    assert suggest_for_coca_cola(fetch_quote=flaky)["peer_tickers"] == ["PEP", "KDP"]
+
+
+def test_when_yahoo_cannot_be_reached_at_all_suggesting_peers_stops_with_a_plain_error():
+    def down(symbol):
+        raise ConnectionError("no internet")
+
+    with pytest.raises(ValueError, match="none of the 5 candidates could be read"):
+        suggest_for_coca_cola(fetch_quote=down)
+
+    def no_industry_lookup(ticker, how_many):
+        raise ConnectionError("no internet")
+
+    with pytest.raises(ValueError, match="Could not get peers from Yahoo Finance: no internet"):
+        suggest_for_coca_cola(fetch_candidates=no_industry_lookup)
+
+
+def test_peer_multiples_for_tickers_the_reader_chose_keep_their_order():
+    got = data.peer_multiples(["MDLZ", "PEP"], fetch_quote=COCA_COLA_PEER_QUOTES.__getitem__)
+    assert got["peer_tickers"] == ["MDLZ", "PEP"]
+    assert got["peer_ev_sales"] == [2.663, 2.434]
+
+
+def test_a_ticker_yahoo_knows_nothing_about_has_no_multiples_and_no_error():
+    unknown = quote("ZZZZ", None, None, None, None, currency=None)
+    got = data.peer_multiples(["ZZZZ"], fetch_quote=lambda ticker: unknown)
+    assert got["peer_pe"] == [None]
+    assert v.median_of_usable_multiples(got["peer_pe"], 2) is None
+
+
+def test_peer_multiples_stops_with_a_plain_error_when_yahoo_fails():
+    def down(ticker):
+        raise ConnectionError("no internet")
+
+    with pytest.raises(ValueError, match="Could not get peer figures from Yahoo Finance: no internet"):
+        data.peer_multiples(["PEP"], fetch_quote=down)
+
+
+# The two functions that really talk to Yahoo, with yfinance faked.
+
+class FakeInfoTicker:
+    """A stand-in for yfinance.Ticker that serves one prepared info dictionary per ticker."""
+    infos = {}
+
+    def __init__(self, ticker):
+        self.info = dict(self.infos.get(ticker, {}))
+
+
+class FakeIndex:
+    """A stand-in for yfinance.Industry, whose top_companies is a table indexed by ticker."""
+    def __init__(self, key):
+        self.top_companies = None if key == "nothing" else pd.DataFrame(
+            {"name": ["Coca-Cola", "PepsiCo", "Monster"]}, index=["KO", "PEP", "MNST"]
+        )
+
+
+def test_fetch_peer_quote_turns_the_market_value_into_millions_and_picks_the_multiples(monkeypatch):
+    FakeInfoTicker.infos = {"PEP": {
+        "marketCap": 200_363_819_008, "currency": "USD", "enterpriseToRevenue": 2.434,
+        "enterpriseToEbitda": 12.472, "trailingPE": 18.50692,
+    }}
+    monkeypatch.setattr("yfinance.Ticker", FakeInfoTicker)
+    got = data.fetch_peer_quote("PEP")
+    assert got == {
+        "ticker": "PEP", "market_cap": pytest.approx(200_363.819008), "currency": "USD",
+        "ev_sales": 2.434, "ev_ebitda": 12.472, "pe": 18.50692,
+    }
+
+
+def test_fetch_peer_quote_gives_none_for_a_figure_yahoo_does_not_have(monkeypatch):
+    FakeInfoTicker.infos = {"LOSS": {"marketCap": 5_000_000_000, "currency": "USD"}}
+    monkeypatch.setattr("yfinance.Ticker", FakeInfoTicker)
+    got = data.fetch_peer_quote("LOSS")
+    assert got["pe"] is None and got["ev_ebitda"] is None and got["ev_sales"] is None
+    assert data.fetch_peer_quote("UNKNOWN")["market_cap"] is None
+
+
+def test_fetch_peer_candidates_lists_the_industry_without_the_company_itself(monkeypatch):
+    FakeInfoTicker.infos = {"KO": {"industryKey": "beverages-non-alcoholic"}}
+    monkeypatch.setattr("yfinance.Ticker", FakeInfoTicker)
+    monkeypatch.setattr("yfinance.Industry", FakeIndex)
+    assert data.fetch_peer_candidates("KO", 20) == ["PEP", "MNST"]
+    assert data.fetch_peer_candidates("KO", 1) == ["PEP"]
+
+
+def test_fetch_peer_candidates_gives_nothing_when_yahoo_has_no_industry(monkeypatch):
+    FakeInfoTicker.infos = {"ODD": {}, "NOTHING": {"industryKey": "nothing"}}
+    monkeypatch.setattr("yfinance.Ticker", FakeInfoTicker)
+    monkeypatch.setattr("yfinance.Industry", FakeIndex)
+    assert data.fetch_peer_candidates("ODD", 20) == []              # no industry key at all
+    assert data.fetch_peer_candidates("NOTHING", 20) == []          # industry with no companies listed
