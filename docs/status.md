@@ -115,19 +115,25 @@
   Keurig's P/E blank on purpose). `usable_multiples` and `median_of_usable_multiples` in
   `valuation.py` match it; `MINIMUM_PEERS = 2` is in `assumptions.py`; `run_multiples` returns
   None for a multiple with too few peers. Adobe is unchanged. 13 new tests; 284 tests pass.
-- Done (in the open pull request): suggesting peers. `size_gap` and `closest_peers` in
+- Done: suggesting peers (merged, PR #32). `size_gap` and `closest_peers` in
   `valuation.py` pick the peers closest in size; `fetch_peer_candidates`, `fetch_peer_quote`,
   `peer_multiples` and `suggest_peers` in `data.py` look them up on Yahoo (swappable for tests);
   `PEER_CANDIDATES_TO_CHECK` (20), `PEER_BIGGEST_SIZE_GAP` (10) and `SUGGESTED_PEERS` (5) are in
   `assumptions.py`. On real data: Coca-Cola gets PEP, MNST, KDP; Apple none; Microsoft one. Nothing
   is on the page yet. 23 new tests; 307 tests pass.
-- Next, agreed with Haavard (peers for other companies, in four pull requests): (1) peer medians
-  that skip missing peers (merged); (2) suggesting peers and fetching their multiples (this one);
-  (3) a sidebar peer box, pre-filled with the suggestions and editable, and the multiples section
-  for other companies (it must cope with `None` prices and say why a multiple is missing); (4) a
-  chart of the peers' multiples. After that, an adjusted beta (two thirds of the raw beta plus one
-  third of 1), built in Excel first. Haavard also has ideas for improving the website afterwards.
+- Done (in the open pull request): the peer box. Other companies get a "Peer tickers" sidebar box,
+  pre-filled with up to 5 suggested peers and editable (at most 8), and the "Peer multiples"
+  section: three prices, the middle price, DCF vs multiples, and a table of the peers' multiples
+  with dashes for missing ones. "Not enough peers" where a multiple has fewer than 2 usable peers.
+  Adobe is unchanged. `MAX_TYPED_PEERS` (8) is in `assumptions.py`. Checked on live Yahoo data
+  (Coca-Cola, Apple, Pfizer). 16 new tests; 323 tests pass.
+- Next, agreed with Haavard: (1) the peer box (this one); (2) a chart of the peers' multiples
+  next to the company's own; (3) an adjusted beta (two thirds of the raw beta plus one third of 1),
+  built in Excel first. Haavard also has ideas for improving the website afterwards.
 - Open:
+  - Low-beta companies get odd DCF prices: on 16 Nov 2026 Pfizer's WACC is 5.96% and its DCF
+    price $94.96 against a market price of $28.89, and both terminal value cautions fire. The
+    caution says so, but the cure is the planned adjusted beta.
   - Even after the capex fade, Microsoft's DCF price is 48% below its market price ($278 vs
     $532, 6 Nov 2026). A starting point from one year is not a forecast, and a 17.8% grower
     fading to 2.5% over five years is a conservative path for it.
