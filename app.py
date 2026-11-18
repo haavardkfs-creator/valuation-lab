@@ -249,6 +249,60 @@ def tint(price, market_price):
     return f"background-color: rgb({red}, {green}, {blue}); color: #262730"
 
 
+NOT_MEANINGFUL = "Not meaningful"       # shown when a number would mean nothing (no P/E for a loss)
+
+
+def company_overview(company):
+    """Work out the eight overview numbers for a company from its last full year and today's
+    share price (see valuation.stock_overview).
+    """
+    return valuation.stock_overview(
+        share_price=company["share_price"],
+        shares=company["shares"],
+        debt=company["debt"],
+        cash_and_investments=company["cash_and_investments"],
+        revenue=company["revenue"],
+        prior_year_revenue=company["prior_year_revenue"],
+        ebit=company["ebit"],
+        depreciation_and_amortisation=company["depreciation_and_amortisation"],
+        net_income=company["net_income"],
+        income_tax=company["income_tax"],
+        income_before_tax=company["income_before_tax"],
+        capex=company["capex"],
+        cash_from_working_capital=company["cash_from_working_capital"],
+    )
+
+
+def percent_or_note(rate):
+    """Write a rate as a percentage, or say it is not meaningful when it could not be worked out."""
+    return NOT_MEANINGFUL if rate is None else percent(rate)
+
+
+def multiple_or_note(multiple, decimals=1):
+    """Write a multiple such as 14.6x, or say it is not meaningful when it could not be worked out."""
+    return NOT_MEANINGFUL if multiple is None else f"{multiple:.{decimals}f}x"
+
+
+def draw_overview(overview):
+    """Draw the overview: how fast the company is growing, what it earns, how much cash it
+    makes for its price and how heavy its debt is, then what the market pays for it.
+    """
+    st.subheader("Overview")
+    growth, margin, cash_yield, leverage = st.columns(4)
+    growth.metric("Revenue growth", percent_or_note(overview["revenue_growth"]), help="Last full year's revenue compared with the year before.")
+    margin.metric("Operating margin", percent_or_note(overview["operating_margin"]), help="Operating profit (EBIT) as a share of revenue, last full year.")
+    cash_yield.metric("Free cash flow yield", percent_or_note(overview["free_cash_flow_yield"]), help="Last full year's free cash flow divided by what the market says the company is worth.")
+    leverage.metric("Net debt ÷ EBITDA", multiple_or_note(overview["net_debt_to_ebitda"], 2), help="Years of operating profit (before depreciation) needed to pay off net debt. Below 0 means more cash than debt.")
+    sales, ebitda, pe = st.columns(3)
+    sales.metric("EV/Sales", multiple_or_note(overview["ev_sales"]), help="Enterprise value (what the whole business is worth at today's price) divided by revenue.")
+    ebitda.metric("EV/EBITDA", multiple_or_note(overview["ev_ebitda"]), help="Enterprise value divided by operating profit before depreciation and amortisation.")
+    pe.metric("P/E", multiple_or_note(overview["pe"]), help="What the market pays for each dollar of the last full year's net income.")
+    st.caption(
+        "Worked out from the company's last full year of figures and today's share price. A number "
+        "that would mean nothing (no P/E for a company that lost money) says so."
+    )
+
+
 def terminal_value_cautions(dcf, terminal_growth_rate):
     """List, in plain words, the reasons to treat this price with care because it rests mostly
     on the far future. Returns an empty list when neither check (the terminal value's share of
@@ -370,31 +424,63 @@ def price_or_note(price):
     return "Not enough peers" if price is None else dollars(price)
 
 
-def peer_table(peers):
-    """Make the table of the peers and the three multiples each one has, as text: a multiple
-    that is missing, or zero or negative, shows as a dash because it is left out of the median.
+def peer_table(peers, own_label, overview, multiples):
+    """Make the table of the peers and what each one has: three multiples and an operating
+    margin, as text. The company itself comes first, so it can be compared at a glance, and the
+    peer medians come last.
+
+    A peer multiple that is missing, or zero or negative, shows as a dash because it is left out
+    of the median; an operating margin shows as a dash only when it is missing, since a negative
+    margin is real information. `multiples` is the result of run_multiples, which holds the medians.
     """
-    def show(multiple):
+    def show_multiple(multiple):
         return f"{multiple:.1f}x" if valuation.usable_multiples([multiple]) else "–"
 
+    def show_margin(margin):
+        return "–" if margin is None or margin != margin else f"{margin:.1%}"      # margin != margin: NaN
+
+    median_margin = valuation.median_of_available(peers["peer_operating_margin"], assumptions.MINIMUM_PEERS)
+    rows = (
+        [own_label]
+        + list(peers["peer_tickers"])
+        + ["Peer median"]
+    )
     return pd.DataFrame(
         {
-            "EV/Sales": [show(multiple) for multiple in peers["peer_ev_sales"]],
-            "EV/EBITDA": [show(multiple) for multiple in peers["peer_ev_ebitda"]],
-            "P/E": [show(multiple) for multiple in peers["peer_pe"]],
+            "EV/Sales": (
+                [show_multiple(overview["ev_sales"])]
+                + [show_multiple(multiple) for multiple in peers["peer_ev_sales"]]
+                + [show_multiple(multiples["median_ev_sales"])]
+            ),
+            "EV/EBITDA": (
+                [show_multiple(overview["ev_ebitda"])]
+                + [show_multiple(multiple) for multiple in peers["peer_ev_ebitda"]]
+                + [show_multiple(multiples["median_ev_ebitda"])]
+            ),
+            "P/E": (
+                [show_multiple(overview["pe"])]
+                + [show_multiple(multiple) for multiple in peers["peer_pe"]]
+                + [show_multiple(multiples["median_pe"])]
+            ),
+            "Op. margin": (
+                [show_margin(overview["operating_margin"])]
+                + [show_margin(margin) for margin in peers["peer_operating_margin"]]
+                + [show_margin(median_margin)]
+            ),
         },
-        index=pd.Index(peers["peer_tickers"], name="Peer"),
+        index=pd.Index(rows, name="Company"),
     )
 
 
-def draw_multiples(multiples, peers, notes, peers_are_suggested):
+def draw_multiples(multiples, peers, notes, peers_are_suggested, own_label, overview):
     """Draw the multiples section: the price each peer multiple gives, their middle value, how
     far the DCF price is from it, and the table of peers behind them.
 
     `multiples` is None when there are no peers to compare with, and then the section says how
     to add some. A price that could not be worked out (too few peers with that multiple) says
     so. `notes` are the messages from the peer box, and peers_are_suggested says whether to
-    point out that the peers were suggested by Yahoo's industry list.
+    point out that the peers were suggested by Yahoo's industry list. `own_label` and `overview`
+    put the company itself in the table.
     """
     st.subheader("Peer multiples")
     for kind, text in notes:
@@ -410,10 +496,13 @@ def draw_multiples(multiples, peers, notes, peers_are_suggested):
     median_column.metric("Middle of the prices", price_or_note(multiples["median_price"]))
     gap = multiples["dcf_vs_multiples"]
     gap_column.metric("DCF vs multiples", "Not available" if gap is None else percent(gap))
-    st.dataframe(peer_table(peers))
+    st.dataframe(peer_table(peers, own_label, overview, multiples))
     st.caption(
         f"Each multiple needs at least {assumptions.MINIMUM_PEERS} peers with a usable figure; "
-        "a peer with no figure (a dash) is left out of that multiple only."
+        "a peer with no figure (a dash) is left out of that multiple only. A negative operating "
+        "margin counts, because a loss is real information. The company's own row comes from its "
+        "last full year and today's price; the peers' figures are Yahoo's trailing twelve months, "
+        "so small differences are expected."
     )
     if peers_are_suggested:
         st.caption(
@@ -458,6 +547,17 @@ def load_peer_multiples(tickers):
     LIVE_DATA_CACHE_SECONDS. Stops with a plain error if Yahoo cannot be reached.
     """
     return data.peer_multiples(list(tickers))
+
+
+def load_adobe_peer_margins(tickers):
+    """Get the operating margins of Adobe's hand-chosen peers from Yahoo (its snapshot of the
+    Excel model has none). Returns a list in the same order, or all blanks if Yahoo cannot be
+    reached, so the table still draws.
+    """
+    try:
+        return load_peer_multiples(tuple(tickers))["peer_operating_margin"]
+    except ValueError:
+        return [None] * len(tickers)
 
 
 def parse_peer_tickers(text, own_ticker, how_many):
@@ -608,7 +708,7 @@ def draw_error(ticker, error):
 
 def draw_page():
     """Draw the whole page: ticker box, sliders, peer box (companies other than Adobe), title,
-    DCF section, charts, heatmap, multiples and footer. If the company cannot be valued, draw
+    DCF section, overview, charts, heatmap, multiples and footer. If the company cannot be valued, draw
     the reason instead.
     """
     ticker = draw_ticker_box()
@@ -617,6 +717,7 @@ def draw_page():
         company, source_used = load_company(ticker)
         if is_base_case(company):
             peers, peer_notes = {key: company[key] for key in PEER_KEYS}, []      # Adobe's own peers
+            peers["peer_operating_margin"] = load_adobe_peer_margins(peers["peer_tickers"])
         else:
             peers, peer_notes = draw_peer_box(company)
             if peers is not None:
@@ -624,6 +725,7 @@ def draw_page():
         dcf_inputs = build_dcf_inputs(company, growth_shift, margin_shift)
         dcf, multiples = run_valuation(company, dcf_inputs, terminal_growth_rate, wacc_override)
         base_wacc = model_wacc(dcf_inputs)
+        overview = company_overview(company)
     except ValueError as error:
         draw_error(ticker, error)
         return
@@ -632,10 +734,14 @@ def draw_page():
     st.write(f"{company['company_name']} ({company['ticker']})")
     draw_source_note(company, source_used)
     draw_dcf(company, dcf, wacc_override is not None)
+    draw_overview(overview)
     year_labels = assumptions.FORECAST_YEAR_LABELS if is_base_case(company) else assumptions.GENERIC_YEAR_LABELS
     draw_charts(dcf, year_labels, terminal_growth_rate)
     draw_heatmap(company, dcf_inputs, base_wacc)
-    draw_multiples(multiples, peers, peer_notes, peers_are_suggested=not is_base_case(company))
+    draw_multiples(
+        multiples, peers, peer_notes, peers_are_suggested=not is_base_case(company),
+        own_label=f"{company['ticker']} (this company)", overview=overview,
+    )
     st.divider()
     st.caption(FOOTER_TEXT)
 

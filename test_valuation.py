@@ -925,3 +925,92 @@ def test_a_candidate_exactly_at_the_size_gap_is_still_included():
 def test_closest_peers_with_nothing_suitable_gives_an_empty_list():
     assert v.closest_peers(5_000_000, [{"ticker": "TINY", "market_cap": 100}], 10, 5) == []
     assert v.closest_peers(100, [], 10, 5) == []
+
+
+# ---------------------------------------------------------------------------
+# An overview of the stock (Multiples sheet, "Adobe's overview", rows 52-64; the peers' margin
+# median is G46 in the Coca-Cola worked example)
+# ---------------------------------------------------------------------------
+
+PRIOR_YEAR_REVENUE = 21505            # Inputs F11
+INCOME_TAX = 1604                     # Inputs G25
+INCOME_BEFORE_TAX = 8734              # Inputs G24
+CAPEX = 179                           # Projection G14
+CASH_FROM_WORKING_CAPITAL = 605       # Projection G16
+
+
+def adobe_overview():
+    return v.stock_overview(
+        share_price=SHARE_PRICE, shares=SHARES, debt=DEBT, cash_and_investments=CASH_AND_INVESTMENTS,
+        revenue=BASE_REVENUE, prior_year_revenue=PRIOR_YEAR_REVENUE, ebit=ADOBE_EBIT,
+        depreciation_and_amortisation=ADOBE_DA, net_income=ADOBE_NET_INCOME,
+        income_tax=INCOME_TAX, income_before_tax=INCOME_BEFORE_TAX, capex=CAPEX,
+        cash_from_working_capital=CASH_FROM_WORKING_CAPITAL,
+    )
+
+
+def test_market_value_and_enterprise_value_match_the_multiples_sheet():
+    assert v.market_value(SHARE_PRICE, SHARES) == close(103857.11)                          # C54
+    net_debt_amount = v.net_debt(DEBT, CASH_AND_INVESTMENTS)
+    assert v.market_enterprise_value(103857.11, net_debt_amount) == close(103472.11)        # C55
+
+
+def test_operating_margin_and_revenue_growth_match_the_multiples_sheet():
+    assert v.operating_margin(ADOBE_EBIT, BASE_REVENUE) == close(0.36627540073204595)       # C59
+    assert v.revenue_growth(BASE_REVENUE, PRIOR_YEAR_REVENUE) == close(0.10527784236224136)  # C60
+
+
+def test_last_year_free_cash_flow_matches_the_multiples_sheet_and_the_projection():
+    tax_rate = INCOME_TAX / INCOME_BEFORE_TAX                                  # starting point C7
+    assert v.last_year_free_cash_flow(ADOBE_EBIT, tax_rate, ADOBE_DA, CAPEX, CASH_FROM_WORKING_CAPITAL) == close(
+        8351.1422028852758                                                     # C61, and Projection G18
+    )
+
+
+def test_the_whole_adobe_overview_matches_the_multiples_sheet():
+    got = adobe_overview()
+    assert got["market_value"] == close(103857.11)                              # C54
+    assert got["enterprise_value"] == close(103472.11)                          # C55
+    assert got["ev_sales"] == close(4.3532378307880011)                         # C56
+    assert got["ev_ebitda"] == close(10.864354262914741)                        # C57
+    assert got["pe"] == close(14.56621458625526)                                # C58
+    assert got["operating_margin"] == close(0.36627540073204595)                # C59
+    assert got["revenue_growth"] == close(0.10527784236224136)                  # C60
+    assert got["free_cash_flow"] == close(8351.1422028852758)                   # C61
+    assert got["free_cash_flow_yield"] == close(0.080409922853478935)           # C62
+    assert got["net_debt_to_ebitda"] == close(-0.040424191516169675)            # C63 (net cash)
+
+
+def test_ratio_or_none_gives_none_when_the_bottom_is_zero_or_negative():
+    assert v.ratio_or_none(10, 4) == close(2.5)
+    assert v.ratio_or_none(10, 0) is None
+    assert v.ratio_or_none(10, -3) is None
+    assert v.ratio_or_none(10, None) is None
+
+
+def test_a_loss_making_company_has_no_pe_and_no_ev_ebitda_but_still_a_margin():
+    got = v.stock_overview(
+        share_price=10, shares=100, debt=200, cash_and_investments=50, revenue=1000,
+        prior_year_revenue=800, ebit=-90, depreciation_and_amortisation=30, net_income=-120,
+        income_tax=0, income_before_tax=-130, capex=40, cash_from_working_capital=10,
+    )
+    assert got["pe"] is None                                    # net income below zero
+    assert got["ev_ebitda"] is None                             # EBITDA is -60
+    assert got["net_debt_to_ebitda"] is None
+    assert got["free_cash_flow"] is None and got["free_cash_flow_yield"] is None   # no pre-tax profit, no tax rate
+    assert got["operating_margin"] == close(-0.09)              # a loss still shows as a negative margin
+    assert got["revenue_growth"] == close(0.25)
+    assert got["ev_sales"] == close((1000 + 150) / 1000)        # enterprise value 1,150
+
+
+def test_median_of_available_counts_negative_figures_and_skips_blanks():
+    # The Coca-Cola peers' operating margins (Multiples G43:G45): median G46.
+    assert v.median_of_available([0.16046, 0.18255, 0.14567], 2) == close(0.16046)
+    assert v.median_of_available([0.16046, None, 0.14567], 2) == close(0.153065)
+    assert v.median_of_available([0.2, -0.2, 0.1], 2) == close(0.1)           # the loss-maker counts
+    assert v.median_of_available([float("nan"), 0.2, 0.1], 2) == close(0.15)
+
+
+def test_median_of_available_gives_none_with_too_few_figures():
+    assert v.median_of_available([0.16, None, None], 2) is None
+    assert v.median_of_available([], 2) is None

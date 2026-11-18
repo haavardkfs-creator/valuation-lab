@@ -121,19 +121,31 @@
   `PEER_CANDIDATES_TO_CHECK` (20), `PEER_BIGGEST_SIZE_GAP` (10) and `SUGGESTED_PEERS` (5) are in
   `assumptions.py`. On real data: Coca-Cola gets PEP, MNST, KDP; Apple none; Microsoft one. Nothing
   is on the page yet. 23 new tests; 307 tests pass.
-- Done (in the open pull request): the peer box. Other companies get a "Peer tickers" sidebar box,
+- Done: the peer box (merged, PR #33). Other companies get a "Peer tickers" sidebar box,
   pre-filled with up to 5 suggested peers and editable (at most 8), and the "Peer multiples"
   section: three prices, the middle price, DCF vs multiples, and a table of the peers' multiples
   with dashes for missing ones. "Not enough peers" where a multiple has fewer than 2 usable peers.
   Adobe is unchanged. `MAX_TYPED_PEERS` (8) is in `assumptions.py`. Checked on live Yahoo data
   (Coca-Cola, Apple, Pfizer). 16 new tests; 323 tests pass.
-- Next, agreed with Haavard: (1) the peer box (this one); (2) a chart of the peers' multiples
-  next to the company's own; (3) an adjusted beta (two thirds of the raw beta plus one third of 1),
-  built in Excel first. Haavard also has ideas for improving the website afterwards.
+- Done (in the open pull request): an overview of the stock. Haavard added "Adobe's overview" to the
+  `Multiples` sheet (rows 52-64) and the peers' operating margins to the Coca-Cola example (G43:G46).
+  `stock_overview` in `valuation.py` (market value, EV, EV/Sales, EV/EBITDA, P/E, operating margin,
+  revenue growth, last-year free cash flow and its yield, net debt over EBITDA) matches the cells, and
+  `median_of_available` matches G46. The page has an "Overview" section of eight numbers; the peers
+  table now has the company's own row first, a "Peer median" row last and an "Op. margin" column
+  (peers' margins come from Yahoo; for Adobe they are fetched live). "Not meaningful" where a number
+  would mean nothing. 29 new or changed tests; 339 tests pass.
+- Next: Haavard's ideas for the website. Also planned: an adjusted beta (two thirds of the raw beta
+  plus one third of 1), built in Excel first. Glossary entries for the new terms (free cash flow
+  yield, net debt over EBITDA, EV/Sales and so on) are Haavard's to write.
 - Open:
   - Low-beta companies get odd DCF prices: on 16 Nov 2026 Pfizer's WACC is 5.96% and its DCF
     price $94.96 against a market price of $28.89, and both terminal value cautions fire. The
     caution says so, but the cure is the planned adjusted beta.
+  - Yahoo sometimes returns an empty quote to the live server: on 18 Nov 2026 NVDA showed "Yahoo
+    Finance did not supply ... company_name, ... share_price, beta" and worked a few minutes later.
+    Possible fix, not built: retry the quote once, and say "this is usually temporary, try again in
+    a minute".
   - Even after the capex fade, Microsoft's DCF price is 48% below its market price ($278 vs
     $532, 6 Nov 2026). A starting point from one year is not a forecast, and a 17.8% grower
     fading to 2.5% over five years is a conservative path for it.

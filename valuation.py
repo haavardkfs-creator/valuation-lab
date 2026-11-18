@@ -216,6 +216,126 @@ def net_debt(debt, cash_and_investments):
     return debt - cash_and_investments
 
 
+# ---------------------------------------------------------------------------
+# An overview of the stock (docs/model.md: "Overview of the stock"; workbook: Multiples rows 52-64)
+# ---------------------------------------------------------------------------
+
+def ratio_or_none(numerator, denominator):
+    """Divide one number by another, or give None when the one underneath is zero or negative,
+    because the answer would mean nothing (there is no P/E for a company that lost money).
+    """
+    if denominator is None or denominator <= 0:
+        return None
+    return numerator / denominator
+
+
+def market_value(share_price, shares):
+    """Work out what the market says the company's shares are worth in total: the share price
+    times the number of shares.
+    """
+    return share_price * shares
+
+
+def market_enterprise_value(market_value_amount, net_debt_amount):
+    """Work out the value of the whole business at today's price: what the shares are worth,
+    plus net debt (or minus the net cash).
+    """
+    return market_value_amount + net_debt_amount
+
+
+def operating_margin(ebit, revenue):
+    """Work out how much operating profit the company makes on each dollar of sales. Gives
+    None if revenue is not above zero.
+    """
+    return ratio_or_none(ebit, revenue)
+
+
+def revenue_growth(revenue, prior_revenue):
+    """Work out how much revenue grew since the year before (0.10 means 10%). Gives None if
+    the year before had no revenue.
+    """
+    growth = ratio_or_none(revenue, prior_revenue)
+    return None if growth is None else growth - 1
+
+
+def last_year_free_cash_flow(ebit, tax_rate, depreciation_and_amortisation, capex, cash_from_working_capital):
+    """Work out the cash the business generated in its last year: operating profit after
+    tax, plus depreciation and amortisation, minus capital spending, plus cash from working
+    capital (the same build as the forecast's free cash flow). Capex is the amount spent.
+    """
+    return (
+        ebit * (1 - tax_rate)
+        + depreciation_and_amortisation
+        - capex
+        + cash_from_working_capital
+    )
+
+
+def median_of_available(values, minimum_peers):
+    """Find the middle value of the figures that exist, ignoring blanks. Unlike a multiple,
+    a negative figure counts (a peer that loses money on its sales is real information).
+    Gives None when fewer than minimum_peers figures exist.
+    """
+    available = [value for value in values if value is not None and not math.isnan(value)]
+    if len(available) < minimum_peers:
+        return None
+    return peer_median(available)
+
+
+def stock_overview(
+    share_price,
+    shares,
+    debt,
+    cash_and_investments,
+    revenue,
+    prior_year_revenue,
+    ebit,
+    depreciation_and_amortisation,
+    net_income,
+    income_tax,
+    income_before_tax,
+    capex,
+    cash_from_working_capital,
+):
+    """Work out eight numbers that give a quick picture of a company: how fast it is growing
+    (revenue growth), what it earns on its sales (operating margin), how much cash it makes
+    for its price (free cash flow yield), how heavy its debt is (net debt over EBITDA), and what
+    the market pays for it (EV/Sales, EV/EBITDA and P/E), plus the market value and enterprise
+    value behind them.
+
+    Uses the last full year's figures and today's share price. A number that would mean nothing
+    (no P/E for a loss, no free cash flow without a tax rate) comes back as None.
+    """
+    market_value_amount = market_value(share_price, shares)
+    net_debt_amount = net_debt(debt, cash_and_investments)
+    enterprise_value_amount = market_enterprise_value(market_value_amount, net_debt_amount)
+    ebitda_amount = ebitda(ebit, depreciation_and_amortisation)
+
+    tax_rate = ratio_or_none(income_tax, income_before_tax)         # none if no pre-tax profit
+    free_cash_flow = None
+    if tax_rate is not None:
+        free_cash_flow = last_year_free_cash_flow(
+            ebit, tax_rate, depreciation_and_amortisation, capex, cash_from_working_capital
+        )
+
+    return {
+        "market_value": market_value_amount,
+        "enterprise_value": enterprise_value_amount,
+        "ev_sales": ratio_or_none(enterprise_value_amount, revenue),
+        "ev_ebitda": ratio_or_none(enterprise_value_amount, ebitda_amount),
+        "pe": ratio_or_none(market_value_amount, net_income),
+        "operating_margin": operating_margin(ebit, revenue),
+        "revenue_growth": revenue_growth(revenue, prior_year_revenue),
+        "free_cash_flow": free_cash_flow,
+        "free_cash_flow_yield": (
+            None if free_cash_flow is None else free_cash_flow / market_value_amount
+        ),
+        "net_debt_to_ebitda": (
+            None if ebitda_amount <= 0 else net_debt_amount / ebitda_amount
+        ),
+    }
+
+
 def implied_share_price(enterprise_value_amount, net_debt_amount, shares):
     """Turn enterprise value into a value per share: take off net debt to get equity
     value, then divide by the number of shares.
