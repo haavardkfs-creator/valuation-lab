@@ -175,6 +175,34 @@ How the page uses them (companies other than Adobe; Adobe keeps its four peers a
 | Peer medians EV/Sales / EV/EBITDA / P/E | 5.78x / 18.20x / 26.85x |
 | Multiples prices EV/Sales / EV/EBITDA / P/E | $333.58 / $420.52 / $463.54 |
 
+## Overview of the stock
+
+Eight numbers for a quick picture of a company, shown on the page under the DCF section
+(workbook: `Multiples` rows 52-64, "Adobe's overview"). They use the company's last full year
+and today's share price, and every one is linked to cells that already exist.
+- Market value = share price × shares. Enterprise value = market value + net debt.
+- EV/Sales = enterprise value ÷ revenue. EV/EBITDA = enterprise value ÷ EBITDA. P/E = market
+  value ÷ net income. What the market pays per dollar of sales, operating profit and earnings.
+- Operating margin = EBIT ÷ revenue. Revenue growth = revenue ÷ the year before's revenue − 1.
+- Free cash flow, last year = EBIT × (1 − tax rate) + D&A − capex + cash from working capital,
+  the same build as the forecast's free cash flow (it ties to `Projection` G18, check cell C64 = 0).
+  The tax rate is income tax ÷ income before tax.
+- Free cash flow yield = free cash flow ÷ market value. The cash return at today's price.
+- Net debt ÷ EBITDA. Years of operating profit needed to pay off the net debt; below 0 means net cash.
+- A number that would mean nothing is shown as "Not meaningful": no P/E or EV/EBITDA when
+  net income or EBITDA is zero or negative, no free cash flow yield when there is no pre-tax profit
+  (no tax rate), no margin or growth when revenue is zero.
+- Adobe on the workbook's $251.47 price: EV/Sales 4.35x, EV/EBITDA 10.86x, P/E 14.57x, operating
+  margin 36.6%, revenue growth 10.5%, free cash flow $8,351m (8.0% yield), net debt ÷ EBITDA -0.04x.
+
+The peers table also carries each peer's operating margin (Yahoo, trailing twelve months), the
+company's own row first, and a "Peer median" row last. The median margin is the middle of the
+margins that exist: a negative margin counts (a peer that loses money on its sales is real
+information) and only a missing one is skipped, with at least 2 needed. Workbook: `Multiples`
+G43:G46, where the Coca-Cola peers' margins (16.05%, 18.26%, 14.57%) have a median of 16.05%.
+The company's own figures come from its last full year, the peers' from Yahoo's trailing twelve
+months, so small differences between them are expected.
+
 ## Starting point for other companies
 
 Adobe's forecast assumptions are judgments made for Adobe. For any other company, the model

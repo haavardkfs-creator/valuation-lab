@@ -52,6 +52,7 @@ OPTIONAL_FIELDS = {
     "peer_ev_sales": "Each peer's EV/Sales multiple",
     "peer_ev_ebitda": "Each peer's EV/EBITDA multiple",
     "peer_pe": "Each peer's P/E multiple",
+    "peer_operating_margin": "Each peer's operating margin, trailing twelve months, decimal (negative for a loss); None when Yahoo has none",
     "statement_currency": "Currency the company reports in, before conversion to US dollars, for example NOK",
     "price_currency": "Currency the share trades in, before conversion to US dollars, for example NOK or GBp (pence)",
     "usd_per_statement_unit": "US dollars one unit of the statement currency was worth when the figures were fetched",
@@ -383,8 +384,8 @@ def fetch_peer_candidates(ticker, how_many):
 
 def fetch_peer_quote(ticker):
     """Ask Yahoo Finance for one peer's market value (in $ millions), the currency it trades in
-    and its three multiples (EV/Sales, EV/EBITDA and P/E, trailing twelve months). A figure
-    Yahoo does not have comes back as None. This is the only function that looks up a peer on
+    its three multiples (EV/Sales, EV/EBITDA and P/E) and its operating margin, all trailing
+    twelve months. A figure Yahoo does not have comes back as None. This is the only function that looks up a peer on
     the internet.
     """
     import yfinance
@@ -398,18 +399,21 @@ def fetch_peer_quote(ticker):
         "ev_sales": info.get("enterpriseToRevenue"),
         "ev_ebitda": info.get("enterpriseToEbitda"),
         "pe": info.get("trailingPE"),
+        "operating_margin": info.get("operatingMargins"),
     }
 
 
 def peer_figures(quotes):
     """Lay peers' quotes out the way a data package holds peers: their tickers, and one list
-    for each multiple, in the same order. A multiple Yahoo did not have stays None.
+    for each multiple and for the operating margin, in the same order. A figure Yahoo did not
+    have stays None.
     """
     return {
         "peer_tickers": [quote["ticker"] for quote in quotes],
         "peer_ev_sales": [quote["ev_sales"] for quote in quotes],
         "peer_ev_ebitda": [quote["ev_ebitda"] for quote in quotes],
         "peer_pe": [quote["pe"] for quote in quotes],
+        "peer_operating_margin": [quote["operating_margin"] for quote in quotes],
     }
 
 

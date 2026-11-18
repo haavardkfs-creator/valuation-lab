@@ -574,3 +574,30 @@ ticker Yahoo knows nothing about is named in a note and left out. No Excel chang
 (16 Nov 2026): Coca-Cola gets PEP, MNST, KDP and prices $36.05 / $54.80 / $99.38 against a market
 price of $99.18; Apple gets an empty box; Pfizer gets five peers, with Gilead's missing P/E left
 out. No new files.
+
+## 2026-11-18 — An overview of eight numbers, and the peers' operating margins
+
+Haavard asked for the company's operating margin and its own multiples on the page, "an important
+factor to look at for investing", and then for the other numbers an analyst would look at for an
+overview. Asked what an analyst checks, the answer was five questions: is it growing, does it earn
+on its sales, does profit become cash, is the debt a risk, and is the price fair. Eight numbers
+answer them, all from figures the page already has: revenue growth, operating margin, free cash
+flow yield, net debt over EBITDA, EV/Sales, EV/EBITDA and P/E (plus the market value and enterprise
+value behind them). Left for later, with reasons: ROIC and ROE (need new balance sheet figures),
+dividend yield and the 52-week range (say less about value), interest cover (Yahoo has no interest
+expense for some companies, such as Apple) and analyst forecasts (outside what the app does).
+Built Excel first: `Multiples` rows 52-64, every figure linked, with a check cell (C64) that ties
+the last-year free cash flow to `Projection` G18. The page shows them in an "Overview" section
+under the DCF section; the peers table gets the company itself as its first row, a "Peer median"
+row last, and a column of peers' operating margins, fetched with the same Yahoo call as their
+multiples (`operatingMargins`, trailing twelve months). For Adobe, whose peers come from the
+snapshot of the Excel model, the margins are fetched live and the column is blank if Yahoo cannot
+be reached. Margins differ from multiples in one rule: a negative margin counts in the peer
+median, because a loss is real information, while a negative multiple is left out. A number that
+would mean nothing shows "Not meaningful". The company's own row uses its last full year and
+today's price, and the peers use Yahoo's trailing twelve months, so the page says small
+differences are expected. In Python, `stock_overview` and the small functions behind it, and
+`median_of_available`, are in `valuation.py`, matched to the cells; `peer_operating_margin` joined
+the peer figures in `data.py`. The page's tooltips are short plain definitions; the glossary
+entries for the new terms are Haavard's to write. Existing tests of the peers table now expect the
+extra rows and column. No new files.

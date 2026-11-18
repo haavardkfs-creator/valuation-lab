@@ -356,21 +356,22 @@ def test_a_low_wacc_company_gets_the_cautions_on_the_page(monkeypatch):
 # Peers for another company: suggested, editable, with the multiples that follow
 # ---------------------------------------------------------------------------
 
-def peer_info(market_cap_billions, ev_sales, ev_ebitda, pe, currency="USD"):
+def peer_info(market_cap_billions, ev_sales, ev_ebitda, pe, currency="USD", operating_margin=None):
     """What Yahoo says about a made-up peer."""
     return {
         "marketCap": market_cap_billions * 1_000_000_000, "currency": currency,
         "enterpriseToRevenue": ev_sales, "enterpriseToEbitda": ev_ebitda, "trailingPE": pe,
+        "operatingMargins": operating_margin,
     }
 
 
 # Example Corp is worth about $94bn (price 240.74 times 389.2m shares). LOSS has no P/E, SMALL is
 # far too small, FOREIGN trades in pence.
 PEERS_IN_THE_INDUSTRY = {
-    "AAA": peer_info(80, 2.0, 12.0, 20.0),
-    "BBB": peer_info(120, 3.0, 16.0, 30.0),
-    "CCC": peer_info(60, 4.0, 10.0, 25.0),
-    "LOSS": peer_info(90, 5.0, 14.0, None),
+    "AAA": peer_info(80, 2.0, 12.0, 20.0, operating_margin=0.30),
+    "BBB": peer_info(120, 3.0, 16.0, 30.0, operating_margin=0.20),
+    "CCC": peer_info(60, 4.0, 10.0, 25.0, operating_margin=0.10),
+    "LOSS": peer_info(90, 5.0, 14.0, None, operating_margin=-0.25),
     "SMALL": peer_info(1, 1.0, 1.0, 1.0),
     "FOREIGN": peer_info(95, 9.0, 9.0, 9.0, currency="GBp"),
 }
@@ -441,9 +442,23 @@ def test_the_peer_box_starts_with_the_closest_dollar_peers_and_the_multiples_fol
 def test_the_peer_table_shows_a_dash_for_a_multiple_that_is_left_out(monkeypatch):
     page = run_example_page(monkeypatch)
     table = page.dataframe[-1].value                       # the heatmap comes first
-    assert list(table.index) == ["LOSS", "AAA", "BBB", "CCC"]
+    # The company itself comes first and the peer medians last.
+    assert list(table.index) == ["EXMP (this company)", "LOSS", "AAA", "BBB", "CCC", "Peer median"]
     assert table.loc["LOSS", "P/E"] == "–" and table.loc["LOSS", "EV/Sales"] == "5.0x"
     assert table.loc["AAA", "P/E"] == "20.0x"
+    assert table.loc["LOSS", "Op. margin"] == "-25.0%"            # a loss shows as a negative margin
+    assert table.loc["AAA", "Op. margin"] == "30.0%"
+
+
+def test_the_table_has_the_company_itself_and_the_peer_medians(monkeypatch):
+    page = run_example_page(monkeypatch)
+    table = page.dataframe[-1].value
+    own = table.loc["EXMP (this company)"]
+    assert own["Op. margin"] == "36.6%"                           # EBIT 8,706 over revenue 23,769
+    # The medians of the four peers: EV/Sales of 5, 2, 3, 4 is 3.5; EV/EBITDA of 14, 12, 16, 10 is
+    # 13; P/E of 20, 30, 25 (LOSS has none) is 25; margins of -25%, 30%, 20%, 10% make 15%.
+    median = table.loc["Peer median"]
+    assert median.tolist() == ["3.5x", "13.0x", "25.0x", "15.0%"]
 
 
 def test_the_reader_can_change_the_peers(monkeypatch):
@@ -453,7 +468,7 @@ def test_the_reader_can_change_the_peers(monkeypatch):
     sales, ebitda, pe = example_prices([2.0, 4.0], [12.0, 10.0], [20.0, 25.0])
     assert metrics(page)["EV/Sales price"] == app.dollars(sales)
     assert metrics(page)["P/E price"] == app.dollars(pe)
-    assert list(page.dataframe[-1].value.index) == ["AAA", "CCC"]
+    assert list(page.dataframe[-1].value.index) == ["EXMP (this company)", "AAA", "CCC", "Peer median"]
 
 
 def test_with_one_peer_the_prices_say_there_are_not_enough_peers(monkeypatch):
@@ -496,7 +511,7 @@ def test_only_the_first_eight_peers_are_used(monkeypatch):
     peer_box(page).set_value("AAA, BBB, CCC, LOSS, P5, P6, P7, P8, P9").run()
     assert not page.exception
     assert any("Only the first 8 peers are used." in caption for caption in texts(page.caption))
-    assert len(page.dataframe[-1].value) == 8
+    assert len(page.dataframe[-1].value) == 8 + 2                 # the 8 peers, the company and the median
 
 
 def test_when_yahoos_industry_lookup_fails_the_page_warns_and_the_box_starts_empty(monkeypatch):
@@ -515,7 +530,9 @@ def test_when_yahoos_industry_lookup_fails_the_page_warns_and_the_box_starts_emp
 def test_adobe_has_no_peer_box_and_keeps_its_four_peers(monkeypatch):
     page = run_page(monkeypatch)
     assert len(page.sidebar.text_input) == 1                   # only the company ticker
-    assert list(page.dataframe[-1].value.index) == ["ADSK", "INTU", "CRM", "SNPS"]
+    assert list(page.dataframe[-1].value.index) == [
+        "ADBE (this company)", "ADSK", "INTU", "CRM", "SNPS", "Peer median"
+    ]
     assert metrics(page)["EV/Sales price"] == "$333.58"
     assert not any("Peers suggested" in caption for caption in texts(page.caption))
 
@@ -544,11 +561,65 @@ def test_the_peer_table_shows_dashes_for_missing_zero_and_negative_multiples():
         "peer_tickers": ["A", "B"], "peer_ev_sales": [2.0, None],
         "peer_ev_ebitda": [-5.0, 12.34], "peer_pe": [0, float("nan")],
     }
-    table = app.peer_table(peers)
-    assert table.loc["A"].tolist() == ["2.0x", "–", "–"]
-    assert table.loc["B"].tolist() == ["–", "12.3x", "–"]
+    peers["peer_operating_margin"] = [-0.1, None]
+    overview = {"ev_sales": 4.0, "ev_ebitda": None, "pe": 20.0, "operating_margin": 0.3}
+    medians = {"median_ev_sales": None, "median_ev_ebitda": None, "median_pe": None}
+    table = app.peer_table(peers, "ME (this company)", overview, medians)
+    assert table.loc["A"].tolist() == ["2.0x", "–", "–", "-10.0%"]
+    assert table.loc["B"].tolist() == ["–", "12.3x", "–", "–"]
+    assert table.loc["ME (this company)"].tolist() == ["4.0x", "–", "20.0x", "30.0%"]
+    assert table.loc["Peer median"].tolist() == ["–", "–", "–", "–"]         # one margin is not enough
 
 
 def test_a_price_that_could_not_be_worked_out_says_so():
     assert app.price_or_note(None) == "Not enough peers"
     assert app.price_or_note(305.6) == "$305.60"
+
+
+# ---------------------------------------------------------------------------
+# The overview: eight numbers for a quick picture of the company
+# ---------------------------------------------------------------------------
+
+def test_company_overview_for_adobe_matches_the_multiples_sheet():
+    # The snapshot has the 10-K figures and the 251.47 share price the workbook uses.
+    got = app.company_overview(data.get_company_data("ADBE", source="snapshot"))
+    assert got["market_value"] == pytest.approx(103857.11)                   # Multiples C54
+    assert got["ev_sales"] == pytest.approx(4.3532378307880011)              # C56
+    assert got["ev_ebitda"] == pytest.approx(10.864354262914741)             # C57
+    assert got["pe"] == pytest.approx(14.56621458625526)                     # C58
+    assert got["operating_margin"] == pytest.approx(0.36627540073204595)     # C59
+    assert got["revenue_growth"] == pytest.approx(0.10527784236224136)       # C60
+    assert got["free_cash_flow_yield"] == pytest.approx(0.080409922853478935)    # C62
+    assert got["net_debt_to_ebitda"] == pytest.approx(-0.040424191516169675)     # C63
+
+
+def test_the_overview_is_on_the_page_with_all_eight_numbers(monkeypatch):
+    page = run_page(monkeypatch)
+    assert "Overview" in texts(page.subheader)
+    shown = metrics(page)
+    assert shown["Revenue growth"] == "10.5%"
+    assert shown["Operating margin"] == "36.6%"
+    assert shown["Net debt ÷ EBITDA"] == "-0.04x"                  # net cash
+    for label in ("Free cash flow yield", "EV/Sales", "EV/EBITDA", "P/E"):
+        assert shown[label] != app.NOT_MEANINGFUL, label
+
+
+def test_another_company_gets_the_overview_too(monkeypatch):
+    page = run_page(monkeypatch, ticker="exmp", yahoo=other_company())
+    assert_footer_and_no_crash(page)
+    assert metrics(page)["Operating margin"] == "36.6%"
+    assert metrics(page)["Revenue growth"] == "10.5%"
+
+
+def test_a_company_that_lost_money_says_not_meaningful_instead_of_a_wrong_number(monkeypatch):
+    losing_income = dict(ADOBE_YAHOO_INCOME, **{"Net Income": (-500e6, 1e9), "Pretax Income": (-600e6, 1e9)})
+    yahoo = fake_statements_ticker(income=losing_income, info=dict(ADOBE_YAHOO_INFO, longName="Loss Corp"))
+    monkeypatch.setattr("yfinance.Ticker", yahoo)
+    # With no pre-tax profit the starting point cannot be worked out, so the page explains that
+    # instead (tested above); this checks that the overview itself still copes.
+    company = data.get_company_data("LOSSY", source="yahoo")
+    got = app.company_overview(company)
+    assert got["pe"] is None and got["free_cash_flow_yield"] is None
+    assert got["operating_margin"] == pytest.approx(8706 / 23769)         # EBIT is still positive here
+    assert app.percent_or_note(None) == app.NOT_MEANINGFUL and app.multiple_or_note(None) == app.NOT_MEANINGFUL
+    assert app.multiple_or_note(14.566, 1) == "14.6x" and app.multiple_or_note(-0.0404, 2) == "-0.04x"

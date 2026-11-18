@@ -49,8 +49,9 @@ CURRENCY_FIELDS = {"statement_currency", "price_currency", "usd_per_statement_un
 
 def test_expected_snapshot_lists_every_package_field():
     # Adobe reports and trades in dollars, so its snapshot has no currency fields. It has a real
-    # cost of debt from the 10-K, so it does not have the fallback flag either.
-    not_in_adobes_snapshot = CURRENCY_FIELDS | {"cost_of_debt_is_fallback"}
+    # cost of debt from the 10-K, so it does not have the fallback flag either, and the snapshot has
+    # no peer operating margins (Excel's Multiples sheet has none for Adobe's peers; the page fetches them).
+    not_in_adobes_snapshot = CURRENCY_FIELDS | {"cost_of_debt_is_fallback", "peer_operating_margin"}
     assert set(EXPECTED_SNAPSHOT) == set(data.PACKAGE_FIELDS) | (set(data.OPTIONAL_FIELDS) - not_in_adobes_snapshot)
 
 
@@ -671,20 +672,20 @@ def test_the_fallback_cost_of_debt_is_the_same_in_every_currency(monkeypatch):
 # Peers: suggested from Yahoo's industry list, with their multiples
 # ---------------------------------------------------------------------------
 
-def quote(ticker, market_cap, ev_sales=2.0, ev_ebitda=12.0, pe=20.0, currency="USD"):
+def quote(ticker, market_cap, ev_sales=2.0, ev_ebitda=12.0, pe=20.0, currency="USD", operating_margin=0.20):
     """A peer's quote as fetch_peer_quote returns it (market value in $ millions)."""
     return {
         "ticker": ticker, "market_cap": market_cap, "currency": currency,
-        "ev_sales": ev_sales, "ev_ebitda": ev_ebitda, "pe": pe,
+        "ev_sales": ev_sales, "ev_ebitda": ev_ebitda, "pe": pe, "operating_margin": operating_margin,
     }
 
 
 # The same peers as Coca-Cola's worked example on the Multiples sheet (rows 43-45), so the
 # multiples are ones already checked against Excel.
 COCA_COLA_PEER_QUOTES = {
-    "PEP": quote("PEP", 200_000, 2.434, 12.472, 18.50692),
-    "KDP": quote("KDP", 49_000, 3.854, 16.631, None),           # no P/E: blank on purpose (F44)
-    "MDLZ": quote("MDLZ", 70_000, 2.663, 14.749, 21.381702),
+    "PEP": quote("PEP", 200_000, 2.434, 12.472, 18.50692, operating_margin=0.16046),      # G43
+    "KDP": quote("KDP", 49_000, 3.854, 16.631, None, operating_margin=0.18255),           # no P/E: blank on purpose (F44); G44
+    "MDLZ": quote("MDLZ", 70_000, 2.663, 14.749, 21.381702, operating_margin=0.14567),    # G45
     "COKE": quote("COKE", 14_000),                              # far too small
     "SHEL": quote("SHEL", 200_000, currency="GBp"),             # not traded in US dollars
 }
@@ -734,7 +735,10 @@ def test_only_the_first_candidates_to_check_are_looked_at():
 
 def test_a_company_with_no_suitable_peers_gets_empty_lists_not_an_error():
     got = suggest_for_coca_cola(company_market_value=5_000_000)      # like Apple: nothing close in size
-    assert got == {"peer_tickers": [], "peer_ev_sales": [], "peer_ev_ebitda": [], "peer_pe": []}
+    assert got == {
+        "peer_tickers": [], "peer_ev_sales": [], "peer_ev_ebitda": [], "peer_pe": [],
+        "peer_operating_margin": [],
+    }
 
 
 def test_a_company_whose_industry_yahoo_does_not_know_gets_empty_lists():
@@ -772,7 +776,7 @@ def test_peer_multiples_for_tickers_the_reader_chose_keep_their_order():
 
 
 def test_a_ticker_yahoo_knows_nothing_about_has_no_multiples_and_no_error():
-    unknown = quote("ZZZZ", None, None, None, None, currency=None)
+    unknown = quote("ZZZZ", None, None, None, None, currency=None, operating_margin=None)
     got = data.peer_multiples(["ZZZZ"], fetch_quote=lambda ticker: unknown)
     assert got["peer_pe"] == [None]
     assert v.median_of_usable_multiples(got["peer_pe"], 2) is None
@@ -807,13 +811,13 @@ class FakeIndex:
 def test_fetch_peer_quote_turns_the_market_value_into_millions_and_picks_the_multiples(monkeypatch):
     FakeInfoTicker.infos = {"PEP": {
         "marketCap": 200_363_819_008, "currency": "USD", "enterpriseToRevenue": 2.434,
-        "enterpriseToEbitda": 12.472, "trailingPE": 18.50692,
+        "enterpriseToEbitda": 12.472, "trailingPE": 18.50692, "operatingMargins": 0.16046,
     }}
     monkeypatch.setattr("yfinance.Ticker", FakeInfoTicker)
     got = data.fetch_peer_quote("PEP")
     assert got == {
         "ticker": "PEP", "market_cap": pytest.approx(200_363.819008), "currency": "USD",
-        "ev_sales": 2.434, "ev_ebitda": 12.472, "pe": 18.50692,
+        "ev_sales": 2.434, "ev_ebitda": 12.472, "pe": 18.50692, "operating_margin": 0.16046,
     }
 
 
@@ -822,6 +826,7 @@ def test_fetch_peer_quote_gives_none_for_a_figure_yahoo_does_not_have(monkeypatc
     monkeypatch.setattr("yfinance.Ticker", FakeInfoTicker)
     got = data.fetch_peer_quote("LOSS")
     assert got["pe"] is None and got["ev_ebitda"] is None and got["ev_sales"] is None
+    assert got["operating_margin"] is None
     assert data.fetch_peer_quote("UNKNOWN")["market_cap"] is None
 
 
@@ -839,3 +844,20 @@ def test_fetch_peer_candidates_gives_nothing_when_yahoo_has_no_industry(monkeypa
     monkeypatch.setattr("yfinance.Industry", FakeIndex)
     assert data.fetch_peer_candidates("ODD", 20) == []              # no industry key at all
     assert data.fetch_peer_candidates("NOTHING", 20) == []          # industry with no companies listed
+
+
+def test_suggested_peers_come_with_their_operating_margins_in_the_same_order():
+    got = suggest_for_coca_cola()
+    assert got["peer_tickers"] == ["PEP", "MDLZ", "KDP"]
+    assert got["peer_operating_margin"] == [0.16046, 0.14567, 0.18255]      # Multiples G43, G45, G44
+
+
+def test_suggested_peers_give_the_operating_margin_median_checked_against_the_multiples_sheet():
+    got = suggest_for_coca_cola()
+    assert v.median_of_available(got["peer_operating_margin"], 2) == pytest.approx(0.16046)    # G46
+
+
+def test_a_peer_with_a_negative_operating_margin_keeps_it():
+    losing = quote("LOSS", 90_000, operating_margin=-0.22427)
+    got = data.peer_multiples(["LOSS"], fetch_quote=lambda ticker: losing)
+    assert got["peer_operating_margin"] == [-0.22427]
