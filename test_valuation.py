@@ -1407,3 +1407,62 @@ def test_the_table_leaves_the_inputs_it_was_given_alone():
     before = (list(inputs["operating_margins"]), list(inputs["growth_rates"]))
     v.margin_growth_table(inputs, TERMINAL_GROWTH_RATE, None, MARGIN_SHIFTS, GROWTH_SHIFTS)
     assert (inputs["operating_margins"], inputs["growth_rates"]) == before
+
+
+# ---------------------------------------------------------------------------
+# Trailing twelve months (workbook: `ttm` sheet, Adobe, the four quarters to 31 Aug 2026)
+# ---------------------------------------------------------------------------
+
+TTM_REVENUE = [6760, 6618, 6398, 6194]                # ttm F6, E6, D6, C6 (newest first)
+TTM_OPERATING_INCOME = [2354, 2238, 2418, 2261]       # F7, E7, D7, C7
+TTM_NET_INCOME = [1827, 1712, 1889, 1856]             # F8, E8, D8, C8
+TTM_DA = [215, 193, 174, 184]                         # F9, E9, D9, C9
+
+
+def adobe_ttm_overview():
+    return v.ttm_overview(
+        share_price=SHARE_PRICE, shares=SHARES,
+        debt=v.financial_debt(1597, 4766),            # current debt C13 + long-term debt C12 = C14
+        cash_and_investments=5639,                    # C15
+        revenue=v.trailing_total(TTM_REVENUE), operating_income=v.trailing_total(TTM_OPERATING_INCOME),
+        depreciation_and_amortisation=v.trailing_total(TTM_DA), net_income=v.trailing_total(TTM_NET_INCOME),
+    )
+
+
+def test_trailing_totals_match_the_ttm_sheet():
+    assert v.trailing_total(TTM_REVENUE) == 25970                  # G6
+    assert v.trailing_total(TTM_OPERATING_INCOME) == 9271          # G7
+    assert v.trailing_total(TTM_NET_INCOME) == 7284                # G8
+    assert v.trailing_total(TTM_DA) == 766                         # G9
+
+
+def test_trailing_total_uses_only_the_latest_four_quarters():
+    assert v.trailing_total([10, 20, 30, 40, 1000, 2000]) == 100   # newest first: the older quarters are ignored
+
+
+def test_trailing_total_needs_four_quarters_with_a_figure_each():
+    assert v.trailing_total([10, 20, 30]) is None
+    assert v.trailing_total([10, None, 30, 40]) is None
+    assert v.trailing_total([10, 20, 30, 40, None]) == 100         # a missing fifth quarter does not matter
+    assert v.trailing_total([]) is None
+
+
+def test_the_ttm_overview_matches_the_ttm_sheet():
+    got = adobe_ttm_overview()
+    assert got["market_value"] == close(103857.11)                 # C19
+    assert got["enterprise_value"] == close(104581.11)             # C20 (net debt of 724 from the latest quarter)
+    assert got["ebitda"] == 10037                                  # C21
+    assert got["ev_sales"] == close(4.0269969195225261)            # C22
+    assert got["ev_ebitda"] == close(10.419558633057687)           # C23
+    assert got["pe"] == close(14.258252333882481)                  # C24
+    assert got["operating_margin"] == close(0.3569888332691567)    # C25
+
+
+def test_a_loss_over_the_last_twelve_months_has_no_pe_or_ev_ebitda():
+    got = v.ttm_overview(
+        share_price=10, shares=100, debt=200, cash_and_investments=50, revenue=1000, operating_income=-90,
+        depreciation_and_amortisation=30, net_income=-120,
+    )
+    assert got["pe"] is None and got["ev_ebitda"] is None          # EBITDA is -60
+    assert got["operating_margin"] == close(-0.09)                 # a loss is still a negative margin
+    assert got["ev_sales"] == close((1000 + 150) / 1000)           # enterprise value is 1,150

@@ -755,3 +755,23 @@ cell is always the DCF price above; the sliders move it. Labels use two decimals
 existing tests changed: the low-WACC page test now says the WACC heatmap is missing (it used to say the
 only table was the assumptions table). The empty Data Table grid is still on the `reverse dcf` sheet
 (rows 44-51); Haavard can delete it. No new files in the repository.
+
+## 2026-11-19 — The company on trailing twelve months, like its peers (roadmap #5b)
+
+Yahoo's peer multiples and margins are trailing twelve months, while the company's own numbers used its last
+fiscal year, so the comparison was not like for like. Tried first on real companies: First Solar's operating
+margin is 30.6% for the fiscal year and 37.7% over the last twelve months (against peers at 6.3%), and
+summing the last four quarters reproduces Yahoo's own trailing revenue exactly. Agreed with Haavard: only
+what the peers table compares goes on TTM (EV/Sales, EV/EBITDA, P/E and the operating margin, in the
+Overview and in the peers table's own row), with debt and cash from the latest quarter; free cash flow
+yield, net debt over EBITDA, revenue growth, the History and the DCF stay on the last fiscal year and the
+page says which is which; the DCF's own base stays on the fiscal year for now. Built Excel first: sheet
+`ttm` with Adobe's four quarters typed in from Yahoo and the multiples as formulas (G6:G9, C14:C25). In
+Python, `trailing_total` and `ttm_overview` in `valuation.py` match the sheet's cells; `fetch_yahoo_ttm`,
+`ttm_in_dollars` and `get_ttm` in `data.py` read the quarters; `apply_ttm` in `app.py` puts them in the
+Overview. Two real-world gaps found on live data and handled: a quarter that has just ended can be a column
+with no figures yet (Nvidia), so the latest four quarters with revenue are used; and Yahoo leaves
+"Long Term Debt" out when it is zero (First Solar), which is believed only when a total debt figure is
+there. If the quarters cannot be had, the page keeps the fiscal year and says so. The margin warning
+against peers now uses the TTM margin, which makes it like for like (First Solar's gap is 31.4 points, not
+24.3). No new files.

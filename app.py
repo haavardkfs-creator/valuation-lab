@@ -287,6 +287,35 @@ def company_overview(company):
     )
 
 
+def apply_ttm(overview, company, ttm, ttm_error=None):
+    """Put the numbers a reader compares with peers (EV/Sales, EV/EBITDA, P/E and the operating
+    margin) on the company's last twelve months, like the peers', and leave the rest on its last
+    fiscal year. Adds "ttm_period_end" (when the latest quarter ended; None if the last twelve
+    months are not available, and then every number stays on the fiscal year) and "ttm_error".
+    """
+    if ttm is None:
+        return dict(overview, ttm_period_end=None, ttm_error=ttm_error)
+    recent = valuation.ttm_overview(
+        share_price=company["share_price"],
+        shares=company["shares"],
+        debt=ttm["debt"],
+        cash_and_investments=ttm["cash_and_investments"],
+        revenue=ttm["revenue"],
+        operating_income=ttm["operating_income"],
+        depreciation_and_amortisation=ttm["depreciation_and_amortisation"],
+        net_income=ttm["net_income"],
+    )
+    return dict(
+        overview,
+        ev_sales=recent["ev_sales"],
+        ev_ebitda=recent["ev_ebitda"],
+        pe=recent["pe"],
+        operating_margin=recent["operating_margin"],
+        ttm_period_end=ttm["period_end"],
+        ttm_error=None,
+    )
+
+
 def percent_or_note(rate):
     """Write a rate as a percentage, or say it is not meaningful when it could not be worked out."""
     return NOT_MEANINGFUL if rate is None else percent(rate)
@@ -404,10 +433,20 @@ def draw_overview(overview):
     sales.metric("EV/Sales", multiple_or_note(overview["ev_sales"]), help="Enterprise value (what the whole business is worth at today's price) divided by revenue.")
     ebitda.metric("EV/EBITDA", multiple_or_note(overview["ev_ebitda"]), help="Enterprise value divided by operating profit before depreciation and amortisation.")
     pe.metric("P/E", multiple_or_note(overview["pe"]), help="What the market pays for each dollar of the last full year's net income.")
-    st.caption(
-        "Worked out from the company's last full year of figures and today's share price. A number "
-        "that would mean nothing (no P/E for a company that lost money) says so."
-    )
+    if overview.get("ttm_period_end"):
+        basis = (
+            f"EV/Sales, EV/EBITDA, P/E and the operating margin are for the last twelve months (the four "
+            f"quarters to {overview['ttm_period_end']}), like the peers'; the others are for the last fiscal "
+            "year. All use today's share price."
+        )
+    elif overview.get("ttm_error"):
+        basis = (
+            f"Worked out from the last fiscal year and today's share price: the last twelve months are "
+            f"not available ({overview['ttm_error']})."
+        )
+    else:
+        basis = "Worked out from the last fiscal year and today's share price."
+    st.caption(f"{basis} A number that would mean nothing (no P/E for a company that lost money) says so.")
 
 
 def assumptions_table(dcf_inputs, year_labels):
@@ -1060,9 +1099,14 @@ def draw_multiples(multiples, peers, notes, peers_are_suggested, own_label, over
     st.caption(
         f"Each multiple needs at least {assumptions.MINIMUM_PEERS} peers with a usable figure; "
         "a peer with no figure (a dash) is left out of that multiple only. A negative operating "
-        "margin counts, because a loss is real information. The company's own row comes from its "
-        "last full year and today's price; the peers' figures are Yahoo's trailing twelve months, "
-        "so small differences are expected."
+        "margin counts, because a loss is real information. "
+        + (
+            f"The company's own row is its last twelve months (to {overview['ttm_period_end']}) at "
+            "today's price, like the peers' figures from Yahoo, so the two are like for like."
+            if overview.get("ttm_period_end")
+            else "The company's own row comes from its last fiscal year and today's price; the peers' "
+            "figures are Yahoo's trailing twelve months, so small differences are expected."
+        )
     )
     for sentence in flag_explanations(peers):
         st.caption(f"⚠ {sentence}")
@@ -1133,6 +1177,14 @@ def load_history(ticker, usd_per_unit):
     LIVE_DATA_CACHE_SECONDS. Stops with a plain error if Yahoo cannot be reached or has none.
     """
     return data.get_history(ticker, usd_per_unit)
+
+
+@st.cache_data(ttl=LIVE_DATA_CACHE_SECONDS, show_spinner=False)
+def load_ttm(ticker, usd_per_unit):
+    """Fetch a company's last twelve months (in US dollars) and remember them for
+    LIVE_DATA_CACHE_SECONDS. Stops with a plain error if Yahoo cannot be reached or lacks them.
+    """
+    return data.get_ttm(ticker, usd_per_unit)
 
 
 def parse_peer_tickers(text, own_ticker, how_many):
@@ -1309,6 +1361,11 @@ def draw_page():
     st.title("Valuation Lab")
     st.write(f"{company['company_name']} ({company['ticker']})")
     draw_source_note(company, source_used)
+    try:
+        ttm, ttm_error = load_ttm(company["ticker"], company.get("usd_per_statement_unit", 1.0)), None
+    except ValueError as error:
+        ttm, ttm_error = None, str(error)
+    overview = apply_ttm(overview, company, ttm, ttm_error)
     try:
         history, history_error = load_history(company["ticker"], company.get("usd_per_statement_unit", 1.0)), None
     except ValueError as error:

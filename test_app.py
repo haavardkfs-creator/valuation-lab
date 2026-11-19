@@ -22,6 +22,7 @@ from test_data import (
     ADOBE_YAHOO_INCOME,
     ADOBE_YAHOO_INFO,
     ADOBE_YEAR_ENDS,
+    QUARTER_ENDS,
     fake_statements_ticker,
     no_interest_expense_company,
 )
@@ -1381,3 +1382,135 @@ def test_another_company_gets_the_margin_and_growth_table_too(monkeypatch):
     assert not page.exception
     table = margin_growth_table_of(page)
     assert app.dollars(table.iloc[2, 2]) == metrics(page)["DCF implied price"]
+
+
+# ---------------------------------------------------------------------------
+# The last twelve months: the company on the same footing as its peers
+# ---------------------------------------------------------------------------
+
+def adobe_with_quarters():
+    """Yahoo's reply for Adobe with its last four quarters (the `ttm` sheet) and the latest balance
+    sheet, on top of the fiscal-year statements the page's other tests use.
+    """
+    base = adobe_with_four_years()
+    income = pd.DataFrame(
+        {
+            "Total Revenue": [6760e6, 6618e6, 6398e6, 6194e6, 5900e6],
+            "Operating Income": [2354e6, 2238e6, 2418e6, 2261e6, 2000e6],
+            "Net Income": [1827e6, 1712e6, 1889e6, 1856e6, 1500e6],
+        },
+        index=QUARTER_ENDS[:5],
+    ).T
+    cash_flow = pd.DataFrame({"Depreciation And Amortization": [215e6, 193e6, 174e6, 184e6, 170e6]}, index=QUARTER_ENDS[:5]).T
+    balance = pd.DataFrame(
+        {
+            "Long Term Debt": [4766e6], "Current Debt": [1597e6], "Total Debt": [6363e6],
+            "Cash Cash Equivalents And Short Term Investments": [5639e6],
+        },
+        index=QUARTER_ENDS[:1],
+    ).T
+
+    class Fake(base):
+        def __init__(self, ticker):
+            super().__init__(ticker)
+            self.quarterly_income_stmt, self.quarterly_cashflow, self.quarterly_balance_sheet = income, cash_flow, balance
+
+    return Fake
+
+
+def expected_ttm_overview(share_price):
+    """The TTM numbers for the page's price, worked out straight from valuation.py (the snapshot's 413 shares)."""
+    return valuation.ttm_overview(
+        share_price=share_price, shares=413, debt=6363, cash_and_investments=5639, revenue=25970,
+        operating_income=9271, depreciation_and_amortisation=766, net_income=7284,
+    )
+
+
+def test_the_overview_puts_the_peer_comparable_numbers_on_the_last_twelve_months(monkeypatch):
+    page = run_page(monkeypatch, yahoo=adobe_with_quarters())
+    expected = expected_ttm_overview(240.74)                     # the page's price from the fake Yahoo
+    shown = metrics(page)
+    assert shown["EV/Sales"] == app.multiple_or_note(expected["ev_sales"])
+    assert shown["EV/EBITDA"] == app.multiple_or_note(expected["ev_ebitda"])
+    assert shown["P/E"] == app.multiple_or_note(expected["pe"])
+    assert shown["Operating margin"] == app.percent(expected["operating_margin"]) == "35.7%"     # ttm C25
+    assert any("the four quarters to 31 Aug 2026" in caption for caption in texts(page.caption))
+
+
+def test_the_other_overview_numbers_stay_on_the_last_fiscal_year(monkeypatch):
+    page = run_page(monkeypatch, yahoo=adobe_with_quarters())
+    fiscal = run_page(monkeypatch, yahoo=adobe_with_four_years())
+    for label in ("Revenue growth", "Free cash flow yield", "Net debt ÷ EBITDA"):
+        assert metrics(page)[label] == metrics(fiscal)[label], label
+    assert metrics(page)["Revenue growth"] == "10.5%"             # last fiscal year, history F15
+
+
+def test_the_dcf_itself_does_not_move_with_the_last_twelve_months(monkeypatch):
+    with_ttm = run_page(monkeypatch, yahoo=adobe_with_quarters())
+    without = run_page(monkeypatch, yahoo=adobe_with_four_years())
+    assert metrics(with_ttm)["DCF implied price"] == metrics(without)["DCF implied price"]
+    assert metrics(with_ttm)["WACC"] == metrics(without)["WACC"]
+
+
+def test_the_peers_tables_own_row_uses_the_last_twelve_months_like_the_peers(monkeypatch):
+    page = run_page(monkeypatch, yahoo=adobe_with_quarters())
+    expected = expected_ttm_overview(240.74)
+    own = page.dataframe[-1].value.loc["ADBE (this company)"]
+    assert own["EV/Sales"] == f"{expected['ev_sales']:.1f}x"
+    assert own["Op. margin"] == "35.7%"
+    assert any(c.startswith("Each multiple needs at least") and "last twelve months (to 31 Aug 2026)" in c for c in texts(page.caption))
+
+
+def test_without_the_quarters_everything_stays_on_the_fiscal_year_and_says_so(monkeypatch):
+    page = run_page(monkeypatch, yahoo=adobe_with_four_years())
+    assert metrics(page)["Operating margin"] == "36.6%"           # the fiscal year's margin
+    [note] = [c for c in texts(page.caption) if c.startswith("Worked out from the last fiscal year and today's share price: the last twelve months")]
+    assert "not available" in note
+    assert any("last fiscal year and today's price" in c for c in texts(page.caption))      # the peers caption's fallback
+
+
+def test_apply_ttm_replaces_only_the_four_peer_comparable_numbers():
+    overview = {
+        "ev_sales": 4.0, "ev_ebitda": 10.0, "pe": 14.0, "operating_margin": 0.366, "revenue_growth": 0.105,
+        "free_cash_flow_yield": 0.08, "net_debt_to_ebitda": -0.04, "free_cash_flow": 8351.0,
+    }
+    company = {"share_price": 251.47, "shares": 413}
+    ttm = {
+        "period_end": "31 Aug 2026", "revenue": 25970.0, "operating_income": 9271.0, "net_income": 7284.0,
+        "depreciation_and_amortisation": 766.0, "debt": 6363.0, "cash_and_investments": 5639.0,
+    }
+    got = app.apply_ttm(overview, company, ttm)
+    assert got["ev_sales"] == pytest.approx(4.0269969195225261)            # ttm C22
+    assert got["ev_ebitda"] == pytest.approx(10.419558633057687)           # C23
+    assert got["pe"] == pytest.approx(14.258252333882481)                  # C24
+    assert got["operating_margin"] == pytest.approx(0.3569888332691567)    # C25
+    for unchanged in ("revenue_growth", "free_cash_flow_yield", "net_debt_to_ebitda", "free_cash_flow"):
+        assert got[unchanged] == overview[unchanged]
+    assert got["ttm_period_end"] == "31 Aug 2026" and got["ttm_error"] is None
+    assert overview["ev_sales"] == 4.0                                      # the original is not changed
+
+
+def test_apply_ttm_without_the_quarters_changes_nothing_and_records_why():
+    overview = {"ev_sales": 4.0, "pe": 14.0, "operating_margin": 0.366}
+    got = app.apply_ttm(overview, {"share_price": 1, "shares": 1}, None, "no internet")
+    assert (got["ev_sales"], got["pe"], got["operating_margin"]) == (4.0, 14.0, 0.366)
+    assert got["ttm_period_end"] is None and got["ttm_error"] == "no internet"
+
+
+def test_a_missing_da_leaves_only_the_ev_ebitda_out():
+    ttm = {
+        "period_end": "31 Aug 2026", "revenue": 25970.0, "operating_income": 9271.0, "net_income": 7284.0,
+        "depreciation_and_amortisation": None, "debt": 6363.0, "cash_and_investments": 5639.0,
+    }
+    got = app.apply_ttm({"ev_sales": 1, "ev_ebitda": 1, "pe": 1, "operating_margin": 1}, {"share_price": 251.47, "shares": 413}, ttm)
+    assert got["ev_ebitda"] is None and got["ev_sales"] is not None and got["pe"] is not None
+
+
+def test_the_margin_warning_uses_the_last_twelve_months_margin():
+    ttm = {
+        "period_end": "30 Sep 2026", "revenue": 5014.0, "operating_income": 1890.0, "net_income": 1861.0,
+        "depreciation_and_amortisation": 584.0, "debt": 108.0, "cash_and_investments": 1624.0,
+    }
+    overview = app.apply_ttm({"operating_margin": 0.306, "ev_sales": 1, "ev_ebitda": 1, "pe": 1}, {"share_price": 150.98, "shares": 107}, ttm)
+    warning = app.margin_gap_warning("First Solar", overview["operating_margin"], {"peer_operating_margin": [0.186, 0.006, 0.063]})
+    assert "(37.7%) is 31.4 points above" in warning              # First Solar's TTM margin, not its fiscal-year 30.6%

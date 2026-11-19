@@ -405,6 +405,50 @@ def history_check(yearly_values, minimum_years):
     }
 
 
+def trailing_total(quarterly_values):
+    """Add up the latest four quarters of a figure (revenue, operating income, ...) to get its
+    trailing twelve months. The quarters are given newest first; only the first four are used.
+    Gives None if there are fewer than four, or any of the four is missing.
+    """
+    latest_four = list(quarterly_values[:4])
+    if len(latest_four) < 4 or any(value is None for value in latest_four):
+        return None
+    return sum(latest_four)
+
+
+def ttm_overview(
+    share_price,
+    shares,
+    debt,
+    cash_and_investments,
+    revenue,
+    operating_income,
+    depreciation_and_amortisation,
+    net_income,
+):
+    """Work out the numbers a reader compares with peers, on the last twelve months (workbook:
+    `ttm` sheet): EV/Sales, EV/EBITDA, P/E and the operating margin, with the market value and the
+    enterprise value behind them. The flows (revenue, operating income, D&A, net income) are the
+    trailing twelve months; debt and cash are from the latest quarter's balance sheet. A number
+    that would mean nothing, or that needs a missing figure (D&A for EV/EBITDA), comes back as
+    None, as in stock_overview.
+    """
+    market_value_amount = market_value(share_price, shares)
+    enterprise_value_amount = market_enterprise_value(market_value_amount, net_debt(debt, cash_and_investments))
+    ebitda_amount = (
+        None if depreciation_and_amortisation is None else ebitda(operating_income, depreciation_and_amortisation)
+    )
+    return {
+        "market_value": market_value_amount,
+        "enterprise_value": enterprise_value_amount,
+        "ebitda": ebitda_amount,
+        "ev_sales": ratio_or_none(enterprise_value_amount, revenue),
+        "ev_ebitda": None if ebitda_amount is None else ratio_or_none(enterprise_value_amount, ebitda_amount),
+        "pe": ratio_or_none(market_value_amount, net_income),
+        "operating_margin": operating_margin(operating_income, revenue),
+    }
+
+
 def median_of_available(values, minimum_peers):
     """Find the middle value of the figures that exist, ignoring blanks. Unlike a multiple,
     a negative figure counts (a peer that loses money on its sales is real information).
