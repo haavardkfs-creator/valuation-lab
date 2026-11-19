@@ -192,3 +192,25 @@ def test_the_peer_suggestion_settings_are_the_ones_agreed_with_haavard():
 
 def test_the_peer_box_takes_at_most_eight_peers():
     assert a.MAX_TYPED_PEERS == 8        # agreed with Haavard on 16 Nov 2026
+
+
+def test_stepping_a_shift_slider_up_from_its_minimum_lands_exactly_on_zero():
+    # This is what used to show as "-0 %": with steps of 0.005 the sum came to -5e-18, not 0.
+    for low, high, step in (
+        (a.GROWTH_SHIFT_MIN_POINTS, a.GROWTH_SHIFT_MAX_POINTS, a.GROWTH_SHIFT_STEP_POINTS),
+        (a.MARGIN_SHIFT_MIN_POINTS, a.MARGIN_SHIFT_MAX_POINTS, a.MARGIN_SHIFT_STEP_POINTS),
+    ):
+        by_adding, value = [], low
+        while value <= high:
+            by_adding.append(value)
+            value += step
+        by_multiplying = [low + number * step for number in range(round((high - low) / step) + 1)]
+        for values in (by_adding, by_multiplying):
+            assert 0.0 in values                                  # zero is one of the stops...
+            assert all(value == 0 or abs(value) >= step for value in values)     # ...with nothing tiny beside it
+            assert values[-1] == high
+
+
+def test_the_decimal_shift_range_is_the_points_range_divided_by_100():
+    assert (a.GROWTH_SHIFT_MIN, a.GROWTH_SHIFT_MAX, a.GROWTH_SHIFT_STEP) == (-0.05, 0.05, 0.005)
+    assert (a.MARGIN_SHIFT_MIN, a.MARGIN_SHIFT_MAX, a.MARGIN_SHIFT_STEP) == (-0.05, 0.05, 0.005)

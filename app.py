@@ -46,13 +46,27 @@ def dollars(amount):
 
 
 def percent(rate):
-    """Write a decimal rate as a percentage with one decimal, for example 0.215 as 21.5%."""
-    return f"{rate:.1%}"
+    """Write a decimal rate as a percentage with one decimal, for example 0.215 as 21.5%. A rate
+    too small to show is written 0.0%, never -0.0%.
+    """
+    text = f"{rate:.1%}"
+    return "0.0%" if text == "-0.0%" else text
 
 
 def precise_percent(rate):
-    """Write a decimal rate as a percentage with two decimals, for example 0.1093 as 10.93%."""
-    return f"{rate:.2%}"
+    """Write a decimal rate as a percentage with two decimals, for example 0.1093 as 10.93%. A rate
+    too small to show is written 0.00%, never -0.00%.
+    """
+    text = f"{rate:.2%}"
+    return "0.00%" if text == "-0.00%" else text
+
+
+def shift_from_points(points):
+    """Turn a slider's percentage points into the decimal the model uses (1.5 points is 0.015),
+    making sure a zero is a plain zero and never a negative one.
+    """
+    return points / 100 + 0.0
+
 
 
 def is_base_case(company):
@@ -171,23 +185,23 @@ def draw_sliders():
     box is unticked, meaning the model uses its own). Each starts at the base case.
     """
     st.sidebar.header("Change the assumptions")
-    growth_shift = st.sidebar.slider(
-        "Revenue growth, every year",
-        min_value=assumptions.GROWTH_SHIFT_MIN,
-        max_value=assumptions.GROWTH_SHIFT_MAX,
+    growth_points = st.sidebar.slider(
+        "Revenue growth: change every year by",
+        min_value=assumptions.GROWTH_SHIFT_MIN_POINTS,
+        max_value=assumptions.GROWTH_SHIFT_MAX_POINTS,
         value=0.0,
-        step=assumptions.GROWTH_SHIFT_STEP,
-        format="percent",
-        help="Moves every forecast year's growth up or down by the same amount. 0% is the base case.",
+        step=assumptions.GROWTH_SHIFT_STEP_POINTS,
+        format="%+.1f pts",
+        help="Adds this many percentage points to every forecast year's growth. 0 is the base case; the table 'What the model assumes' shows the result.",
     )
-    margin_shift = st.sidebar.slider(
-        "Operating margin, every year",
-        min_value=assumptions.MARGIN_SHIFT_MIN,
-        max_value=assumptions.MARGIN_SHIFT_MAX,
+    margin_points = st.sidebar.slider(
+        "Operating margin: change every year by",
+        min_value=assumptions.MARGIN_SHIFT_MIN_POINTS,
+        max_value=assumptions.MARGIN_SHIFT_MAX_POINTS,
         value=0.0,
-        step=assumptions.MARGIN_SHIFT_STEP,
-        format="percent",
-        help="Moves every forecast year's operating margin up or down by the same amount. 0% is the base case.",
+        step=assumptions.MARGIN_SHIFT_STEP_POINTS,
+        format="%+.1f pts",
+        help="Adds this many percentage points to every forecast year's operating margin. 0 is the base case; the table 'What the model assumes' shows the result.",
     )
     terminal_growth_rate = st.sidebar.slider(
         "Terminal growth",
@@ -212,7 +226,7 @@ def draw_sliders():
             format="percent",
             help="The rate that cash flows are discounted at. Higher means a lower price.",
         )
-    return growth_shift, margin_shift, terminal_growth_rate, wacc_override
+    return shift_from_points(growth_points), shift_from_points(margin_points), terminal_growth_rate, wacc_override
 
 
 def draw_explanations(section):
@@ -300,6 +314,56 @@ def draw_overview(overview):
     st.caption(
         "Worked out from the company's last full year of figures and today's share price. A number "
         "that would mean nothing (no P/E for a company that lost money) says so."
+    )
+
+
+def assumptions_table(dcf_inputs, year_labels):
+    """Make the table of the assumptions the DCF really uses, one row per forecast year: revenue
+    growth, operating margin, tax rate, and D&A, capex and working capital as a share of revenue
+    (working capital is positive when it brings cash in). They are the figures after the sliders
+    have moved them, as text with two decimals.
+    """
+    years = len(year_labels)
+    return pd.DataFrame(
+        {
+            "Revenue growth": [precise_percent(rate) for rate in dcf_inputs["growth_rates"]],
+            "Operating margin": [precise_percent(rate) for rate in dcf_inputs["operating_margins"]],
+            "Tax rate": [precise_percent(dcf_inputs["tax_rate"])] * years,
+            "D&A % of revenue": [precise_percent(rate) for rate in dcf_inputs["da_pcts"]],
+            "Capex % of revenue": [precise_percent(rate) for rate in dcf_inputs["capex_pcts"]],
+            "Working capital % of revenue": [precise_percent(rate) for rate in dcf_inputs["wc_pcts"]],
+        },
+        index=pd.Index(year_labels, name="Year"),
+    )
+
+
+def points_text(shift):
+    """Write a decimal shift as percentage points with a sign, for example 0.015 as +1.5 points
+    and 0 as +0.0 points.
+    """
+    return f"{shift * 100 + 0.0:+.1f} points"
+
+
+def draw_assumptions(company, dcf_inputs, year_labels, dcf, terminal_growth_rate, wacc_is_set_by_user, growth_shift, margin_shift):
+    """Draw "What the model assumes": the table of the numbers the DCF really uses, then one line
+    with the terminal growth rate, the WACC and what the sliders are changing, so a slider's
+    value is never mistaken for the assumption itself.
+    """
+    st.subheader("What the model assumes")
+    st.dataframe(assumptions_table(dcf_inputs, year_labels))
+    if is_base_case(company):
+        where_from = "Adobe's assumptions are hand-chosen (the Projection sheet in the Excel model)."
+    else:
+        where_from = (
+            "These are a starting point worked out from the company's own last reported year, "
+            "not a forecast (see the note under the title)."
+        )
+    whose_wacc = "the WACC you set" if wacc_is_set_by_user else "the model's own WACC"
+    st.caption(
+        f"{where_from} After year 5, cash flow grows {precise_percent(terminal_growth_rate)} a "
+        f"year for ever, discounted at {precise_percent(dcf['wacc'])} ({whose_wacc}). The sliders "
+        f"are changing growth by {points_text(growth_shift)} and operating margin by "
+        f"{points_text(margin_shift)} in every year; at +0.0 points the table is the base case."
     )
 
 
@@ -708,7 +772,7 @@ def draw_error(ticker, error):
 
 def draw_page():
     """Draw the whole page: ticker box, sliders, peer box (companies other than Adobe), title,
-    DCF section, overview, charts, heatmap, multiples and footer. If the company cannot be valued, draw
+    DCF section, overview, assumptions, charts, heatmap, multiples and footer. If the company cannot be valued, draw
     the reason instead.
     """
     ticker = draw_ticker_box()
@@ -736,6 +800,10 @@ def draw_page():
     draw_dcf(company, dcf, wacc_override is not None)
     draw_overview(overview)
     year_labels = assumptions.FORECAST_YEAR_LABELS if is_base_case(company) else assumptions.GENERIC_YEAR_LABELS
+    draw_assumptions(
+        company, dcf_inputs, year_labels, dcf, terminal_growth_rate, wacc_override is not None,
+        growth_shift, margin_shift,
+    )
     draw_charts(dcf, year_labels, terminal_growth_rate)
     draw_heatmap(company, dcf_inputs, base_wacc)
     draw_multiples(
