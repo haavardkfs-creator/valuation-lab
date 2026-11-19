@@ -355,6 +355,32 @@ def flag_peers(peers, depressed_margin, outlier_factor, minimum_peers):
     return flags
 
 
+def yearly_growth(values):
+    """Work out how much each year's figure grew on the year before (0.10 means 10%), oldest
+    year first. The first year has nothing to compare with, and a year is None if either figure
+    is missing or the year before was not above zero.
+    """
+    growth = [None]
+    for before, now in zip(values, values[1:]):
+        if before is None or now is None:
+            growth.append(None)
+        else:
+            change = ratio_or_none(now, before)
+            growth.append(None if change is None else change - 1)
+    return growth
+
+
+def ratios_by_year(numerators, denominators):
+    """Divide one list of yearly figures by another, year by year (operating income over revenue
+    gives the operating margin). A year is None if either figure is missing or the bottom one is
+    not above zero.
+    """
+    return [
+        None if top is None or bottom is None else ratio_or_none(top, bottom)
+        for top, bottom in zip(numerators, denominators)
+    ]
+
+
 def median_of_available(values, minimum_peers):
     """Find the middle value of the figures that exist, ignoring blanks. Unlike a multiple,
     a negative figure counts (a peer that loses money on its sales is real information).

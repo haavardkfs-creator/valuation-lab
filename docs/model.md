@@ -228,6 +228,32 @@ G43:G46, where the Coca-Cola peers' margins (16.05%, 18.26%, 14.57%) have a medi
 The company's own figures come from its last full year, the peers' from Yahoo's trailing twelve
 months, so small differences between them are expected.
 
+## History
+
+The page shows the last few years of the main figures under the Overview (workbook: sheet
+`history`, Adobe FY2022-FY2025), because one year can be a peak or a bottom and the DCF's starting
+point is built from only one. Yahoo gives 4 or 5 years; Adobe's income statement has 4 (FY2022 to
+FY2025), so the table shows as many as exist, oldest first, with a dash where a figure is missing.
+- Rows: revenue, revenue growth, operating income, operating margin, net income, free cash flow
+  (reported), free cash flow margin, diluted average shares and the yearly change in shares.
+- Revenue growth = this year ÷ last year − 1 (the first year has none). Operating margin = operating
+  income ÷ revenue. Free cash flow margin = free cash flow ÷ revenue. Yearly change in shares = this
+  year's shares ÷ last year's − 1; a fall means buybacks.
+- Adobe: revenue growth 10.2%, 10.8%, 10.5%; operating margin 34.6%, 34.3%, 36.0%, 36.6%; free cash
+  flow margin 42.0%, 35.8%, 36.6%, 41.4%; change in shares -2.5%, -2.0%, -5.1%.
+- Free cash flow here is as the company reports it: cash from operations minus capital spending
+  (Adobe FY2025: $9,852m). The model builds its own differently (EBIT after tax + D&A - capex + working
+  capital: $8,351m, see "Overview of the stock"), because reported cash from operations includes
+  things the simpler build does not, such as stock-based compensation added back. The page quotes
+  both for the last year.
+- The share count is the diluted average over each year (Adobe FY2025: 427m), not the shares
+  outstanding the valuation uses (413m): an average over a year is not a count on one day.
+- A loss is a negative amount and a negative margin, not a dash: it is real information (First Solar's
+  FY2022 operating margin was -10.7%, then 26.7%, 33.1% and 30.6%).
+- A company that reports in another currency is converted to US dollars at today's rate, as
+  elsewhere; the shares are not converted. Two charts show revenue and free cash flow, and the
+  operating and free cash flow margins.
+
 ## What the model assumes, and the sliders
 
 The page shows the assumptions the DCF really uses, so a slider is never mistaken for the

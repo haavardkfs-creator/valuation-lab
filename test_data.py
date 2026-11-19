@@ -861,3 +861,120 @@ def test_a_peer_with_a_negative_operating_margin_keeps_it():
     losing = quote("LOSS", 90_000, operating_margin=-0.22427)
     got = data.peer_multiples(["LOSS"], fetch_quote=lambda ticker: losing)
     assert got["peer_operating_margin"] == [-0.22427]
+
+
+# ---------------------------------------------------------------------------
+# History: the last few years of the main figures
+# ---------------------------------------------------------------------------
+
+ADOBE_YEAR_ENDS = [pd.Timestamp(f"{year}-11-30") for year in (2025, 2024, 2023, 2022)]      # newest first, as Yahoo gives them
+
+
+def history_ticker(income=None, cash_flow=None):
+    """A stand-in for yfinance.Ticker with Adobe's four years (the `history` sheet), as Yahoo
+    returns them: dollars, newest year first. Free cash flow has a fifth year Yahoo's income
+    statement lacks, as for the real Adobe.
+    """
+    income_rows = income if income is not None else {
+        "Total Revenue": [23769e6, 21505e6, 19409e6, 17606e6],
+        "Operating Income": [8706e6, 7741e6, 6650e6, 6098e6],
+        "Net Income": [7130e6, 5560e6, 5428e6, 4756e6],
+        "Diluted Average Shares": [427e6, 450e6, 459e6, 471e6],
+    }
+    cash_rows = cash_flow if cash_flow is not None else {
+        "Free Cash Flow": [9852e6, 7873e6, 6942e6, 7396e6],
+    }
+
+    class FakeHistoryTicker:
+        def __init__(self, ticker):
+            width = len(next(iter(income_rows.values())))
+            self.income_stmt = pd.DataFrame(income_rows, index=ADOBE_YEAR_ENDS[:width]).T
+            cash_width = len(next(iter(cash_rows.values())))
+            self.cashflow = pd.DataFrame(cash_rows, index=ADOBE_YEAR_ENDS[:cash_width]).T
+    return FakeHistoryTicker
+
+
+def test_the_history_has_the_years_oldest_first_in_millions(monkeypatch):
+    monkeypatch.setattr("yfinance.Ticker", history_ticker())
+    got = data.fetch_yahoo_history("ADBE")
+    assert got["years"] == ["FY2022", "FY2023", "FY2024", "FY2025"]
+    assert got["revenue"] == [17606, 19409, 21505, 23769]                   # history C8:F8
+    assert got["operating_income"] == [6098, 6650, 7741, 8706]              # C9:F9
+    assert got["net_income"] == [4756, 5428, 5560, 7130]                    # C10:F10
+    assert got["free_cash_flow"] == [7396, 6942, 7873, 9852]                # C11:F11
+    assert got["diluted_shares"] == [471, 459, 450, 427]                    # C12:F12
+
+
+def test_the_history_ratios_match_the_history_sheet_end_to_end(monkeypatch):
+    monkeypatch.setattr("yfinance.Ticker", history_ticker())
+    got = data.get_history("ADBE")
+    assert v.ratios_by_year(got["operating_income"], got["revenue"])[-1] == pytest.approx(0.36627540073204595)    # F16
+    assert v.yearly_growth(got["revenue"])[-1] == pytest.approx(0.10527784236224136)                              # F15
+    assert v.yearly_growth(got["diluted_shares"])[-1] == pytest.approx(-0.051111111111111107)                     # F18
+
+
+def test_a_year_without_revenue_is_left_out(monkeypatch):
+    income = {
+        "Total Revenue": [23769e6, float("nan"), 19409e6],
+        "Operating Income": [8706e6, 7741e6, 6650e6],
+    }
+    monkeypatch.setattr("yfinance.Ticker", history_ticker(income=income, cash_flow={"Free Cash Flow": [9852e6, 7873e6, 6942e6]}))
+    got = data.fetch_yahoo_history("ADBE")
+    assert got["years"] == ["FY2023", "FY2025"]
+    assert got["revenue"] == [19409, 23769]
+
+
+def test_a_figure_yahoo_does_not_have_is_none(monkeypatch):
+    income = {"Total Revenue": [23769e6, 21505e6]}                         # no operating income, net income or shares
+    monkeypatch.setattr("yfinance.Ticker", history_ticker(income=income, cash_flow={"Free Cash Flow": [9852e6]}))
+    got = data.fetch_yahoo_history("ADBE")
+    assert got["operating_income"] == [None, None] and got["diluted_shares"] == [None, None]
+    assert got["free_cash_flow"] == [None, 9852]                           # only the latest year has one
+
+
+def test_free_cash_flow_is_matched_to_its_year_not_to_its_position(monkeypatch):
+    # Yahoo's cash flow has a year the income statement lacks, so the columns do not line up by position.
+    class OffsetTicker:
+        def __init__(self, ticker):
+            self.income_stmt = pd.DataFrame({"Total Revenue": [200e6, 100e6]}, index=ADOBE_YEAR_ENDS[1:3]).T
+            self.cashflow = pd.DataFrame({"Free Cash Flow": [9e6, 8e6, 7e6]}, index=ADOBE_YEAR_ENDS[0:3]).T
+
+    monkeypatch.setattr("yfinance.Ticker", OffsetTicker)
+    got = data.fetch_yahoo_history("ADBE")
+    assert got["years"] == ["FY2023", "FY2024"]
+    assert got["free_cash_flow"] == [7, 8]                                 # not 9 and 8
+
+
+def test_columns_that_are_not_dates_still_get_a_label(monkeypatch):
+    # The page tests fake Yahoo with columns named "latest" and "before".
+    monkeypatch.setattr("yfinance.Ticker", fake_statements_ticker())
+    got = data.fetch_yahoo_history("ADBE")
+    assert got["years"] == ["before", "latest"] and got["revenue"] == [21505, 23769]
+
+
+def test_the_money_in_a_history_is_converted_to_dollars_and_the_shares_are_not():
+    history = {
+        "years": ["FY2024", "FY2025"], "revenue": [1000.0, 2000.0], "operating_income": [None, 500.0],
+        "net_income": [100.0, 200.0], "free_cash_flow": [50.0, None], "diluted_shares": [10.0, 9.0],
+    }
+    got = data.history_in_dollars(history, 0.10)
+    assert got["revenue"] == pytest.approx([100.0, 200.0])
+    assert got["operating_income"] == [None, pytest.approx(50.0)]
+    assert got["free_cash_flow"] == [pytest.approx(5.0), None]
+    assert got["diluted_shares"] == [10.0, 9.0] and got["years"] == ["FY2024", "FY2025"]
+
+
+def test_get_history_converts_with_the_rate_it_is_given(monkeypatch):
+    monkeypatch.setattr("yfinance.Ticker", history_ticker())
+    got = data.get_history("AKER.OL", usd_per_unit=0.1)
+    assert got["revenue"][-1] == pytest.approx(2376.9)
+
+
+def test_get_history_stops_with_a_plain_error_when_yahoo_fails_or_has_nothing():
+    def down(ticker):
+        raise ConnectionError("no internet")
+
+    with pytest.raises(ValueError, match="Could not get the history from Yahoo Finance: no internet"):
+        data.get_history("ADBE", fetch_history=down)
+    with pytest.raises(ValueError, match="Yahoo Finance has no yearly figures for ZZZZ"):
+        data.get_history("ZZZZ", fetch_history=lambda ticker: {"years": []})
