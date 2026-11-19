@@ -112,6 +112,17 @@ def fallback_pre_tax_cost_of_debt(risk_free_rate, credit_spread):
     return risk_free_rate + credit_spread
 
 
+def capital_weights(share_price, shares, debt):
+    """Work out how much of the company's funding is equity and how much is debt, each as a
+    share of the two together, using market values: equity is the share price times the number
+    of shares, debt is financial debt only. Returns the weight of equity and the weight of debt,
+    which add up to 1.
+    """
+    market_value_of_equity = share_price * shares
+    total_capital = market_value_of_equity + debt
+    return market_value_of_equity / total_capital, debt / total_capital
+
+
 def wacc(share_price, shares, debt, cost_of_equity_rate, after_tax_cost_of_debt_rate):
     """Blend the cost of equity and the after-tax cost of debt into one discount rate,
     weighting each by how much of the company's market value it funds.
@@ -119,11 +130,36 @@ def wacc(share_price, shares, debt, cost_of_equity_rate, after_tax_cost_of_debt_
     Equity is valued at share price times shares; debt is financial debt only. The result
     is not rounded.
     """
-    market_value_of_equity = share_price * shares
-    total_capital = market_value_of_equity + debt
-    weight_of_equity = market_value_of_equity / total_capital
-    weight_of_debt = debt / total_capital
+    weight_of_equity, weight_of_debt = capital_weights(share_price, shares, debt)
     return weight_of_equity * cost_of_equity_rate + weight_of_debt * after_tax_cost_of_debt_rate
+
+
+def wacc_breakdown(
+    share_price,
+    shares,
+    debt,
+    risk_free_rate,
+    beta,
+    equity_risk_premium,
+    pre_tax_cost_of_debt,
+    tax_rate,
+):
+    """Lay out every step that leads to the WACC, so a page can show where the number comes
+    from: the cost of equity, the after-tax cost of debt, the market value of equity and of
+    debt, the weight of each, and the WACC itself.
+    """
+    cost_of_equity_rate = cost_of_equity(risk_free_rate, beta, equity_risk_premium)
+    after_tax_rate = after_tax_cost_of_debt(pre_tax_cost_of_debt, tax_rate)
+    weight_of_equity, weight_of_debt = capital_weights(share_price, shares, debt)
+    return {
+        "cost_of_equity": cost_of_equity_rate,
+        "after_tax_cost_of_debt": after_tax_rate,
+        "market_value_of_equity": share_price * shares,
+        "debt": debt,
+        "weight_of_equity": weight_of_equity,
+        "weight_of_debt": weight_of_debt,
+        "wacc": wacc(share_price, shares, debt, cost_of_equity_rate, after_tax_rate),
+    }
 
 
 # ---------------------------------------------------------------------------

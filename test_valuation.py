@@ -1014,3 +1014,40 @@ def test_median_of_available_counts_negative_figures_and_skips_blanks():
 def test_median_of_available_gives_none_with_too_few_figures():
     assert v.median_of_available([0.16, None, None], 2) is None
     assert v.median_of_available([], 2) is None
+
+
+# ---------------------------------------------------------------------------
+# Every step of the WACC (WACC sheet, rows 8-29)
+# ---------------------------------------------------------------------------
+
+def adobe_wacc_breakdown():
+    return v.wacc_breakdown(
+        share_price=SHARE_PRICE, shares=SHARES, debt=DEBT, risk_free_rate=RISK_FREE_RATE, beta=BETA,
+        equity_risk_premium=EQUITY_RISK_PREMIUM, pre_tax_cost_of_debt=PRE_TAX_COST_OF_DEBT, tax_rate=TAX_RATE,
+    )
+
+
+def test_capital_weights_match_the_wacc_sheet():
+    weight_of_equity, weight_of_debt = v.capital_weights(SHARE_PRICE, SHARES, DEBT)
+    assert weight_of_equity == close(0.94357987595022708)         # WACC C24
+    assert weight_of_debt == close(0.056420124049772903)          # WACC C25
+    assert weight_of_equity + weight_of_debt == close(1)          # WACC C26 (the check cell)
+
+
+def test_a_company_with_no_debt_is_all_equity():
+    assert v.capital_weights(100, 50, 0) == (1.0, 0.0)
+
+
+def test_the_wacc_breakdown_matches_every_step_of_the_wacc_sheet():
+    got = adobe_wacc_breakdown()
+    assert got["cost_of_equity"] == close(0.113758)                       # C11
+    assert got["after_tax_cost_of_debt"] == close(0.034146666666666672)   # C16
+    assert got["market_value_of_equity"] == close(103857.11)              # C21
+    assert got["debt"] == 6210                                            # C22
+    assert got["weight_of_equity"] == close(0.94357987595022708)          # C24
+    assert got["weight_of_debt"] == close(0.056420124049772903)           # C25
+    assert got["wacc"] == close(0.10926631869756551)                      # C29
+
+
+def test_the_breakdowns_wacc_is_the_wacc_the_dcf_uses():
+    assert adobe_wacc_breakdown()["wacc"] == close(run_base_case()["wacc"])
