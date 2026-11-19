@@ -737,3 +737,21 @@ the range is reported as "No answer". The answers use the page's WACC (the model
 terminal growth and sliders, so they move with them. The implied margin is an absolute figure: moving the
 margin slider changes the model's margin but not what the price needs. The history comparison needed the
 history before the section is drawn, so the page now loads it earlier. No new files in the repository.
+
+## 2026-11-19 — A second sensitivity table: margin and growth (roadmap #3)
+
+WACC and terminal growth are not the biggest risks, so a second table varies the operating margin and the
+revenue growth. Tried first on Adobe and First Solar: a 10-point cut in margin costs Adobe $73 a share, a
+4-point cut in growth $47. Agreed with Haavard: margin -10, -5, 0, +5, +10 points and growth -4, -2, 0, +2,
++4 points; labels showing the actual averages, not only the shifts; and a place under the WACC table.
+The Excel step was to be an Excel Data Table on the `reverse dcf` sheet, but the table never filled (the
+saved file had headers and no results, and no Data Table formula), so the check became six readings of
+the price at chosen shifts (C55:E60): the base case, the four corners and (+5, +2). Python matches all six
+to within 0.000001, and the corners to 12 digits. In `valuation.py`, `margin_growth_table` returns the
+prices and the averages; the steps are named constants in `assumptions.py`. Unlike the WACC table, which
+varies the WACC itself and so ignores the WACC slider, this one uses the WACC the DCF uses, so its middle
+cell is always the DCF price above; the sliders move it. Labels use two decimals because an average of
+37.65% is stored just below the halfway point and one decimal showed 37.6% or 37.7% arbitrarily. Two
+existing tests changed: the low-WACC page test now says the WACC heatmap is missing (it used to say the
+only table was the assumptions table). The empty Data Table grid is still on the `reverse dcf` sheet
+(rows 44-51); Haavard can delete it. No new files in the repository.

@@ -1337,3 +1337,73 @@ def test_the_reverse_dcf_uses_a_wacc_the_reader_set():
     changed["operating_margins"] = v.shift_rates(changed["operating_margins"], higher)
     price = v.run_full_dcf(**changed, terminal_growth_rate=TERMINAL_GROWTH_RATE, wacc_override=0.13)["implied_share_price"]
     assert price == pytest.approx(SHARE_PRICE, abs=1e-5)
+
+
+# ---------------------------------------------------------------------------
+# Price at different margins and growth (workbook: `reverse dcf` sheet, spot check in C55:E60)
+# ---------------------------------------------------------------------------
+
+MARGIN_SHIFTS = [-0.10, -0.05, 0.0, 0.05, 0.10]       # assumptions.MARGIN_GROWTH_TABLE_MARGIN_SHIFTS
+GROWTH_SHIFTS = [-0.04, -0.02, 0.0, 0.02, 0.04]       # assumptions.MARGIN_GROWTH_TABLE_GROWTH_SHIFTS
+
+
+def adobe_margin_growth_table(wacc_override=None):
+    return v.margin_growth_table(adobe_dcf_inputs(), TERMINAL_GROWTH_RATE, wacc_override, MARGIN_SHIFTS, GROWTH_SHIFTS)
+
+
+def price_in_table(table, margin_shift, growth_shift):
+    return table["prices"][table["margin_shifts"].index(margin_shift)][table["growth_shifts"].index(growth_shift)]
+
+
+def test_the_table_matches_the_six_spot_checks_read_from_the_reverse_dcf_sheet():
+    table = adobe_margin_growth_table()
+    # (margin shift, growth shift, price read from C36 at those shifts), reverse dcf C55:E60.
+    for margin, growth, excel_price in (
+        (0.0, 0.0, 305.60201673218899),         # row 55: the base case
+        (-0.10, -0.04, 197.87449572381999),     # row 56
+        (-0.10, 0.04, 273.484977798768),        # row 57
+        (0.10, -0.04, 321.01922006390203),      # row 58
+        (0.10, 0.04, 443.66697615246102),       # row 59
+        (0.05, 0.02, 370.48811419488402),       # row 60
+    ):
+        assert price_in_table(table, margin, growth) == pytest.approx(excel_price, abs=1e-6)
+
+
+def test_the_middle_of_the_table_is_the_dcfs_own_price():
+    assert price_in_table(adobe_margin_growth_table(), 0.0, 0.0) == close(run_base_case()["implied_share_price"])
+
+
+def test_the_table_has_a_row_per_margin_shift_and_a_column_per_growth_shift():
+    table = adobe_margin_growth_table()
+    assert len(table["prices"]) == 5 and all(len(row) == 5 for row in table["prices"])
+    assert table["margin_shifts"] == MARGIN_SHIFTS and table["growth_shifts"] == GROWTH_SHIFTS
+
+
+def test_the_prices_rise_with_the_margin_down_a_column_and_with_growth_along_a_row():
+    prices = adobe_margin_growth_table()["prices"]
+    for row in prices:
+        assert row == sorted(row)                                   # more growth, higher price
+    for column in zip(*prices):
+        assert list(column) == sorted(column)                       # more margin, higher price
+
+
+def test_the_averages_are_the_models_plus_each_shift():
+    table = adobe_margin_growth_table()
+    assert table["margin_averages"] == [close(0.3765 + shift) for shift in MARGIN_SHIFTS]         # reverse dcf C38 plus the shift
+    assert table["growth_averages"] == [close(0.081 + shift) for shift in GROWTH_SHIFTS]          # D38 plus the shift
+
+
+def test_the_table_uses_a_wacc_the_reader_set():
+    own = price_in_table(adobe_margin_growth_table(), 0.0, 0.0)
+    set_by_reader = price_in_table(adobe_margin_growth_table(wacc_override=0.13), 0.0, 0.0)
+    assert set_by_reader < own                                     # a higher discount rate gives a lower price
+    assert set_by_reader == close(
+        v.run_full_dcf(**adobe_dcf_inputs(), terminal_growth_rate=TERMINAL_GROWTH_RATE, wacc_override=0.13)["implied_share_price"]
+    )
+
+
+def test_the_table_leaves_the_inputs_it_was_given_alone():
+    inputs = adobe_dcf_inputs()
+    before = (list(inputs["operating_margins"]), list(inputs["growth_rates"]))
+    v.margin_growth_table(inputs, TERMINAL_GROWTH_RATE, None, MARGIN_SHIFTS, GROWTH_SHIFTS)
+    assert (inputs["operating_margins"], inputs["growth_rates"]) == before

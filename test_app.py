@@ -301,9 +301,9 @@ def test_a_very_low_wacc_still_shows_the_dcf_and_explains_the_missing_heatmap(mo
     assert "DCF implied price" in metrics(page)
     assert "Sensitivity: price at different WACC and terminal growth" in texts(page.subheader)
     assert any("This table cannot be drawn" in caption for caption in texts(page.caption))
-    # The only table on the page is "What the model assumes": the heatmap is missing.
-    [table] = page.dataframe
-    assert list(table.value.columns)[0] == "Revenue growth"
+    # The WACC heatmap is missing: the tables on the page are "What the model assumes" and the margin and
+    # growth table, which does not vary the WACC.
+    assert [element.value.index.name for element in page.dataframe] == ["Year", "Average operating margin"]
 
 
 # ---------------------------------------------------------------------------
@@ -1294,3 +1294,90 @@ def test_the_implied_section_still_appears_when_the_history_is_missing(monkeypat
     assert "What the market price implies" in texts(page.subheader)
     sentence = [c for c in texts(page.caption) if c.startswith("To justify the market price of")][0]
     assert "In its history" not in sentence
+
+
+# ---------------------------------------------------------------------------
+# The second sensitivity table: price at different margins and growth
+# ---------------------------------------------------------------------------
+
+def margin_growth_table_of(page):
+    """The margin and growth table of a page: the one whose rows are average operating margins."""
+    [table] = [element.value for element in page.dataframe if element.value.index.name == "Average operating margin"]
+    return table
+
+
+def test_the_shift_labels_show_the_average_and_the_shift_or_base():
+    assert app.shift_label(0.3765, 0.0) == "37.65% (base)"                      # two decimals, like the assumptions table
+    assert app.shift_label(0.2765, -0.10) == "27.65% (-10 pts)"
+    assert app.shift_label(0.1010, 0.02) == "10.10% (+2 pts)"
+    assert app.shift_label(0.4265, 0.05) == "42.65% (+5 pts)"
+
+
+def test_the_page_has_the_margin_and_growth_table_under_the_wacc_heatmap(monkeypatch):
+    page = run_page(monkeypatch)
+    subheaders = texts(page.subheader)
+    wacc_table = subheaders.index("Sensitivity: price at different WACC and terminal growth")
+    assert subheaders.index("Sensitivity: price at different margins and growth") == wacc_table + 1
+
+
+def test_the_tables_rows_and_columns_are_the_average_margins_and_growth_with_their_shifts(monkeypatch):
+    page = run_page(monkeypatch, yahoo=adobe_with_four_years())
+    table = margin_growth_table_of(page)
+    assert table.index.tolist() == [
+        "27.65% (-10 pts)", "32.65% (-5 pts)", "37.65% (base)", "42.65% (+5 pts)", "47.65% (+10 pts)",
+    ]
+    assert table.columns.tolist() == [
+        "4.10% (-4 pts)", "6.10% (-2 pts)", "8.10% (base)", "10.10% (+2 pts)", "12.10% (+4 pts)",
+    ]
+    assert table.columns.name == "Average revenue growth"
+
+
+def test_the_middle_cell_is_the_dcf_price_shown_above(monkeypatch):
+    page = run_page(monkeypatch)
+    table = margin_growth_table_of(page)
+    assert app.dollars(table.iloc[2, 2]) == metrics(page)["DCF implied price"]
+
+
+def test_the_tables_prices_are_the_models_for_each_pair_of_shifts(monkeypatch):
+    page = run_page(monkeypatch, yahoo=adobe_with_four_years())
+    table = margin_growth_table_of(page)
+    company = data.get_company_data_with_fallback("ADBE")[0]
+    expected = valuation.margin_growth_table(
+        app.build_dcf_inputs(company, 0, 0), assumptions.TERMINAL_GROWTH_RATE, None,
+        assumptions.MARGIN_GROWTH_TABLE_MARGIN_SHIFTS, assumptions.MARGIN_GROWTH_TABLE_GROWTH_SHIFTS,
+    )
+    assert table.to_numpy().flatten().tolist() == pytest.approx([price for row in expected["prices"] for price in row])
+    assert table.iloc[0, 0] < table.iloc[2, 2] < table.iloc[4, 4]                  # worst corner < base < best corner
+
+
+def test_the_growth_slider_moves_the_table_and_its_labels(monkeypatch):
+    page = run_page(monkeypatch)
+    before = margin_growth_table_of(page).iloc[2, 2]
+    page.sidebar.slider[0].set_value(1.0).run()                                    # growth +1 point
+    assert not page.exception
+    table = margin_growth_table_of(page)
+    assert table.iloc[2, 2] > before                                               # the middle moves with the sliders
+    assert app.dollars(table.iloc[2, 2]) == metrics(page)["DCF implied price"]
+    assert table.columns[2] == "9.10% (base)"                                      # the average growth is now 9.10%
+
+
+def test_the_table_uses_the_wacc_the_reader_set(monkeypatch):
+    page = run_page(monkeypatch)
+    page.sidebar.checkbox[0].check().run()
+    page.sidebar.slider[3].set_value(0.13).run()
+    table = margin_growth_table_of(page)
+    assert app.dollars(table.iloc[2, 2]) == metrics(page)["DCF implied price"]     # the DCF price at the reader's WACC
+
+
+def test_the_caption_gives_the_market_price_and_the_dcf_price_with_escaped_dollar_signs(monkeypatch):
+    page = run_page(monkeypatch)
+    [caption] = [c for c in texts(page.caption) if c.startswith("Each cell moves the operating margin")]
+    assert "market price of \\$" in caption and "The bold price, \\$" in caption
+    assert "$" not in caption.replace("\\$", "")                                  # every dollar sign has its backslash
+
+
+def test_another_company_gets_the_margin_and_growth_table_too(monkeypatch):
+    page = run_page(monkeypatch, ticker="exmp", yahoo=other_company())
+    assert not page.exception
+    table = margin_growth_table_of(page)
+    assert app.dollars(table.iloc[2, 2]) == metrics(page)["DCF implied price"]

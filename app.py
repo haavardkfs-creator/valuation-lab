@@ -823,6 +823,65 @@ def draw_heatmap(company, dcf_inputs, base_wacc):
     draw_explanations("sensitivity")
 
 
+def shift_label(average, shift):
+    """Label one row or column of the margin and growth table: the average the shift gives, with two
+    decimals like the "What the model assumes" table, and the shift beside it, or "base" when there
+    is no shift (for example 27.65% (-10 pts), or 37.65% (base)).
+    """
+    if shift == 0:
+        return f"{precise_percent(average)} (base)"
+    return f"{precise_percent(average)} ({shift * 100:+.0f} pts)"
+
+
+def draw_margin_growth_table(company, dcf_inputs, dcf, terminal_growth_rate, wacc_override):
+    """Draw the second sensitivity table: the implied share price at different operating margins
+    (down the side) and revenue growth (along the top), coloured against the market price like
+    the WACC table. It uses the WACC the DCF uses, so the middle cell is the DCF price above.
+    """
+    st.subheader("Sensitivity: price at different margins and growth")
+    table = valuation.margin_growth_table(
+        dcf_inputs,
+        terminal_growth_rate,
+        wacc_override,
+        assumptions.MARGIN_GROWTH_TABLE_MARGIN_SHIFTS,
+        assumptions.MARGIN_GROWTH_TABLE_GROWTH_SHIFTS,
+    )
+    prices = pd.DataFrame(
+        table["prices"],
+        index=pd.Index(
+            [shift_label(average, shift) for average, shift in zip(table["margin_averages"], table["margin_shifts"])],
+            name="Average operating margin",
+        ),
+        columns=pd.Index(
+            [shift_label(average, shift) for average, shift in zip(table["growth_averages"], table["growth_shifts"])],
+            name="Average revenue growth",
+        ),
+    )
+    base_row = assumptions.MARGIN_GROWTH_TABLE_MARGIN_SHIFTS.index(0.0)
+    base_column = assumptions.MARGIN_GROWTH_TABLE_GROWTH_SHIFTS.index(0.0)
+
+    def style_cells(values):
+        """Colour every cell and put the base case in bold."""
+        styles = values.map(lambda price: tint(price, company["share_price"]))
+        styles.iloc[base_row, base_column] += "; font-weight: bold"
+        return styles
+
+    st.dataframe(
+        prices.style.apply(style_cells, axis=None).format(dollars),
+        width="stretch",
+    )
+    # Each dollar sign is escaped with a backslash, because Streamlit reads text between two
+    # unescaped dollar signs as a maths formula.
+    st.caption(
+        (
+            f"Each cell moves the operating margin and the revenue growth of every forecast year by the "
+            f"points shown. Green means above today's market price of {dollars(company['share_price'])}, "
+            f"red below it. The bold price, {dollars(dcf['implied_share_price'])}, is the DCF above. The "
+            "table uses the WACC and terminal growth in use, and the sliders move it."
+        ).replace("$", "\\$")
+    )
+
+
 def price_or_note(price):
     """Write a price in dollars, or say there were not enough peers to work one out."""
     return "Not enough peers" if price is None else dollars(price)
@@ -1225,7 +1284,7 @@ def draw_error(ticker, error):
 def draw_page():
     """Draw the whole page: ticker box, sliders, peer box (companies other than Adobe), title,
     DCF section, what the market price implies, overview, history, assumptions, how the WACC is
-    built, charts, heatmap, multiples and footer. If the company cannot be valued, draw
+    built, charts, the two sensitivity tables, multiples and footer. If the company cannot be valued, draw
     the reason instead.
     """
     ticker = draw_ticker_box()
@@ -1266,6 +1325,7 @@ def draw_page():
     draw_wacc_build(company, dcf_inputs, source_used, dcf, wacc_override is not None)
     draw_charts(dcf, year_labels, terminal_growth_rate)
     draw_heatmap(company, dcf_inputs, base_wacc)
+    draw_margin_growth_table(company, dcf_inputs, dcf, terminal_growth_rate, wacc_override)
     draw_multiples(
         multiples, peers, peer_notes, peers_are_suggested=not is_base_case(company),
         own_label=f"{company['ticker']} (this company)", overview=overview,

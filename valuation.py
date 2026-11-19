@@ -784,6 +784,35 @@ def sensitivity_table(dcf_inputs, base_wacc, wacc_offsets, terminal_growth_rates
     }
 
 
+def margin_growth_table(dcf_inputs, terminal_growth_rate, wacc_override, margin_shifts, growth_shifts):
+    """Work out the implied share price for every pairing of a shift in operating margin and a shift
+    in revenue growth (workbook: `reverse dcf` sheet, shifts in C7 and C8).
+
+    Each shift is a decimal added to every forecast year (0.05 is five percentage points). The WACC
+    and terminal growth are the ones the DCF uses (wacc_override is None for the model's own), so the
+    price at no shift is the DCF's own. Returns the shifts, the average margin and the average growth
+    each shift gives over the forecast years, and the prices, one row per margin shift and one column
+    per growth shift.
+    """
+    def price_at(margin_shift, growth_shift):
+        changed = dict(dcf_inputs)
+        changed["operating_margins"] = shift_rates(dcf_inputs["operating_margins"], margin_shift)
+        changed["growth_rates"] = shift_rates(dcf_inputs["growth_rates"], growth_shift)
+        return run_full_dcf(
+            **changed, terminal_growth_rate=terminal_growth_rate, wacc_override=wacc_override
+        )["implied_share_price"]
+
+    average_margin = sum(dcf_inputs["operating_margins"]) / len(dcf_inputs["operating_margins"])
+    average_growth = sum(dcf_inputs["growth_rates"]) / len(dcf_inputs["growth_rates"])
+    return {
+        "margin_shifts": list(margin_shifts),
+        "growth_shifts": list(growth_shifts),
+        "margin_averages": [average_margin + shift for shift in margin_shifts],
+        "growth_averages": [average_growth + shift for shift in growth_shifts],
+        "prices": [[price_at(margin, growth) for growth in growth_shifts] for margin in margin_shifts],
+    }
+
+
 # ---------------------------------------------------------------------------
 # Starting point for other companies (docs/model.md: "Starting point for other companies")
 # ---------------------------------------------------------------------------
