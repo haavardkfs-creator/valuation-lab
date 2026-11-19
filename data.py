@@ -439,6 +439,102 @@ def get_history(ticker, usd_per_unit=1.0, fetch_history=fetch_yahoo_history):
 
 
 # ---------------------------------------------------------------------------
+# Trailing twelve months: the latest four quarters, to compare with the peers
+# ---------------------------------------------------------------------------
+
+# The money figures in a trailing-twelve-month set, which Yahoo gives in the currency the company
+# reports in.
+TTM_MONEY_FIELDS = [
+    "revenue", "operating_income", "net_income", "depreciation_and_amortisation", "debt", "cash_and_investments",
+]
+
+
+def fetch_yahoo_ttm(ticker):
+    """Ask Yahoo Finance for a company's last twelve months: the sum of its latest four quarters of
+    revenue, operating income, net income and depreciation and amortisation, and its debt and cash
+    from the latest quarter's balance sheet, in the company's own currency and in millions.
+    Quarters that have no revenue yet are skipped. Also returns the date the latest quarter ended. A flow figure Yahoo does not have for all four
+    quarters is None. This is the only function that looks up the quarters on the internet.
+    """
+    import yfinance
+
+    stock = yfinance.Ticker(ticker)
+    income, cash_flow, balance = stock.quarterly_income_stmt, stock.quarterly_cashflow, stock.quarterly_balance_sheet
+    # The latest four quarters that have revenue, newest first: a quarter that has just ended can be a
+    # column in the table that has no figures yet, because the company has not reported it.
+    dates = [
+        date for position, date in enumerate(income.columns)
+        if _statement_line(income, ["Total Revenue"], position) is not None
+    ][:4]
+
+    def four_quarters(frame, names):
+        """The figure for each of the four quarters (None where Yahoo has none), matched by date."""
+        values = []
+        for date in dates:
+            value = None
+            if date in frame.columns:
+                value = _statement_line(frame, names, list(frame.columns).index(date))
+            values.append(None if value is None else value / 1_000_000)
+        return values
+
+    def latest_balance(names):
+        value = _statement_line(balance, names, 0)
+        return None if value is None else value / 1_000_000
+
+    current_debt = latest_balance(["Current Debt"])
+    long_term_debt = latest_balance(["Long Term Debt"])
+    if long_term_debt is None and latest_balance(["Total Debt"]) is not None:
+        # Yahoo leaves the line out when it is zero (First Solar: total debt less leases is its
+        # current debt), but only believe that when the balance sheet is filled in.
+        long_term_debt = 0.0
+    return {
+        "period_end": dates[0].strftime("%-d %b %Y") if dates and hasattr(dates[0], "strftime") else None,
+        "revenue": valuation.trailing_total(four_quarters(income, ["Total Revenue"])),
+        "operating_income": valuation.trailing_total(four_quarters(income, ["Operating Income"])),
+        "net_income": valuation.trailing_total(four_quarters(income, ["Net Income"])),
+        "depreciation_and_amortisation": valuation.trailing_total(
+            four_quarters(cash_flow, ["Depreciation And Amortization", "Depreciation Amortization Depletion"])
+        ),
+        "debt": (
+            None if long_term_debt is None
+            else valuation.financial_debt(0 if current_debt is None else current_debt, long_term_debt)
+        ),
+        "cash_and_investments": latest_balance(["Cash Cash Equivalents And Short Term Investments"]),
+    }
+
+
+def ttm_in_dollars(ttm, usd_per_unit):
+    """Turn a trailing-twelve-month set's money figures into US dollars at the given exchange rate
+    (the date is left alone). A figure that is None stays None.
+    """
+    converted = dict(ttm)
+    for field in TTM_MONEY_FIELDS:
+        converted[field] = None if ttm[field] is None else valuation.convert_currency(ttm[field], usd_per_unit)
+    return converted
+
+
+def get_ttm(ticker, usd_per_unit=1.0, fetch_ttm=fetch_yahoo_ttm):
+    """Get a company's last twelve months in US dollars. `usd_per_unit` is what one unit of the
+    company's reporting currency is worth in dollars (1 for a dollar company). Stops with a plain
+    error if Yahoo cannot be reached, or does not have four quarters of revenue, operating income
+    and net income, or the latest debt and cash, which the multiples need. D&A may be missing: the
+    EV/EBITDA is then left out. `fetch_ttm` can be swapped, which is how the tests run without the
+    internet.
+    """
+    try:
+        ttm = fetch_ttm(ticker)
+    except Exception as error:      # Yahoo can fail in many ways; the reader needs one clear message
+        raise ValueError("Could not get the last twelve months from Yahoo Finance: %s" % error) from error
+    needed = ["revenue", "operating_income", "net_income", "debt", "cash_and_investments"]
+    missing = [name for name in needed if ttm[name] is None]
+    if missing:
+        raise ValueError(
+            "Yahoo Finance does not have four quarters of figures for %s (missing: %s)." % (ticker, ", ".join(missing))
+        )
+    return ttm_in_dollars(ttm, usd_per_unit)
+
+
+# ---------------------------------------------------------------------------
 # Peers: suggested from Yahoo's industry list, with their multiples
 # ---------------------------------------------------------------------------
 

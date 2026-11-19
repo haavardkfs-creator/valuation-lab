@@ -978,3 +978,169 @@ def test_get_history_stops_with_a_plain_error_when_yahoo_fails_or_has_nothing():
         data.get_history("ADBE", fetch_history=down)
     with pytest.raises(ValueError, match="Yahoo Finance has no yearly figures for ZZZZ"):
         data.get_history("ZZZZ", fetch_history=lambda ticker: {"years": []})
+
+
+# ---------------------------------------------------------------------------
+# Trailing twelve months: the latest four quarters (workbook: `ttm` sheet, Adobe)
+# ---------------------------------------------------------------------------
+
+QUARTER_ENDS = [pd.Timestamp(day) for day in ("2026-08-31", "2026-05-31", "2026-02-28", "2025-11-30", "2025-08-31", "2025-05-31")]
+
+
+def quarterly_ticker(income=None, cash_flow=None, balance=None, income_quarters=QUARTER_ENDS):
+    """A stand-in for yfinance.Ticker with Adobe's quarters (the `ttm` sheet), newest first.
+    The two older quarters are there to prove they are not counted.
+    """
+    income_rows = income if income is not None else {
+        "Total Revenue": [6760e6, 6618e6, 6398e6, 6194e6, 5900e6, 5800e6],
+        "Operating Income": [2354e6, 2238e6, 2418e6, 2261e6, 2000e6, 1900e6],
+        "Net Income": [1827e6, 1712e6, 1889e6, 1856e6, 1500e6, 1400e6],
+    }
+    cash_rows = cash_flow if cash_flow is not None else {
+        "Depreciation And Amortization": [215e6, 193e6, 174e6, 184e6, 170e6, 160e6],
+    }
+    balance_rows = balance if balance is not None else {
+        "Long Term Debt": [4766e6, 4766e6],
+        "Current Debt": [1597e6, 1500e6],
+        "Total Debt": [6363e6, 6266e6],
+        "Cash Cash Equivalents And Short Term Investments": [5639e6, 5000e6],
+    }
+
+    class FakeQuarterlyTicker:
+        def __init__(self, ticker):
+            self.quarterly_income_stmt = pd.DataFrame(income_rows, index=income_quarters[:len(next(iter(income_rows.values())))]).T
+            self.quarterly_cashflow = pd.DataFrame(cash_rows, index=income_quarters[:len(next(iter(cash_rows.values())))]).T
+            self.quarterly_balance_sheet = pd.DataFrame(balance_rows, index=income_quarters[:len(next(iter(balance_rows.values())))]).T
+    return FakeQuarterlyTicker
+
+
+def test_the_last_twelve_months_match_the_ttm_sheet(monkeypatch):
+    monkeypatch.setattr("yfinance.Ticker", quarterly_ticker())
+    got = data.fetch_yahoo_ttm("ADBE")
+    assert got["period_end"] == "31 Aug 2026"
+    assert got["revenue"] == 25970                             # ttm G6
+    assert got["operating_income"] == 9271                     # G7
+    assert got["net_income"] == 7284                           # G8
+    assert got["depreciation_and_amortisation"] == 766         # G9
+    assert got["debt"] == 6363                                 # C14: long-term 4,766 + current 1,597
+    assert got["cash_and_investments"] == 5639                 # C15
+
+
+def test_the_ttm_multiples_match_the_ttm_sheet_end_to_end(monkeypatch):
+    monkeypatch.setattr("yfinance.Ticker", quarterly_ticker())
+    ttm = data.get_ttm("ADBE")
+    got = v.ttm_overview(
+        share_price=251.47, shares=413, debt=ttm["debt"], cash_and_investments=ttm["cash_and_investments"],
+        revenue=ttm["revenue"], operating_income=ttm["operating_income"],
+        depreciation_and_amortisation=ttm["depreciation_and_amortisation"], net_income=ttm["net_income"],
+    )
+    assert got["ev_sales"] == pytest.approx(4.0269969195225261)        # C22
+    assert got["ev_ebitda"] == pytest.approx(10.419558633057687)       # C23
+    assert got["pe"] == pytest.approx(14.258252333882481)              # C24
+    assert got["operating_margin"] == pytest.approx(0.3569888332691567)    # C25
+
+
+def test_a_quarter_that_has_just_ended_but_is_not_reported_yet_is_skipped(monkeypatch):
+    # Like Nvidia's newest column on 19 Nov 2026: the quarter is in the table, with no figures yet.
+    income = {
+        "Total Revenue": [float("nan"), 6760e6, 6618e6, 6398e6, 6194e6],
+        "Operating Income": [float("nan"), 2354e6, 2238e6, 2418e6, 2261e6],
+        "Net Income": [float("nan"), 1827e6, 1712e6, 1889e6, 1856e6],
+    }
+    cash = {"Depreciation And Amortization": [float("nan"), 215e6, 193e6, 174e6, 184e6]}
+    monkeypatch.setattr("yfinance.Ticker", quarterly_ticker(income=income, cash_flow=cash))
+    got = data.fetch_yahoo_ttm("NVDA")
+    assert got["period_end"] == "31 May 2026"                  # the second column: the first has no revenue
+    assert got["revenue"] == 6760 + 6618 + 6398 + 6194         # the four reported quarters, not counting the empty one
+    assert got["depreciation_and_amortisation"] == 215 + 193 + 174 + 184
+
+
+def test_fewer_than_four_reported_quarters_leaves_that_figure_out(monkeypatch):
+    income = {"Total Revenue": [6760e6, 6618e6, 6398e6], "Operating Income": [2354e6, 2238e6, 2418e6], "Net Income": [1827e6, 1712e6, 1889e6]}
+    monkeypatch.setattr("yfinance.Ticker", quarterly_ticker(income=income))
+    got = data.fetch_yahoo_ttm("NEW")
+    assert got["revenue"] is None and got["operating_income"] is None and got["net_income"] is None
+
+
+def test_a_missing_long_term_debt_line_is_zero_when_total_debt_is_there(monkeypatch):
+    # Like First Solar: total debt of 325 less leases of 217 is its current debt of 108.
+    balance = {
+        "Current Debt": [108e6], "Total Debt": [325e6], "Cash Cash Equivalents And Short Term Investments": [1624e6],
+    }
+    monkeypatch.setattr("yfinance.Ticker", quarterly_ticker(balance=balance))
+    got = data.fetch_yahoo_ttm("FSLR")
+    assert got["debt"] == 108
+
+
+def test_a_missing_long_term_debt_line_with_no_total_debt_is_not_believed(monkeypatch):
+    balance = {"Current Debt": [108e6], "Cash Cash Equivalents And Short Term Investments": [1624e6]}
+    monkeypatch.setattr("yfinance.Ticker", quarterly_ticker(balance=balance))
+    assert data.fetch_yahoo_ttm("ODD")["debt"] is None
+    with pytest.raises(ValueError, match="missing: debt"):
+        data.get_ttm("ODD")
+
+
+def test_missing_current_debt_counts_as_zero(monkeypatch):
+    balance = {"Long Term Debt": [4766e6], "Cash Cash Equivalents And Short Term Investments": [5639e6]}
+    monkeypatch.setattr("yfinance.Ticker", quarterly_ticker(balance=balance))
+    assert data.fetch_yahoo_ttm("ADBE")["debt"] == 4766
+
+
+def test_missing_da_does_not_stop_the_ttm_but_leaves_the_ev_ebitda_out(monkeypatch):
+    monkeypatch.setattr("yfinance.Ticker", quarterly_ticker(cash_flow={"Capital Expenditure": [-50e6, -40e6, -30e6, -20e6]}))
+    ttm = data.get_ttm("ADBE")
+    assert ttm["depreciation_and_amortisation"] is None
+    got = v.ttm_overview(
+        share_price=251.47, shares=413, debt=ttm["debt"], cash_and_investments=ttm["cash_and_investments"],
+        revenue=ttm["revenue"], operating_income=ttm["operating_income"],
+        depreciation_and_amortisation=None, net_income=ttm["net_income"],
+    )
+    assert got["ev_ebitda"] is None and got["ebitda"] is None
+    assert got["ev_sales"] == pytest.approx(4.0269969195225261)        # the rest still works
+
+
+def test_a_cash_flow_quarter_is_matched_to_its_date_not_to_its_position(monkeypatch):
+    # The cash flow table lacks the newest quarter, so its columns are shifted by one position.
+    # Matching by position would add four wrong quarters; matching by date finds one is missing.
+    class Shifted(quarterly_ticker()):
+        def __init__(self, ticker):
+            super().__init__(ticker)
+            self.quarterly_cashflow = pd.DataFrame(
+                {"Depreciation And Amortization": [193e6, 174e6, 184e6, 170e6]}, index=QUARTER_ENDS[1:5]
+            ).T
+
+    monkeypatch.setattr("yfinance.Ticker", Shifted)
+    assert data.fetch_yahoo_ttm("ADBE")["depreciation_and_amortisation"] is None      # the newest quarter has no D&A
+
+
+def test_the_ttm_money_is_converted_to_dollars_and_the_date_is_left_alone():
+    ttm = {
+        "period_end": "30 Sep 2026", "revenue": 1000.0, "operating_income": 300.0, "net_income": None,
+        "depreciation_and_amortisation": 50.0, "debt": 200.0, "cash_and_investments": 100.0,
+    }
+    got = data.ttm_in_dollars(ttm, 0.10)
+    assert got["revenue"] == pytest.approx(100.0) and got["debt"] == pytest.approx(20.0) and got["net_income"] is None
+    assert got["period_end"] == "30 Sep 2026"
+
+
+def test_get_ttm_stops_with_a_plain_error_when_yahoo_fails():
+    def down(ticker):
+        raise ConnectionError("no internet")
+
+    with pytest.raises(ValueError, match="Could not get the last twelve months from Yahoo Finance: no internet"):
+        data.get_ttm("ADBE", fetch_ttm=down)
+
+
+def test_get_ttm_names_what_is_missing():
+    incomplete = {
+        "period_end": "31 Aug 2026", "revenue": 1000.0, "operating_income": None, "net_income": 100.0,
+        "depreciation_and_amortisation": 10.0, "debt": 50.0, "cash_and_investments": None,
+    }
+    with pytest.raises(ValueError, match=r"missing: operating_income, cash_and_investments"):
+        data.get_ttm("ODD", fetch_ttm=lambda ticker: incomplete)
+
+
+def test_columns_that_are_not_dates_give_no_period_date(monkeypatch):
+    monkeypatch.setattr("yfinance.Ticker", fake_statements_ticker())    # the page tests' fake has no quarterly statements at all
+    with pytest.raises(ValueError, match="Could not get the last twelve months"):
+        data.get_ttm("ADBE")

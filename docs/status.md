@@ -175,14 +175,23 @@
   separately the average revenue growth, that would make the DCF equal the market price, against the model's
   and against the company's history. Uses the page's WACC, terminal growth and sliders. 23 new tests; 454
   tests pass. Checked on live data (First Solar, Adobe, Coca-Cola, Nvidia) and in the running app.
-- Done (in the open pull request): roadmap #3, a second sensitivity table. Haavard read the price on the
+- Done: roadmap #3 (merged, PR #42), a second sensitivity table. Haavard read the price on the
   `reverse dcf` sheet at six pairs of shifts (C55:E60; Excel's Data Table would not fill). A table under the
   WACC heatmap gives the price at operating margins of -10 to +10 points and revenue growth of -4 to +4
   points, labelled with the average each gives, coloured against the market price, centred on the page's
   current settings so the middle is the DCF price. `margin_growth_table` in `valuation.py` matches the six
   readings; the steps are in `assumptions.py`. 17 new tests; 471 tests pass. Checked in the running app.
-- Next: roadmap #5b, the company on trailing twelve months like the peers, then #5c, #7, #8, #6, #10 and #11,
-  as below. Small items waiting for Haavard's decision: Pfizer's negative tax rate, the adjusted beta, the
+- Done (in the open pull request): roadmap #5b, the company on trailing twelve months. Haavard built the
+  `ttm` sheet (Adobe's four quarters to 31 Aug 2026). EV/Sales, EV/EBITDA, P/E and the operating margin in
+  the Overview and in the peers table's own row now use the last four quarters, like the peers' figures;
+  free cash flow yield, net debt over EBITDA, revenue growth, the History and the DCF stay on the last
+  fiscal year, and the page says which is which. `trailing_total` and `ttm_overview` in `valuation.py` match
+  the sheet; `fetch_yahoo_ttm`, `ttm_in_dollars` and `get_ttm` in `data.py`; `apply_ttm` in `app.py`. Handles a
+  quarter with no figures yet (Nvidia) and a missing long-term debt line (First Solar). Falls back to the
+  fiscal year, and says so, if Yahoo lacks the quarters. 27 new tests; 498 tests pass. Checked on live data
+  (First Solar, Adobe, Coca-Cola, Nvidia, Apple).
+- Next: roadmap #5c, peers by business type (needs a decision), then #7, #8, #6, #10 and #11, as below.
+  Small items waiting for Haavard's decision: Pfizer's negative tax rate, the adjusted beta, the
   empty-Yahoo-reply retry, and drawing the overview and history even when the DCF cannot be built.
 - Open:
   - A negative tax rate flows into the forecast. Pfizer's last-year tax rate is -3.54% (a tax

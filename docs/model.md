@@ -241,6 +241,32 @@ holds the other as modelled.
   implies a 20.3% margin against 30.6% in the model, within its history of -10.7% to 33.1%; Coca-Cola's
   implies 42.6%, above its best year of 31.1%; Nvidia's implies 94.7%, far above its best year.
 
+## The last twelve months (trailing twelve months, TTM)
+
+Yahoo's peer multiples and margins are for the last twelve months, so the company's own numbers that
+are compared with them are put on the same footing (workbook: sheet `ttm`, Adobe, the four quarters to
+31 Aug 2026).
+- TTM figure = the sum of the latest four quarters of revenue, operating income, net income and
+  depreciation and amortisation (D&A). Quarters that have just ended but have no figures yet are
+  skipped, so the four are the latest four that were reported.
+- Debt and cash come from the latest quarter's balance sheet. Net debt = debt - cash (Adobe: $724m).
+- Enterprise value = market value + net debt (Adobe on the workbook price: $103,857m + $724m = $104,581m).
+- EV/Sales = EV ÷ TTM revenue (4.03x). EV/EBITDA = EV ÷ (TTM operating income + TTM D&A) (10.42x).
+  P/E = market value ÷ TTM net income (14.26x). Operating margin = TTM operating income ÷ TTM revenue
+  (35.7%).
+- Only these four numbers, in the Overview and in the peers table's own row, are on TTM, because they are
+  what the peers table compares. The margin warning against peers (see "Warnings about the peers") uses the
+  TTM margin too. Free cash flow yield, net debt ÷ EBITDA, revenue growth, the History and the DCF itself
+  stay on the last fiscal year (TTM growth would need 8 quarters and Yahoo has 7; changing the DCF's base
+  is a bigger model decision), and the page says which is which.
+- Why it matters (18-19 Nov 2026): First Solar's operating margin is 30.6% for its fiscal year but 37.7%
+  over the last twelve months, so against its peers' 6.3% the gap is 31.4 points, not 24.3. Adobe's
+  revenue is $23,769m for the fiscal year and $25,970m over the last twelve months.
+- If Yahoo has no TTM figures (fewer than four quarters of revenue, operating income or net income, or no
+  latest debt and cash), the page keeps the fiscal-year numbers and says so. A missing D&A only leaves
+  the EV/EBITDA out. A missing "Long Term Debt" line counts as zero when the balance sheet shows a total
+  debt figure (First Solar: total debt of $325m less leases of $217m is its current debt of $108m).
+
 ## Overview of the stock
 
 Eight numbers for a quick picture of a company, shown on the page under the DCF section
