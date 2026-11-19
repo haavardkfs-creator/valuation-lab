@@ -363,6 +363,82 @@ def yahoo_source(ticker, fetch_statements=fetch_yahoo_statements):
 
 
 # ---------------------------------------------------------------------------
+# History: the last few years of the main figures
+# ---------------------------------------------------------------------------
+
+# The money figures in a history, which Yahoo gives in the currency the company reports in.
+HISTORY_MONEY_FIELDS = ["revenue", "operating_income", "net_income", "free_cash_flow"]
+
+
+def fetch_yahoo_history(ticker):
+    """Ask Yahoo Finance for a company's yearly figures, as many years as it has (4 or 5),
+    oldest first, in the company's own currency and in millions: revenue, operating income, net
+    income, free cash flow as the company reports it (cash from operations minus capital
+    spending) and the diluted average number of shares over the year. A year is kept only if
+    Yahoo has its revenue; any other figure Yahoo does not have for a year is None.
+    This is the only function that looks up a history on the internet.
+    """
+    import yfinance
+
+    stock = yfinance.Ticker(ticker)
+    income, cash_flow = stock.income_stmt, stock.cashflow
+
+    def millions(frame, names, column):
+        value = _statement_line(frame, names, column)
+        return None if value is None else value / 1_000_000
+
+    history = {"years": []}
+    for field in HISTORY_MONEY_FIELDS + ["diluted_shares"]:
+        history[field] = []
+    for column, date in enumerate(income.columns):                  # the latest year first
+        revenue = millions(income, ["Total Revenue"], column)
+        if revenue is None:
+            continue
+        cash_column = list(cash_flow.columns).index(date) if date in cash_flow.columns else None
+        history["years"].append(f"FY{date.year}" if hasattr(date, "year") else str(date))
+        history["revenue"].append(revenue)
+        history["operating_income"].append(millions(income, ["Operating Income"], column))
+        history["net_income"].append(millions(income, ["Net Income"], column))
+        history["free_cash_flow"].append(
+            None if cash_column is None else millions(cash_flow, ["Free Cash Flow"], cash_column)
+        )
+        history["diluted_shares"].append(
+            millions(income, ["Diluted Average Shares", "Basic Average Shares"], column)
+        )
+    for field in history:
+        history[field].reverse()                                    # oldest first, as a reader expects
+    return history
+
+
+def history_in_dollars(history, usd_per_unit):
+    """Turn a history's money figures into US dollars at the given exchange rate (the shares
+    and the year labels are left alone). A figure that is None stays None.
+    """
+    converted = dict(history)
+    for field in HISTORY_MONEY_FIELDS:
+        converted[field] = [
+            None if amount is None else valuation.convert_currency(amount, usd_per_unit)
+            for amount in history[field]
+        ]
+    return converted
+
+
+def get_history(ticker, usd_per_unit=1.0, fetch_history=fetch_yahoo_history):
+    """Get a company's yearly history in US dollars, oldest year first. `usd_per_unit` is what one
+    unit of the company's reporting currency is worth in dollars (1 for a dollar company).
+    Stops with a plain error if Yahoo cannot be reached or has no yearly figures.
+    `fetch_history` can be swapped, which is how the tests run without the internet.
+    """
+    try:
+        history = fetch_history(ticker)
+    except Exception as error:      # Yahoo can fail in many ways; the reader needs one clear message
+        raise ValueError("Could not get the history from Yahoo Finance: %s" % error) from error
+    if not history["years"]:
+        raise ValueError("Yahoo Finance has no yearly figures for %s." % ticker)
+    return history_in_dollars(history, usd_per_unit)
+
+
+# ---------------------------------------------------------------------------
 # Peers: suggested from Yahoo's industry list, with their multiples
 # ---------------------------------------------------------------------------
 

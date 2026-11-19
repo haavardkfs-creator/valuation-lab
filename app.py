@@ -470,6 +470,118 @@ def draw_wacc_build(company, dcf_inputs, source_used, dcf, wacc_is_set_by_user):
     st.caption(wacc_explanation(build, dcf["wacc"], wacc_is_set_by_user))
 
 
+def millions_text(amount):
+    """Write a dollar amount in millions, for example $23,769m or -$281m, or a dash if missing."""
+    if amount is None:
+        return "–"
+    return f"-${-amount:,.0f}m" if amount < 0 else f"${amount:,.0f}m"
+
+
+def rate_text(rate):
+    """Write a rate as a percentage, or a dash if it is missing."""
+    return "–" if rate is None else percent(rate)
+
+
+def history_ratios(history):
+    """Work out the history's year-by-year ratios: revenue growth, operating margin, free cash
+    flow margin and the yearly change in diluted shares (a fall means buybacks).
+    """
+    return {
+        "revenue_growth": valuation.yearly_growth(history["revenue"]),
+        "operating_margin": valuation.ratios_by_year(history["operating_income"], history["revenue"]),
+        "fcf_margin": valuation.ratios_by_year(history["free_cash_flow"], history["revenue"]),
+        "share_change": valuation.yearly_growth(history["diluted_shares"]),
+    }
+
+
+def history_table(history):
+    """Make the history table, one column per year (oldest first) and one row per figure, as
+    text, with a dash where Yahoo has no figure.
+    """
+    ratios = history_ratios(history)
+    rows = {
+        "Revenue": [millions_text(amount) for amount in history["revenue"]],
+        "Revenue growth": [rate_text(rate) for rate in ratios["revenue_growth"]],
+        "Operating income": [millions_text(amount) for amount in history["operating_income"]],
+        "Operating margin": [rate_text(rate) for rate in ratios["operating_margin"]],
+        "Net income": [millions_text(amount) for amount in history["net_income"]],
+        "Free cash flow (reported)": [millions_text(amount) for amount in history["free_cash_flow"]],
+        "Free cash flow margin": [rate_text(rate) for rate in ratios["fcf_margin"]],
+        "Diluted average shares": [
+            "–" if shares is None else f"{shares:,.0f}m" for shares in history["diluted_shares"]
+        ],
+        "Yearly change in shares": [rate_text(rate) for rate in ratios["share_change"]],
+    }
+    return pd.DataFrame(rows, index=pd.Index(history["years"], name="Year")).T
+
+
+def history_chart_data(history):
+    """Make the data for the two history charts: revenue and reported free cash flow in $
+    millions, and the operating margin and free cash flow margin ("FCF margin", short so the
+    chart's legend fits) in percent of revenue. Years with no figure are left blank.
+    """
+    ratios = history_ratios(history)
+    index = pd.Index(history["years"], name="Year")
+    amounts = pd.DataFrame(
+        {"Revenue": history["revenue"], "Free cash flow (reported)": history["free_cash_flow"]},
+        index=index, dtype=float,
+    )
+    margins = pd.DataFrame(
+        {
+            "Operating margin": [None if rate is None else rate * 100 for rate in ratios["operating_margin"]],
+            "FCF margin": [None if rate is None else rate * 100 for rate in ratios["fcf_margin"]],
+        },
+        index=index, dtype=float,
+    )
+    return amounts, margins
+
+
+def free_cash_flow_note(history, overview, company_name):
+    """Explain how the history's free cash flow (as the company reports it: cash from operations
+    minus capital spending) differs from the model's, which is built from operating profit after
+    tax, depreciation, capex and working capital. When both are known for the last year, quote them.
+    """
+    note = (
+        "Free cash flow here is as the company reports it: cash from operations minus capital "
+        "spending. The model builds its own free cash flow differently (operating profit after tax, "
+        "plus depreciation, minus capex, plus working capital), so the two differ"
+    )
+    reported = history["free_cash_flow"][-1]
+    modelled = overview["free_cash_flow"]
+    if reported is not None and modelled is not None:
+        note += f": for {company_name}'s last year, {millions_text(reported)} reported against {millions_text(modelled)} in the model."
+    else:
+        note += "."
+    return note
+
+
+def draw_history(history, error, overview, company_name):
+    """Draw the history: a table of the last few years (as many as Yahoo has, 4 or 5), two small
+    charts, and notes on what the free cash flow and the share count mean here. If the history
+    could not be fetched, say why instead; the rest of the page does not depend on it.
+    """
+    st.subheader("History")
+    if history is None:
+        st.caption(f"The history is not available right now. {error}")
+        return
+    st.table(history_table(history))
+    amounts, margins = history_chart_data(history)
+    amounts_column, margins_column = st.columns(2)
+    amounts_column.markdown("**Revenue and free cash flow**")
+    amounts_column.bar_chart(amounts, stack=False, color=[CHART_BLUE, CHART_LIGHT_BLUE], y_label="$ millions")
+    margins_column.markdown("**Operating margin and free cash flow margin**")
+    margins_column.line_chart(margins, color=[CHART_BLUE, CHART_LIGHT_BLUE], y_label="% of revenue")
+    # Each dollar sign is escaped with a backslash, because Streamlit reads text between two
+    # unescaped dollar signs as a maths formula.
+    st.caption(free_cash_flow_note(history, overview, company_name).replace("$", "\\$"))
+    st.caption(
+        f"Yahoo Finance gives {len(history['years'])} years of figures for this company. Shares are "
+        "the diluted average over each year, not the number outstanding that the valuation uses; a "
+        "fall means buybacks. One year can be a peak or a bottom, so look at the direction, not "
+        "just the latest number."
+    )
+
+
 def terminal_value_cautions(dcf, terminal_growth_rate):
     """List, in plain words, the reasons to treat this price with care because it rests mostly
     on the far future. Returns an empty list when neither check (the terminal value's share of
@@ -831,6 +943,14 @@ def load_adobe_peer_margins(tickers):
         return [None] * len(tickers)
 
 
+@st.cache_data(ttl=LIVE_DATA_CACHE_SECONDS, show_spinner=False)
+def load_history(ticker, usd_per_unit):
+    """Fetch a company's yearly history (in US dollars) and remember it for
+    LIVE_DATA_CACHE_SECONDS. Stops with a plain error if Yahoo cannot be reached or has none.
+    """
+    return data.get_history(ticker, usd_per_unit)
+
+
 def parse_peer_tickers(text, own_ticker, how_many):
     """Turn what was typed in the peer box into a list of tickers: split at commas and spaces,
     in capitals, no repeats, without the company's own ticker, and no more than how_many.
@@ -979,8 +1099,8 @@ def draw_error(ticker, error):
 
 def draw_page():
     """Draw the whole page: ticker box, sliders, peer box (companies other than Adobe), title,
-    DCF section, overview, assumptions, how the WACC is built, charts, heatmap, multiples and
-    footer. If the company cannot be valued, draw
+    DCF section, overview, history, assumptions, how the WACC is built, charts, heatmap, multiples
+    and footer. If the company cannot be valued, draw
     the reason instead.
     """
     ticker = draw_ticker_box()
@@ -1007,6 +1127,11 @@ def draw_page():
     draw_source_note(company, source_used)
     draw_dcf(company, dcf, wacc_override is not None)
     draw_overview(overview)
+    try:
+        history, history_error = load_history(company["ticker"], company.get("usd_per_statement_unit", 1.0)), None
+    except ValueError as error:
+        history, history_error = None, str(error)
+    draw_history(history, history_error, overview, company["company_name"])
     year_labels = assumptions.FORECAST_YEAR_LABELS if is_base_case(company) else assumptions.GENERIC_YEAR_LABELS
     draw_assumptions(
         company, dcf_inputs, year_labels, dcf, terminal_growth_rate, wacc_override is not None,

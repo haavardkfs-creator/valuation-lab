@@ -1152,3 +1152,52 @@ def test_one_extreme_peer_does_not_make_a_normal_peer_look_odd():
 def test_a_multiple_with_too_few_usable_peers_is_not_judged():
     peers = dict(SOLAR_PEERS, peer_pe=[None, None, 3.9])               # only one usable P/E: no middle to compare with
     assert "pe" not in v.flag_peers(peers, DEPRESSED_MARGIN, OUTLIER_FACTOR, 2)[2]
+
+
+# ---------------------------------------------------------------------------
+# Year-by-year ratios for the history (workbook: `history` sheet, rows 8-18, Adobe FY2022-FY2025)
+# ---------------------------------------------------------------------------
+
+HISTORY_REVENUE = [17606, 19409, 21505, 23769]          # history C8:F8
+HISTORY_OPERATING_INCOME = [6098, 6650, 7741, 8706]     # C9:F9
+HISTORY_FREE_CASH_FLOW = [7396, 6942, 7873, 9852]       # C11:F11
+HISTORY_SHARES = [471, 459, 450, 427]                   # C12:F12
+
+
+def test_yearly_revenue_growth_matches_the_history_sheet():
+    got = v.yearly_growth(HISTORY_REVENUE)
+    assert got[0] is None                                  # C15: n/a, no year before
+    assert got[1:] == [close(0.10240826990798602), close(0.10799113813179462), close(0.10527784236224136)]   # D15:F15
+
+
+def test_the_operating_margin_by_year_matches_the_history_sheet():
+    assert v.ratios_by_year(HISTORY_OPERATING_INCOME, HISTORY_REVENUE) == [
+        close(0.34635919572872886), close(0.3426245556185275), close(0.35996279934898862), close(0.36627540073204595),
+    ]                                                      # C16:F16
+
+
+def test_the_free_cash_flow_margin_by_year_matches_the_history_sheet():
+    assert v.ratios_by_year(HISTORY_FREE_CASH_FLOW, HISTORY_REVENUE) == [
+        close(0.42008406225150519), close(0.35766912257200267), close(0.36610090676586843), close(0.41448946106272877),
+    ]                                                      # C17:F17
+
+
+def test_the_yearly_change_in_shares_matches_the_history_sheet():
+    got = v.yearly_growth(HISTORY_SHARES)
+    assert got[0] is None                                  # C18: n/a
+    assert got[1:] == [close(-0.025477707006369421), close(-0.019607843137254943), close(-0.051111111111111107)]   # D18:F18
+
+
+def test_a_missing_year_gives_none_for_that_year_and_the_next_growth():
+    assert v.yearly_growth([100, None, 120, 132]) == [None, None, None, close(0.1)]
+
+
+def test_growth_from_a_year_with_no_revenue_is_none():
+    assert v.yearly_growth([0, 50, 60]) == [None, None, close(0.2)]
+    assert v.yearly_growth([-10, 50]) == [None, None]
+
+
+def test_a_loss_is_a_negative_margin_but_no_revenue_gives_none():
+    # First Solar's FY2022: an operating loss on revenue is a negative margin, which is real information.
+    assert v.ratios_by_year([-281, 886], [2619, 3319]) == [close(-281 / 2619), close(886 / 3319)]
+    assert v.ratios_by_year([5, None, 7], [10, 20, 0]) == [close(0.5), None, None]

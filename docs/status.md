@@ -154,6 +154,15 @@
   price"). `margin_gap`, `is_outlier` and `flag_peers` in `valuation.py`; the limits are in
   `assumptions.py`. Checked on live data (First Solar, Coca-Cola, Pfizer, Adobe). 26 new or changed
   tests; 389 tests pass.
+- Done (in the open pull request): roadmap #1a, history. Haavard added the `history` sheet (Adobe
+  FY2022-FY2025, ratios as formulas). A "History" section under the Overview shows up to 5 years (Yahoo
+  gives 4 or 5) of revenue, growth, operating income and margin, net income, reported free cash flow and
+  its margin, diluted average shares and their yearly change, with two charts and notes on how reported
+  free cash flow differs from the model's and on what the share count is. `fetch_yahoo_history`,
+  `history_in_dollars` and `get_history` in `data.py`; `yearly_growth` and `ratios_by_year` in
+  `valuation.py`. Checked in the running app (Adobe, First Solar). 26 new tests; 415 tests pass.
+- Next: roadmap #1b, a check of the latest year against the history (is it a peak or a bottom?), then
+  #2 and so on, as below.
 - Next: the website roadmap, agreed with Haavard on 18 Nov 2026 (his list of 11, in his words below,
   worked in the order after it). One pull request, one idea; each model change is built in Excel
   first, and Haavard writes the glossary entries for new terms (free cash flow yield, net debt
@@ -185,7 +194,7 @@
       A PDF needs a new dependency (tell Haavard first); text typed into the page is lost on reload
       until Phase 7 (saving via Supabase).
   Order of work, by dependency and size: this roadmap (done); #4 (done) and #9 (done) (small, and the later features need
-  the model's path to be visible); #5a (done); #1; #2 then #3; #5b and #5c; #7, #8, #6; #10 and #11.
+  the model's path to be visible); #5a (done); #1 (#1a done); #2 then #3; #5b and #5c; #7, #8, #6; #10 and #11.
   Also planned, not on the list: an adjusted beta (two thirds of the raw beta plus one third of 1),
   built in Excel first, the cure for low-beta prices (see Open).
 - Open:

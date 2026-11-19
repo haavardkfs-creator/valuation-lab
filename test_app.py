@@ -7,6 +7,7 @@ are drawn, and that a company that cannot be valued gets a plain error instead o
 
 from pathlib import Path
 
+import pandas as pd
 import pytest
 import streamlit as st
 from streamlit.testing.v1 import AppTest
@@ -20,6 +21,7 @@ from test_data import (
     ADOBE_YAHOO_CASH_FLOW,
     ADOBE_YAHOO_INCOME,
     ADOBE_YAHOO_INFO,
+    ADOBE_YEAR_ENDS,
     fake_statements_ticker,
     no_interest_expense_company,
 )
@@ -768,14 +770,14 @@ def test_the_wacc_table_says_where_adobes_inputs_come_from():
 def test_the_wacc_table_is_on_the_page_and_its_wacc_is_the_one_the_dcf_uses(monkeypatch):
     page = run_page(monkeypatch)
     assert "How the WACC is built" in texts(page.subheader)
-    table = page.table[0].value
+    table = wacc_table_of(page)
     assert table.loc["Beta", "Where it comes from"] == "Yahoo Finance, 5-year monthly"      # live, not the snapshot
     assert table.loc["WACC", "Value"].startswith(metrics(page)["WACC"][:-2])               # 10.9x% and 10.9%
 
 
 def test_another_companys_inputs_are_labelled_as_estimates_from_its_own_figures(monkeypatch):
     page = run_page(monkeypatch, ticker="exmp", yahoo=other_company())
-    where = page.table[0].value["Where it comes from"]
+    where = wacc_table_of(page)["Where it comes from"]
     assert where["Pre-tax cost of debt"] == "Estimate: last year's interest expense divided by debt"
     assert where["Tax rate"] == "Last year's rate: income tax divided by pre-tax income"
     assert where["Debt"] == "Yahoo Finance: current plus long-term debt"
@@ -783,7 +785,7 @@ def test_another_companys_inputs_are_labelled_as_estimates_from_its_own_figures(
 
 def test_a_company_using_the_fallback_cost_of_debt_says_so_in_the_wacc_table(monkeypatch):
     page = run_page(monkeypatch, ticker="aapl", yahoo=no_interest_expense_company())
-    table = page.table[0].value
+    table = wacc_table_of(page)
     assert table.loc["Pre-tax cost of debt", "Value"] == "6.40%"                           # the risk-free rate plus 1.11%
     assert table.loc["Pre-tax cost of debt", "Where it comes from"].startswith("Estimate: the risk-free rate plus")
 
@@ -806,10 +808,10 @@ def test_a_company_with_no_debt_is_explained_as_all_equity():
 
 def test_when_the_reader_sets_a_wacc_the_page_still_shows_the_models_own_build(monkeypatch):
     page = run_page(monkeypatch)
-    own = page.table[0].value.loc["WACC", "Value"]
+    own = wacc_table_of(page).loc["WACC", "Value"]
     page.sidebar.checkbox[0].check().run()                                                 # "Set the WACC myself"
     assert not page.exception
-    assert page.table[0].value.loc["WACC", "Value"] == own                                 # the build is unchanged
+    assert wacc_table_of(page).loc["WACC", "Value"] == own                                 # the build is unchanged
     [line] = [c for c in texts(page.caption) if "You have set the WACC to 11.00%" in c]    # the slider's start
     assert "instead of the model's own" in line
 
@@ -818,7 +820,7 @@ def test_a_very_low_wacc_company_still_gets_its_wacc_table(monkeypatch):
     low_beta = fake_statements_ticker(info=dict(ADOBE_YAHOO_INFO, beta=-0.3))
     page = run_page(monkeypatch, ticker="lowb", yahoo=low_beta)
     assert not page.exception
-    assert page.table[0].value.loc["Beta", "Value"] == "-0.30"
+    assert wacc_table_of(page).loc["Beta", "Value"] == "-0.30"
 
 
 # ---------------------------------------------------------------------------
@@ -965,3 +967,149 @@ def test_adobes_page_flags_synopsys_for_its_pe(monkeypatch):
     middle = f"{statistics.median([32.73, 20.72, 20.97, 82.62]):.1f}x"       # all four peers' P/Es
     assert any(c.startswith(f"⚠ SNPS: its P/E of 82.6x is far from the peers' middle ({middle})") for c in texts(page.caption))
     assert "Middle of the three prices" in metrics(page)                     # Adobe has all three prices
+
+
+def wacc_table_of(page):
+    """The 'How the WACC is built' table of a page: the one with a 'Where it comes from' column."""
+    [table] = [element.value for element in page.table if "Where it comes from" in element.value.columns]
+    return table
+
+
+# ---------------------------------------------------------------------------
+# History: the last few years, a table and two charts
+# ---------------------------------------------------------------------------
+
+def adobe_with_four_years():
+    """Yahoo's reply for Adobe with four years of statements, as the real one has: the latest two
+    years are the ones the page's other tests use, so the valuation does not change.
+    """
+    base = fake_statements_ticker()
+    income = pd.DataFrame(
+        {
+            "Total Revenue": [23769e6, 21505e6, 19409e6, 17606e6],
+            "Operating Income": [8706e6, 7741e6, 6650e6, 6098e6],
+            "Net Income": [7130e6, 5560e6, 5428e6, 4756e6],
+            "Tax Provision": [1604e6, 1371e6, 1000e6, 900e6],
+            "Pretax Income": [8734e6, 6931e6, 6400e6, 5600e6],
+            "Interest Expense": [263e6, 169e6, 150e6, 120e6],
+            "Diluted Average Shares": [427e6, 450e6, 459e6, 471e6],
+        },
+        index=ADOBE_YEAR_ENDS,
+    ).T
+    cash_flow = pd.DataFrame(
+        {
+            "Depreciation And Amortization": [818e6, 857e6, 800e6, 750e6],
+            "Capital Expenditure": [-179e6, -183e6, -150e6, -140e6],
+            "Change In Working Capital": [605e6, 144e6, 100e6, 90e6],
+            "Free Cash Flow": [9852e6, 7873e6, 6942e6, 7396e6],
+        },
+        index=ADOBE_YEAR_ENDS,
+    ).T
+
+    class Fake(base):
+        def __init__(self, ticker):
+            super().__init__(ticker)
+            if not hasattr(self, "info") or "marketCap" in self.info:
+                return
+            self.income_stmt, self.cashflow = income, cash_flow
+
+    return Fake
+
+
+def history_table_of(page):
+    """The history table of a page: the one whose first row is Revenue and whose columns are years."""
+    [table] = [element.value for element in page.table if "Revenue growth" in element.value.index]
+    return table
+
+
+def test_the_history_table_matches_the_history_sheet(monkeypatch):
+    page = run_page(monkeypatch, yahoo=adobe_with_four_years())
+    assert "History" in texts(page.subheader)
+    table = history_table_of(page)
+    assert list(table.columns) == ["FY2022", "FY2023", "FY2024", "FY2025"]
+    assert table.loc["Revenue"].tolist() == ["$17,606m", "$19,409m", "$21,505m", "$23,769m"]
+    assert table.loc["Revenue growth"].tolist() == ["–", "10.2%", "10.8%", "10.5%"]                 # history D15:F15
+    assert table.loc["Operating income"].tolist() == ["$6,098m", "$6,650m", "$7,741m", "$8,706m"]
+    assert table.loc["Operating margin"].tolist() == ["34.6%", "34.3%", "36.0%", "36.6%"]           # C16:F16
+    assert table.loc["Net income"].tolist() == ["$4,756m", "$5,428m", "$5,560m", "$7,130m"]
+    assert table.loc["Free cash flow (reported)"].tolist() == ["$7,396m", "$6,942m", "$7,873m", "$9,852m"]
+    assert table.loc["Free cash flow margin"].tolist() == ["42.0%", "35.8%", "36.6%", "41.4%"]      # C17:F17
+    assert table.loc["Diluted average shares"].tolist() == ["471m", "459m", "450m", "427m"]
+    assert table.loc["Yearly change in shares"].tolist() == ["–", "-2.5%", "-2.0%", "-5.1%"]        # D18:F18
+
+
+def test_the_note_quotes_reported_free_cash_flow_against_the_models(monkeypatch):
+    page = run_page(monkeypatch, yahoo=adobe_with_four_years())
+    [note] = [c for c in texts(page.caption) if c.startswith("Free cash flow here is as the company reports it")]
+    assert "$9,852m reported against $8,351m in the model" in note.replace("\\", "")      # without the escaping backslashes
+    assert any(c.startswith("Yahoo Finance gives 4 years of figures") and "diluted average" in c for c in texts(page.caption))
+
+
+def test_the_history_works_with_the_two_years_of_the_simple_fake(monkeypatch):
+    page = run_page(monkeypatch)                      # columns named "before" and "latest", no shares or cash flow line
+    assert not page.exception
+    table = history_table_of(page)
+    assert list(table.columns) == ["before", "latest"]
+    assert table.loc["Revenue growth"].tolist() == ["–", "10.5%"]
+    assert table.loc["Diluted average shares"].tolist() == ["–", "–"]
+    assert table.loc["Free cash flow (reported)"].tolist() == ["–", "–"]
+
+
+def test_the_history_of_a_company_in_kroner_is_shown_in_dollars(monkeypatch):
+    page = run_page(monkeypatch, ticker="krn.ol", yahoo=krone_company())
+    assert history_table_of(page).loc["Revenue", "latest"] == "$2,377m"            # 23,769 kroner millions at 10 US cents
+
+
+def test_if_the_history_cannot_be_fetched_the_page_says_so_and_carries_on(monkeypatch):
+    def down(ticker, usd_per_unit=1.0):
+        raise ValueError("Could not get the history from Yahoo Finance: no internet")
+
+    monkeypatch.setattr("data.get_history", down)
+    page = run_page(monkeypatch)
+    assert_footer_and_no_crash(page)
+    assert "History" in texts(page.subheader)
+    assert any(c.startswith("The history is not available right now. Could not get the history") for c in texts(page.caption))
+    assert "DCF implied price" in metrics(page)                                    # the rest of the page is fine
+
+
+def test_a_loss_shows_as_a_negative_amount_and_margin_in_the_table():
+    # First Solar's FY2022 and FY2023, as Yahoo showed them on 18 Nov 2026.
+    history = {
+        "years": ["FY2022", "FY2023"], "revenue": [2619.0, 3319.0], "operating_income": [-281.0, 886.0],
+        "net_income": [-44.0, 831.0], "free_cash_flow": [-30.0, -785.0], "diluted_shares": [107.0, 107.0],
+    }
+    table = app.history_table(history)
+    assert table.loc["Operating income"].tolist() == ["-$281m", "$886m"]
+    assert table.loc["Operating margin"].tolist() == ["-10.7%", "26.7%"]
+    assert table.loc["Free cash flow (reported)"].tolist() == ["-$30m", "-$785m"]
+
+
+def test_the_chart_data_has_amounts_in_millions_and_margins_in_percent():
+    history = {
+        "years": ["FY2024", "FY2025"], "revenue": [21505.0, 23769.0], "operating_income": [7741.0, 8706.0],
+        "net_income": [5560.0, 7130.0], "free_cash_flow": [7873.0, None], "diluted_shares": [450.0, 427.0],
+    }
+    amounts, margins = app.history_chart_data(history)
+    assert list(amounts.index) == ["FY2024", "FY2025"]
+    assert amounts["Revenue"].tolist() == [21505.0, 23769.0]
+    assert amounts["Free cash flow (reported)"].iloc[0] == 7873.0 and amounts["Free cash flow (reported)"].isna().iloc[1]
+    assert margins["Operating margin"].round(1).tolist() == [36.0, 36.6]
+    assert margins["FCF margin"].iloc[0] == pytest.approx(7873 / 21505 * 100) and margins["FCF margin"].isna().iloc[1]
+
+
+def test_the_helpers_write_amounts_with_signs_and_dashes():
+    assert app.millions_text(23769.0) == "$23,769m" and app.millions_text(-281.4) == "-$281m"
+    assert app.millions_text(None) == "–" and app.rate_text(None) == "–" and app.rate_text(0.105) == "10.5%"
+
+
+def test_the_note_still_makes_sense_when_the_models_free_cash_flow_is_not_known():
+    history = {"free_cash_flow": [None, 9852.0]}
+    assert app.free_cash_flow_note(history, {"free_cash_flow": None}, "Loss Corp").endswith("so the two differ.")
+
+
+def test_the_dollar_signs_in_the_history_note_are_escaped_so_they_are_not_read_as_maths(monkeypatch):
+    # Without the backslashes Streamlit shows the text between two dollar signs as a formula.
+    page = run_page(monkeypatch, yahoo=adobe_with_four_years())
+    [note] = [c for c in texts(page.caption) if c.startswith("Free cash flow here is as the company reports it")]
+    assert "\\$9,852m reported against \\$8,351m in the model" in note
+    assert "$9,852m" not in note.replace("\\$", "")                # every dollar sign has its backslash

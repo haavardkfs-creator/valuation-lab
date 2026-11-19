@@ -677,3 +677,26 @@ makes the rule simpler to explain and consistent with the page, and is easy to r
 Adobe's page now shows the margin warning too (11.8 points), and a flag on Synopsys, which the
 Excel notes already call an outlier. Rules of thumb, so no Excel step; the rules are written up in
 `docs/model.md` ("Warnings about the peers") for Haavard to check. No new files.
+
+## 2026-11-18 — The history section (roadmap #1, first slice)
+
+The biggest item on the roadmap: everything on the page rested on one year, which can be a peak or a
+bottom. Yahoo was checked first: 4 or 5 years of annual statements for six companies, not 10 (10
+years would need a second data source, later), with Adobe's income statement at 4 years and its cash
+flow at 5. The item is built in two slices, agreed with Haavard: this one, the history itself, and the
+next one, a check of the latest year against the history (a peak or a bottom). Built Excel first:
+sheet `history` with Adobe's four years typed in from Yahoo and the ratios as formulas (C8:F18). The
+page has a "History" section under the Overview: a table with a column per year, two charts, and
+notes. Two definitions matter and were decided with Haavard: free cash flow is shown as the company
+REPORTS it (cash from operations minus capital spending), clearly labelled, with a note quoting how
+it differs from the model's own free cash flow (Adobe: $9,852m against $8,351m); and the share count is
+the diluted AVERAGE over each year, not the shares outstanding (427m against 413m). In `data.py`,
+`fetch_yahoo_history` reads the years oldest first and matches free cash flow to its year by date, not
+by position (Yahoo's two statements do not always have the same years), `history_in_dollars` converts
+the money, and `get_history` wraps both with plain errors. In `valuation.py`, `yearly_growth` and
+`ratios_by_year` match the sheet's cells. The page fetches the history on its own, remembers it for 15
+minutes, and if Yahoo fails says so in one line and carries on. Two things found while checking it in
+the running app: a note with two dollar signs was shown as a maths formula (so its dollar signs are
+escaped, as in the earlier charts section), and a chart legend was cut off (its series is called "FCF
+margin"). Adding a second static table meant the WACC tests now find their table by its content, not
+its position. No Excel change beyond the new sheet; no new files in the repository.
