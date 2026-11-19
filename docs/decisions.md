@@ -700,3 +700,22 @@ the running app: a note with two dollar signs was shown as a maths formula (so i
 escaped, as in the earlier charts section), and a chart legend was cut off (its series is called "FCF
 margin"). Adding a second static table meant the WACC tests now find their table by its content, not
 its position. No Excel change beyond the new sheet; no new files in the repository.
+
+## 2026-11-18 — Is the latest year typical? (roadmap #1b)
+
+The second slice of the history item, agreed with Haavard: use the history to say whether the latest year
+may be a peak or a bottom, which is the First Solar question. Eight real companies were tried first
+(latest operating margin against the average of the earlier years, and the swing between the best and
+worst year). Haavard agreed the limits: 5 points from the earlier average and 15 points of swing. The
+two numbers separate the cases cleanly: First Solar +14.2 and 43.9, Nvidia +14.6 and 41.7, Ford -8.2,
+Pfizer 5.0 (just under) but a swing of 30.3, against Adobe, Coca-Cola and Apple within 2.3 points and
+a swing under 4. A third rule had to be named: at least 3 years of margins are needed
+(`MINIMUM_HISTORY_YEARS`), because an average of one earlier year is not a history; I added it and said so.
+Built Excel first: `history` C20 (the earlier average), C21 (the gap in points) and C22 (the swing in
+points). In Python, `history_check` in `valuation.py` matches all three; the limits are named constants in
+`assumptions.py`; `margin_history_warnings` in `app.py` writes the sentences ("may be a peak", "may be a
+bottom", "swung by"), shown as yellow warnings at the top of the History section. The warnings change
+nothing in the valuation: using an average margin in the starting point would be a model change, for
+later. Found while checking on live data and recorded under "Open" in `docs/status.md`: for a company that
+lost money last year (Ford) the page shows only the "no pre-tax profit" error, so the overview and the
+history never appear, exactly when a history would help most. Not fixed here. No new files.

@@ -73,6 +73,21 @@ PEER_MARGIN_GAP_WARNING = 0.10
 DEPRESSED_PEER_MARGIN = 0.05
 PEER_OUTLIER_FACTOR = 3
 
+# When the page warns that the latest year may be a peak or a bottom (see docs/model.md, "Is the
+# latest year typical?"). Rules of thumb, chosen with Haavard on 18 Nov 2026 after trying eight real
+# companies; they only warn, and change nothing in the valuation.
+# - MARGIN_VS_HISTORY_WARNING: warn when the latest operating margin is more than this many
+#   percentage points above ("may be a peak") or below ("may be a bottom") the average of the earlier
+#   years. First Solar +14.2, Nvidia +14.6, Ford -8.2; Adobe, Coca-Cola and Apple within +/-2.3.
+# - MARGIN_SWING_WARNING: warn when the best year's margin is more than this many points above the
+#   worst year's, because one year is then a poor guide. First Solar 43.9, Pfizer 30.3; steady
+#   companies under 10.
+# - MINIMUM_HISTORY_YEARS: the fewest years of margins needed to make either check (the latest year and
+#   at least two earlier ones), because an average of one earlier year is not a history.
+MARGIN_VS_HISTORY_WARNING = 0.05
+MARGIN_SWING_WARNING = 0.15
+MINIMUM_HISTORY_YEARS = 3
+
 # The company the hand-chosen forecast assumptions above were made for. The page uses them
 # only for this company; any other ticker gets a starting point from its own last year.
 BASE_CASE_TICKER = "ADBE"

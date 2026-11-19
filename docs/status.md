@@ -154,55 +154,33 @@
   price"). `margin_gap`, `is_outlier` and `flag_peers` in `valuation.py`; the limits are in
   `assumptions.py`. Checked on live data (First Solar, Coca-Cola, Pfizer, Adobe). 26 new or changed
   tests; 389 tests pass.
-- Done (in the open pull request): roadmap #1a, history. Haavard added the `history` sheet (Adobe
+- Done: roadmap #1a, history (merged, PR #39). Haavard added the `history` sheet (Adobe
   FY2022-FY2025, ratios as formulas). A "History" section under the Overview shows up to 5 years (Yahoo
   gives 4 or 5) of revenue, growth, operating income and margin, net income, reported free cash flow and
   its margin, diluted average shares and their yearly change, with two charts and notes on how reported
   free cash flow differs from the model's and on what the share count is. `fetch_yahoo_history`,
   `history_in_dollars` and `get_history` in `data.py`; `yearly_growth` and `ratios_by_year` in
   `valuation.py`. Checked in the running app (Adobe, First Solar). 26 new tests; 415 tests pass.
-- Next: roadmap #1b, a check of the latest year against the history (is it a peak or a bottom?), then
-  #2 and so on, as below.
-- Next: the website roadmap, agreed with Haavard on 18 Nov 2026 (his list of 11, in his words below,
-  worked in the order after it). One pull request, one idea; each model change is built in Excel
-  first, and Haavard writes the glossary entries for new terms (free cash flow yield, net debt
-  over EBITDA, EV/Sales and so on).
-  1. History: 5 to 10 years of revenue, operating margin, free cash flow, net income and share
-     count. Yahoo gives only 4-5 annual years, so 4-5 first; 10 years would need a second data
-     source (for example SEC filings), later. Reason: one year can be a peak or a bottom.
-  2. Reverse DCF: solve for the margin or growth the market price implies ("the market is pricing
-     in a 20% margin"). Excel first (Goal Seek); a solver in Python needs no new dependency.
-  3. A second sensitivity table that varies operating margin and revenue growth, since WACC and
-     terminal growth are not the biggest risks.
-  4. Visible assumptions: show the actual growth path, margin, capex and working capital the model
-     uses, and make clear what the sliders' "0 %" means (an adjustment, not the value). Fix "-0 %".
-  5. Peer robustness, in three parts: (5a) warn when peers' margins differ a lot from the
-     company's, flag or exclude peers with depressed or negative earnings, and warn when "the
-     middle" is only the average of two prices; (5b) put the company on trailing twelve months
-     like the peers (Yahoo has 7 quarters); (5c) choose peers by business type, not size (Yahoo
-     only has industry, so this needs a decision).
-  6. Scenarios: bear, base and bull, each with its own growth and margin, and a
-     probability-weighted price. Haavard decides the inputs and probabilities.
-  7. Quality metrics: ROIC, free cash flow over net income (cash conversion), interest coverage and
-     share count change. ROIC needs balance sheet figures; interest cover is blank for some
-     companies.
-  8. Adjustments for one-off items: a field to adjust EBIT (for example to remove tax credits such
-     as First Solar's 45X, or one-time gains). Labelled as the reader's own number.
-  9. Transparent WACC: show the risk-free rate, beta, equity risk premium and cost of debt behind it.
-  10. Forward multiples (nice to have): analyst estimates for next year; Yahoo has them.
-  11. A thesis field and export (nice to have): thesis, risks and a sell trigger, exported as a PDF.
-      A PDF needs a new dependency (tell Haavard first); text typed into the page is lost on reload
-      until Phase 7 (saving via Supabase).
-  Order of work, by dependency and size: this roadmap (done); #4 (done) and #9 (done) (small, and the later features need
-  the model's path to be visible); #5a (done); #1 (#1a done); #2 then #3; #5b and #5c; #7, #8, #6; #10 and #11.
-  Also planned, not on the list: an adjusted beta (two thirds of the raw beta plus one third of 1),
-  built in Excel first, the cure for low-beta prices (see Open).
+- Done (in the open pull request): roadmap #1b, is the latest year typical? Haavard added the earlier
+  average, the gap and the swing to the `history` sheet (C20:C22). `history_check` in `valuation.py`
+  matches them; the limits (5 points, 15 points, at least 3 years) are in `assumptions.py`. The History
+  section shows a yellow warning when the latest operating margin is more than 5 points above ("may be a
+  peak") or below ("may be a bottom") the earlier average, and one when the margin has swung by more than
+  15 points. Warnings only: the valuation is unchanged. Checked on live data (First Solar: both; Pfizer:
+  the swing; Adobe, Coca-Cola, Apple: none). 16 new tests; 431 tests pass.
+- Next: roadmap #2, the reverse DCF, then #3 and so on, as below. Small items waiting for Haavard's
+  decision: Pfizer's negative tax rate, the adjusted beta, and the empty-Yahoo-reply retry.
 - Open:
   - A negative tax rate flows into the forecast. Pfizer's last-year tax rate is -3.54% (a tax
     benefit; seen on 18 Nov 2026 in the new WACC table), and the starting point holds the tax rate
     flat, so its forecast cash flows are too high and its after-tax cost of debt (4.32%) is above
     its pre-tax cost (4.18%). Together with its low beta this explains its DCF price. Needs a
     decision, for example floor the tax rate at zero or use a normal rate, built in Excel first.
+  - A company that lost money last year gets only an error, so no overview and no history. For Ford
+    (18 Nov 2026) the page says "A tax rate can't be worked out because the company made no pre-tax
+    profit", because the starting point needs last year's tax rate, and nothing below it is drawn. The
+    overview and the history do not need a tax rate and would help most here. Needs a decision: draw them
+    even when the DCF cannot be built.
   - Low-beta companies get odd DCF prices: on 16 Nov 2026 Pfizer's WACC is 5.96% and its DCF
     price $94.96 against a market price of $28.89, and both terminal value cautions fire. The
     caution says so, but the cure is the planned adjusted beta.

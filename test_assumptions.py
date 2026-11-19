@@ -220,3 +220,9 @@ def test_the_peer_warning_limits_are_the_ones_agreed_with_haavard():
     # 18 Nov 2026: a margin gap over 10 points, a margin under 5%, and a multiple over 3 times
     # (or under a third of) the others' middle.
     assert (a.PEER_MARGIN_GAP_WARNING, a.DEPRESSED_PEER_MARGIN, a.PEER_OUTLIER_FACTOR) == (0.10, 0.05, 3)
+
+
+def test_the_history_warning_limits_are_the_ones_agreed_with_haavard():
+    # 18 Nov 2026: 5 points from the earlier average, 15 points between the best and worst year, and at
+    # least 3 years of margins.
+    assert (a.MARGIN_VS_HISTORY_WARNING, a.MARGIN_SWING_WARNING, a.MINIMUM_HISTORY_YEARS) == (0.05, 0.15, 3)

@@ -979,7 +979,7 @@ def wacc_table_of(page):
 # History: the last few years, a table and two charts
 # ---------------------------------------------------------------------------
 
-def adobe_with_four_years():
+def adobe_with_four_years(operating_income=None):
     """Yahoo's reply for Adobe with four years of statements, as the real one has: the latest two
     years are the ones the page's other tests use, so the valuation does not change.
     """
@@ -987,7 +987,7 @@ def adobe_with_four_years():
     income = pd.DataFrame(
         {
             "Total Revenue": [23769e6, 21505e6, 19409e6, 17606e6],
-            "Operating Income": [8706e6, 7741e6, 6650e6, 6098e6],
+            "Operating Income": operating_income or [8706e6, 7741e6, 6650e6, 6098e6],
             "Net Income": [7130e6, 5560e6, 5428e6, 4756e6],
             "Tax Provision": [1604e6, 1371e6, 1000e6, 900e6],
             "Pretax Income": [8734e6, 6931e6, 6400e6, 5600e6],
@@ -1113,3 +1113,77 @@ def test_the_dollar_signs_in_the_history_note_are_escaped_so_they_are_not_read_a
     [note] = [c for c in texts(page.caption) if c.startswith("Free cash flow here is as the company reports it")]
     assert "\\$9,852m reported against \\$8,351m in the model" in note
     assert "$9,852m" not in note.replace("\\$", "")                # every dollar sign has its backslash
+
+
+# ---------------------------------------------------------------------------
+# Is the latest year typical? Warnings from the history (workbook: `history` C20:C22)
+# ---------------------------------------------------------------------------
+
+def history_with_margins(*margins):
+    """A history with revenue of 100 every year and these operating margins (oldest first)."""
+    return {
+        "years": [f"FY{2022 + number}" for number in range(len(margins))], "revenue": [100.0] * len(margins),
+        "operating_income": [None if margin is None else margin * 100 for margin in margins],
+        "net_income": [None] * len(margins), "free_cash_flow": [None] * len(margins), "diluted_shares": [None] * len(margins),
+    }
+
+
+def test_a_margin_far_above_its_history_is_called_a_possible_peak_and_a_wide_swing_is_noted():
+    # First Solar's margins on 18 Nov 2026: -10.7%, 26.7%, 33.1% and 30.6%.
+    peak, swing = app.margin_history_warnings(history_with_margins(-0.107, 0.267, 0.331, 0.306), "First Solar")
+    assert peak == (
+        "First Solar's latest operating margin (30.6%) is 14.2 points above the average of the earlier years "
+        "(16.4%). This year may be a peak, so a forecast that holds it flat could be too optimistic."
+    )
+    assert swing == (
+        "The operating margin has swung by 43.8 points between its best (33.1%) and worst (-10.7%) year. "
+        "One year is a poor guide for a margin like that, so look at the whole history."
+    )
+
+
+def test_a_margin_far_below_its_history_is_called_a_possible_bottom():
+    # Ford's margins: 4.0%, 3.1%, 2.8% and then a loss of 4.9%.
+    [bottom] = app.margin_history_warnings(history_with_margins(0.040, 0.031, 0.028, -0.049), "Ford")
+    assert "is 8.2 points below the average of the earlier years (3.3%)" in bottom
+    assert "may be a bottom" in bottom and "too pessimistic" in bottom
+
+
+def test_a_steady_margin_gets_no_warning():
+    # Adobe's margins (history C16:F16): within 1.7 points of the earlier average, a swing of 2.4.
+    assert app.margin_history_warnings(history_with_margins(0.34636, 0.34262, 0.35996, 0.36628), "Adobe") == []
+
+
+def test_a_swinging_margin_whose_latest_year_is_near_the_average_only_gets_the_swing_note():
+    # Pfizer's margins: 37.7%, 7.4%, 23.5%, 27.8%. The latest is 4.96 points above the earlier average,
+    # just inside the 5-point limit, but the swing is 30.3 points.
+    [swing] = app.margin_history_warnings(history_with_margins(0.377, 0.074, 0.235, 0.278), "Pfizer")
+    assert swing.startswith("The operating margin has swung by 30.3 points")
+
+
+def test_too_few_years_gives_no_warning():
+    assert app.margin_history_warnings(history_with_margins(0.1, 0.4), "Two Years") == []
+    assert app.margin_history_warnings(history_with_margins(None, None, 0.3), "One Margin") == []
+
+
+def test_the_page_warns_when_the_latest_margin_may_be_a_peak(monkeypatch):
+    # Older years' operating income gives margins of -10%, 10% and 15% before the latest 36.6%.
+    page = run_page(monkeypatch, yahoo=adobe_with_four_years(operating_income=[8706e6, 3226e6, 1941e6, -1761e6]))
+    peak = [w for w in texts(page.warning) if "may be a peak" in w]
+    assert len(peak) == 1 and peak[0].startswith("Adobe Inc.'s latest operating margin (36.6%) is 31.6 points above")
+    assert any("swung by 46.6 points" in w for w in texts(page.warning))
+
+
+def test_the_page_warns_when_the_latest_margin_may_be_a_bottom(monkeypatch):
+    # Older years at 50%, 55% and 60% before the latest 36.6%.
+    page = run_page(monkeypatch, yahoo=adobe_with_four_years(operating_income=[8706e6, 12903e6, 10675e6, 8803e6]))
+    assert any("may be a bottom" in w and "points below the average" in w for w in texts(page.warning))
+
+
+def test_adobes_four_years_give_no_history_warning_on_the_page(monkeypatch):
+    page = run_page(monkeypatch, yahoo=adobe_with_four_years())
+    assert not any("earlier years" in w or "swung by" in w for w in texts(page.warning))
+
+
+def test_the_two_year_simple_fake_gives_no_history_warning(monkeypatch):
+    page = run_page(monkeypatch)
+    assert not page.warning

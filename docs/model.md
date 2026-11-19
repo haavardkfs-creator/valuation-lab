@@ -254,6 +254,25 @@ FY2025), so the table shows as many as exist, oldest first, with a dash where a 
   elsewhere; the shares are not converted. Two charts show revenue and free cash flow, and the
   operating and free cash flow margins.
 
+## Is the latest year typical?
+
+The DCF's starting point for another company is built from its last year alone, and one year can be a
+peak or a bottom. Two warnings in the History section compare the latest operating margin with the years
+before it (workbook: `history` sheet, C20:C22). They are rules of thumb: they only warn, and change
+nothing in the valuation.
+- Earlier average = the average operating margin of the years before the latest one. Gap = latest margin
+  minus that average. Adobe: 35.0% and +1.7 points (C20, C21).
+- Swing = the best year's margin minus the worst year's. Adobe: 2.4 points (C22).
+- If the gap is more than 5 points above the average, the page says this year "may be a peak, so a
+  forecast that holds it flat could be too optimistic"; more than 5 points below, "may be a bottom".
+- If the swing is more than 15 points, the page says one year is a poor guide for a margin like that.
+- At least 3 years of margins are needed (the latest and two earlier ones); years without a figure are
+  ignored.
+- On real data (18 Nov 2026): First Solar's latest margin of 30.6% is 14.2 points above its earlier
+  average of 16.4% and its swing is 43.9 points (both warnings); Nvidia +14.6; Ford -8.2 (a loss
+  year); Pfizer's gap is 5.0 (just inside the limit) but its swing is 30.3; Adobe, Coca-Cola and Apple
+  are within 2.3 points and under a 4-point swing, so they get no warning.
+
 ## What the model assumes, and the sliders
 
 The page shows the assumptions the DCF really uses, so a slider is never mistaken for the
