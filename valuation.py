@@ -381,6 +381,30 @@ def ratios_by_year(numerators, denominators):
     ]
 
 
+def history_check(yearly_values, minimum_years):
+    """Compare the latest year of a yearly figure (such as the operating margin, oldest year
+    first) with the years before it, to see whether the latest year looks typical.
+
+    Returns the latest value, the average of the earlier years, the gap between them (latest minus
+    average, a decimal: 0.05 is five percentage points), and the swing (the best year minus the
+    worst). Years with no figure are ignored. Gives None if the latest year has no figure, or fewer
+    than minimum_years years have one, because an average of one earlier year is not a history.
+    """
+    if not yearly_values or yearly_values[-1] is None:
+        return None
+    available = [value for value in yearly_values if value is not None]
+    if len(available) < minimum_years:
+        return None
+    latest = available[-1]
+    earlier_average = sum(available[:-1]) / len(available[:-1])
+    return {
+        "latest": latest,
+        "earlier_average": earlier_average,
+        "gap": latest - earlier_average,
+        "swing": max(available) - min(available),
+    }
+
+
 def median_of_available(values, minimum_peers):
     """Find the middle value of the figures that exist, ignoring blanks. Unlike a multiple,
     a negative figure counts (a peer that loses money on its sales is real information).

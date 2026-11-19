@@ -555,15 +555,47 @@ def free_cash_flow_note(history, overview, company_name):
     return note
 
 
+def margin_history_warnings(history, company_name):
+    """Warn, in plain words, when the latest year's operating margin may not be typical: when it
+    is far above or below the average of the earlier years (it may be a peak or a bottom), and when
+    the margin has swung widely between its best and worst year (one year is a poor guide).
+    Returns a list of sentences, empty when the margin looks steady or there are too few years.
+    """
+    margins = history_ratios(history)["operating_margin"]
+    check = valuation.history_check(margins, assumptions.MINIMUM_HISTORY_YEARS)
+    if check is None:
+        return []
+    warnings = []
+    if abs(check["gap"]) > assumptions.MARGIN_VS_HISTORY_WARNING:
+        above = check["gap"] > 0
+        warnings.append(
+            f"{company_name}'s latest operating margin ({percent(check['latest'])}) is "
+            f"{abs(check['gap']) * 100:.1f} points {'above' if above else 'below'} the average of the earlier "
+            f"years ({percent(check['earlier_average'])}). This year may be a {'peak' if above else 'bottom'}, so a "
+            f"forecast that holds it flat could be too {'optimistic' if above else 'pessimistic'}."
+        )
+    if check["swing"] > assumptions.MARGIN_SWING_WARNING:
+        known = [margin for margin in margins if margin is not None]
+        warnings.append(
+            f"The operating margin has swung by {check['swing'] * 100:.1f} points between its best "
+            f"({percent(max(known))}) and worst ({percent(min(known))}) year. One year is a poor guide "
+            "for a margin like that, so look at the whole history."
+        )
+    return warnings
+
+
 def draw_history(history, error, overview, company_name):
-    """Draw the history: a table of the last few years (as many as Yahoo has, 4 or 5), two small
-    charts, and notes on what the free cash flow and the share count mean here. If the history
+    """Draw the history: yellow warnings when the latest margin may be a peak or a bottom, a table of
+    the last few years (as many as Yahoo has, 4 or 5), two small charts, and notes on what the free
+    cash flow and the share count mean here. If the history
     could not be fetched, say why instead; the rest of the page does not depend on it.
     """
     st.subheader("History")
     if history is None:
         st.caption(f"The history is not available right now. {error}")
         return
+    for warning in margin_history_warnings(history, company_name):
+        st.warning(warning)
     st.table(history_table(history))
     amounts, margins = history_chart_data(history)
     amounts_column, margins_column = st.columns(2)

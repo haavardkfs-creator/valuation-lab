@@ -1201,3 +1201,46 @@ def test_a_loss_is_a_negative_margin_but_no_revenue_gives_none():
     # First Solar's FY2022: an operating loss on revenue is a negative margin, which is real information.
     assert v.ratios_by_year([-281, 886], [2619, 3319]) == [close(-281 / 2619), close(886 / 3319)]
     assert v.ratios_by_year([5, None, 7], [10, 20, 0]) == [close(0.5), None, None]
+
+
+# ---------------------------------------------------------------------------
+# Is the latest year typical? (workbook: `history` sheet, C20:C22, Adobe)
+# ---------------------------------------------------------------------------
+
+ADOBE_OPERATING_MARGINS = [0.34635919572872886, 0.3426245556185275, 0.35996279934898862, 0.36627540073204595]    # history C16:F16
+MINIMUM_HISTORY_YEARS = 3             # assumptions.MINIMUM_HISTORY_YEARS
+
+
+def test_the_history_check_matches_the_history_sheet():
+    got = v.history_check(ADOBE_OPERATING_MARGINS, MINIMUM_HISTORY_YEARS)
+    assert got["latest"] == close(0.36627540073204595)                         # F16
+    assert got["earlier_average"] == close(0.34964885023208164)                # C20
+    assert got["gap"] * 100 == close(1.662655049996431)                        # C21, in points
+    assert got["swing"] * 100 == close(2.3650845113518448)                     # C22, in points
+
+
+def test_the_history_check_for_first_solar_by_hand():
+    got = v.history_check([-0.107, 0.267, 0.331, 0.306], MINIMUM_HISTORY_YEARS)
+    assert got["earlier_average"] == close((-0.107 + 0.267 + 0.331) / 3)       # 16.37%
+    assert got["gap"] == close(0.306 - (-0.107 + 0.267 + 0.331) / 3)           # 14.2 points above
+    assert got["swing"] == close(0.331 - (-0.107))                             # 43.8 points
+
+
+def test_the_history_check_gives_a_negative_gap_when_the_latest_year_is_below_the_rest():
+    assert v.history_check([0.04, 0.031, 0.028, -0.049], MINIMUM_HISTORY_YEARS)["gap"] == close(-0.049 - 0.033)
+
+
+def test_years_without_a_figure_are_ignored():
+    got = v.history_check([0.10, None, 0.20, 0.30], MINIMUM_HISTORY_YEARS)
+    assert got["earlier_average"] == close(0.15) and got["gap"] == close(0.15)
+
+
+def test_the_history_check_needs_the_minimum_number_of_years():
+    assert v.history_check([0.1, 0.2], MINIMUM_HISTORY_YEARS) is None           # two years: too few
+    assert v.history_check([0.1, 0.2, 0.3], MINIMUM_HISTORY_YEARS) is not None  # exactly three is enough
+    assert v.history_check([0.1, None, None, 0.3], MINIMUM_HISTORY_YEARS) is None
+
+
+def test_the_history_check_needs_a_latest_figure():
+    assert v.history_check([0.1, 0.2, 0.3, None], MINIMUM_HISTORY_YEARS) is None
+    assert v.history_check([], MINIMUM_HISTORY_YEARS) is None
