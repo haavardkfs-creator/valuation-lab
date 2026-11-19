@@ -73,6 +73,15 @@ PEER_MARGIN_GAP_WARNING = 0.10
 DEPRESSED_PEER_MARGIN = 0.05
 PEER_OUTLIER_FACTOR = 3
 
+# The reverse DCF (see docs/model.md, "What the market price implies"). The page looks for the shift
+# in every year's operating margin, or in every year's revenue growth, that makes the DCF price equal
+# the market price. It searches this far either way (0.5 is 50 percentage points) and stops when the
+# search has narrowed to this tolerance in the shift (1e-9 is far below anything the page shows).
+# Chosen on 18 Nov 2026; the search range is wide enough for any realistic answer and anything beyond it
+# is reported as "no answer" instead.
+REVERSE_DCF_SEARCH_RANGE = 0.5
+REVERSE_DCF_TOLERANCE = 1e-9
+
 # When the page warns that the latest year may be a peak or a bottom (see docs/model.md, "Is the
 # latest year typical?"). Rules of thumb, chosen with Haavard on 18 Nov 2026 after trying eight real
 # companies; they only warn, and change nothing in the valuation.

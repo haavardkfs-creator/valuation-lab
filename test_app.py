@@ -1187,3 +1187,110 @@ def test_adobes_four_years_give_no_history_warning_on_the_page(monkeypatch):
 def test_the_two_year_simple_fake_gives_no_history_warning(monkeypatch):
     page = run_page(monkeypatch)
     assert not page.warning
+
+
+# ---------------------------------------------------------------------------
+# What the market price implies: the reverse DCF on the page
+# ---------------------------------------------------------------------------
+
+ANSWER = {"shift": -0.0747, "model_average": 0.3766, "implied_average": 0.3019}
+
+
+def test_the_margin_sentence_gives_the_implied_margin_against_the_models():
+    sentence = app.implied_margin_sentence(251.47, ANSWER, None)
+    assert sentence == (
+        "To justify the market price of $251.47, the market is pricing in an average operating margin of "
+        "30.2% over the five forecast years, against 37.7% in the model, with revenue growth as modelled."
+    )
+
+
+def test_the_growth_sentence_gives_the_implied_growth_against_the_models():
+    answer = {"shift": -0.0475, "model_average": 0.081, "implied_average": 0.0335}
+    assert app.implied_growth_sentence(251.47, answer, None) == (
+        "Or, holding the margin as modelled, an average revenue growth of 3.4% a year, against 8.1% in the model."
+    )
+
+
+def test_each_sentence_says_plainly_when_no_answer_exists():
+    assert app.implied_margin_sentence(1e9, None, None) == (
+        "No operating margin within 50 points of the model's makes the DCF equal the market price of $1,000,000,000.00."
+    )
+    assert app.implied_growth_sentence(1e9, None, None).startswith("No revenue growth within 50 points of the model's")
+
+
+def test_the_history_clause_says_whether_the_implied_figure_is_above_below_or_within_the_range():
+    history = history_with_margins(0.343, 0.343, 0.360, 0.366)                    # Adobe's range: 34.3% to 36.6%
+    below = app.implied_margin_sentence(251.47, ANSWER, history)
+    assert "In its history the operating margin ranged from 34.3% to 36.6%, so the implied figure is below its worst year." in below
+    within = app.implied_margin_sentence(251.47, dict(ANSWER, implied_average=0.35), history)
+    assert within.endswith("so the implied figure is within that range.")
+    above = app.implied_margin_sentence(251.47, dict(ANSWER, implied_average=0.45), history)
+    assert above.endswith("so the implied figure is above its best year.")
+
+
+def test_the_growth_clause_uses_the_years_of_revenue_growth_in_the_history():
+    history = history_with_margins(0.1, 0.1, 0.1, 0.1)
+    history["revenue"] = [100.0, 110.0, 126.5, 132.825]                           # growth of 10%, 15% and 5%
+    sentence = app.implied_growth_sentence(100, {"shift": 0.0, "model_average": 0.08, "implied_average": 0.12}, history)
+    assert "In its history revenue growth ranged from 5.0% to 15.0%, so the implied figure is within that range." in sentence
+
+
+def test_no_history_clause_when_the_history_has_no_figure_to_compare_with():
+    history = history_with_margins(None, None, None)
+    assert "In its history" not in app.implied_margin_sentence(251.47, ANSWER, history)
+    assert app.history_range_clause("the operating margin", 0.3, []) == ""
+
+
+def test_the_page_has_the_market_price_implies_section_under_the_dcf_numbers(monkeypatch):
+    page = run_page(monkeypatch, yahoo=adobe_with_four_years())
+    subheaders = texts(page.subheader)
+    assert subheaders.index("Discounted cash flow (DCF)") < subheaders.index("What the market price implies") < subheaders.index("Overview")
+    shown = metrics(page)
+    assert shown["Operating margin it implies"].endswith("%") and shown["Revenue growth it implies"].endswith("%")
+
+
+def test_the_pages_implied_figures_match_the_solver_for_the_pages_price(monkeypatch):
+    page = run_page(monkeypatch, yahoo=adobe_with_four_years())
+    company = data.get_company_data_with_fallback("ADBE")[0]
+    answers = valuation.reverse_dcf(
+        app.build_dcf_inputs(company, 0, 0), company["share_price"], assumptions.TERMINAL_GROWTH_RATE, None,
+        assumptions.REVERSE_DCF_SEARCH_RANGE, assumptions.REVERSE_DCF_TOLERANCE,
+    )
+    assert metrics(page)["Operating margin it implies"] == app.percent(answers["margin"]["implied_average"])
+    assert metrics(page)["Revenue growth it implies"] == app.percent(answers["growth"]["implied_average"])
+    captions = [caption.replace("\\", "") for caption in texts(page.caption)]           # without the escaping backslashes
+    assert any(c.startswith(f"To justify the market price of {app.dollars(company['share_price'])}") for c in captions)
+    assert any("In its history the operating margin ranged from 34.3% to 36.6%" in c for c in captions)       # Adobe's four years
+    assert any(c.startswith("Or, holding the margin as modelled, an average revenue growth of") for c in captions)
+
+
+def test_the_implied_figures_move_with_the_sliders_and_the_wacc(monkeypatch):
+    page = run_page(monkeypatch, yahoo=adobe_with_four_years())
+    before = metrics(page)["Operating margin it implies"]
+    page.sidebar.slider[1].set_value(-2.0).run()                     # a margin 2 points lower in the model
+    assert not page.exception
+    # The implied margin is an absolute figure: a lower modelled margin does not change what the price needs...
+    assert metrics(page)["Operating margin it implies"] == before
+    # ...but the WACC does: a higher discount rate needs a higher margin to justify the same price.
+    page.sidebar.checkbox[0].check().run()
+    page.sidebar.slider[3].set_value(0.13).run()
+    after = float(metrics(page)["Operating margin it implies"].rstrip("%"))
+    assert after > float(before.rstrip("%"))
+
+
+def test_the_dollar_signs_in_the_implied_sentences_are_escaped(monkeypatch):
+    page = run_page(monkeypatch, yahoo=adobe_with_four_years())
+    [sentence] = [c for c in texts(page.caption) if c.startswith("To justify the market price of")]
+    assert "of \\$" in sentence                                       # the backslash is there
+
+
+def test_the_implied_section_still_appears_when_the_history_is_missing(monkeypatch):
+    def down(ticker, usd_per_unit=1.0):
+        raise ValueError("Could not get the history from Yahoo Finance: no internet")
+
+    monkeypatch.setattr("data.get_history", down)
+    page = run_page(monkeypatch)
+    assert not page.exception
+    assert "What the market price implies" in texts(page.subheader)
+    sentence = [c for c in texts(page.caption) if c.startswith("To justify the market price of")][0]
+    assert "In its history" not in sentence

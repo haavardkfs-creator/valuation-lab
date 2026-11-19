@@ -719,3 +719,21 @@ nothing in the valuation: using an average margin in the starting point would be
 later. Found while checking on live data and recorded under "Open" in `docs/status.md`: for a company that
 lost money last year (Ford) the page shows only the "no pre-tax profit" error, so the overview and the
 history never appear, exactly when a history would help most. Not fixed here. No new files.
+
+## 2026-11-18 — The reverse DCF: what does the market price imply? (roadmap #2)
+
+Haavard asked for the tool to work out, from the market price, the margin or growth it implies, for
+example "the market is pricing in a 20% margin", the most useful insight from his First Solar analysis.
+Agreed with Haavard: solve for the margin and for the growth separately, each holding the other as
+modelled; report the average over the five forecast years; and put it in a section right under the DCF
+numbers, set against the company's history as a reading aid. Tried first on real numbers: First Solar
+20.3%, Adobe 30.2%, Coca-Cola 42.6%, Nvidia 94.7%. Built Excel first: sheet `reverse dcf`, a copy of the
+DCF with a margin shift and a growth shift (check cell C37 is 0 at zero shifts) and the two Goal Seek
+results typed in (C41:D42). In Python, `solve_for_target` finds, by repeatedly halving a range, where a
+steadily rising or falling function reaches a target, and `reverse_dcf` uses it with `run_full_dcf`; they
+match the Goal Seek results to within 0.00001 points (Excel stops at its own tolerance). The search range
+(50 points either way) and the tolerance (1e-9) are named constants in `assumptions.py`; an answer outside
+the range is reported as "No answer". The answers use the page's WACC (the model's, or the reader's),
+terminal growth and sliders, so they move with them. The implied margin is an absolute figure: moving the
+margin slider changes the model's margin but not what the price needs. The history comparison needed the
+history before the section is drawn, so the page now loads it earlier. No new files in the repository.

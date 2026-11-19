@@ -704,6 +704,58 @@ def run_multiples(
 
 
 # ---------------------------------------------------------------------------
+# The reverse DCF: what does the market price imply? (workbook: `reverse dcf` sheet)
+# ---------------------------------------------------------------------------
+
+def solve_for_target(value_at, target, lowest, highest, tolerance):
+    """Find the input, between lowest and highest, at which value_at(input) equals the target, by
+    repeatedly halving the range. value_at must rise (or fall) steadily as the input rises. Returns
+    None if the target is not reached anywhere in the range.
+    """
+    value_low, value_high = value_at(lowest), value_at(highest)
+    if (value_low - target) * (value_high - target) > 0:       # both on the same side: no answer here
+        return None
+    rising = value_high >= value_low
+    low, high = lowest, highest
+    while high - low > tolerance:
+        middle = (low + high) / 2
+        if (value_at(middle) < target) == rising:
+            low = middle
+        else:
+            high = middle
+    return (low + high) / 2
+
+
+def reverse_dcf(dcf_inputs, market_price, terminal_growth_rate, wacc_override, search_range, tolerance):
+    """Work out what the market price implies, in two ways. First, the shift in every year's
+    operating margin that makes the DCF price equal the market price, holding revenue growth as
+    given. Second, the shift in every year's revenue growth that does it, holding the margin as given.
+    The WACC and terminal growth are the ones the DCF uses (wacc_override is None for the model's own).
+
+    Each answer is a dictionary with the shift (a decimal: 0.05 is five points), the model's average
+    over the forecast years, and the average the market price implies (the model's plus the shift); it
+    is None if no shift within search_range, up or down, reaches the market price.
+    """
+    answers = {}
+    for name, inputs_key in (("margin", "operating_margins"), ("growth", "growth_rates")):
+        def price_at(shift, inputs_key=inputs_key):
+            changed = dict(dcf_inputs)
+            changed[inputs_key] = shift_rates(dcf_inputs[inputs_key], shift)
+            return run_full_dcf(
+                **changed, terminal_growth_rate=terminal_growth_rate, wacc_override=wacc_override
+            )["implied_share_price"]
+
+        shift = solve_for_target(price_at, market_price, -search_range, search_range, tolerance)
+        model_average = sum(dcf_inputs[inputs_key]) / len(dcf_inputs[inputs_key])
+        answers[name] = None if shift is None else {
+            "shift": shift,
+            "model_average": model_average,
+            "implied_average": model_average + shift,
+        }
+    return answers
+
+
+# ---------------------------------------------------------------------------
 # The sensitivity table: price at many WACCs and terminal growth rates
 # ---------------------------------------------------------------------------
 
