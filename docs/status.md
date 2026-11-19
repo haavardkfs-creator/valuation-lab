@@ -161,15 +161,23 @@
   free cash flow differs from the model's and on what the share count is. `fetch_yahoo_history`,
   `history_in_dollars` and `get_history` in `data.py`; `yearly_growth` and `ratios_by_year` in
   `valuation.py`. Checked in the running app (Adobe, First Solar). 26 new tests; 415 tests pass.
-- Done (in the open pull request): roadmap #1b, is the latest year typical? Haavard added the earlier
+- Done: roadmap #1b (merged, PR #40), is the latest year typical? Haavard added the earlier
   average, the gap and the swing to the `history` sheet (C20:C22). `history_check` in `valuation.py`
   matches them; the limits (5 points, 15 points, at least 3 years) are in `assumptions.py`. The History
   section shows a yellow warning when the latest operating margin is more than 5 points above ("may be a
   peak") or below ("may be a bottom") the earlier average, and one when the margin has swung by more than
   15 points. Warnings only: the valuation is unchanged. Checked on live data (First Solar: both; Pfizer:
   the swing; Adobe, Coca-Cola, Apple: none). 16 new tests; 431 tests pass.
-- Next: roadmap #2, the reverse DCF, then #3 and so on, as below. Small items waiting for Haavard's
-  decision: Pfizer's negative tax rate, the adjusted beta, and the empty-Yahoo-reply retry.
+- Done (in the open pull request): roadmap #2, the reverse DCF. Haavard built the `reverse dcf` sheet
+  (a copy of the DCF with a margin shift and a growth shift, and two Goal Seek results). `solve_for_target`
+  and `reverse_dcf` in `valuation.py` match them; the search range and tolerance are in `assumptions.py`.
+  A "What the market price implies" section under the DCF numbers gives the average operating margin, and
+  separately the average revenue growth, that would make the DCF equal the market price, against the model's
+  and against the company's history. Uses the page's WACC, terminal growth and sliders. 23 new tests; 454
+  tests pass. Checked on live data (First Solar, Adobe, Coca-Cola, Nvidia) and in the running app.
+- Next: roadmap #3, a second sensitivity table (operating margin by revenue growth), then #5b and so on,
+  as below. Small items waiting for Haavard's decision: Pfizer's negative tax rate, the adjusted beta, the
+  empty-Yahoo-reply retry, and drawing the overview and history even when the DCF cannot be built.
 - Open:
   - A negative tax rate flows into the forecast. Pfizer's last-year tax rate is -3.54% (a tax
     benefit; seen on 18 Nov 2026 in the new WACC table), and the starting point holds the tax rate

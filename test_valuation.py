@@ -1244,3 +1244,96 @@ def test_the_history_check_needs_the_minimum_number_of_years():
 def test_the_history_check_needs_a_latest_figure():
     assert v.history_check([0.1, 0.2, 0.3, None], MINIMUM_HISTORY_YEARS) is None
     assert v.history_check([], MINIMUM_HISTORY_YEARS) is None
+
+
+# ---------------------------------------------------------------------------
+# The reverse DCF (workbook: `reverse dcf` sheet; Goal Seek results in C41:D42)
+# ---------------------------------------------------------------------------
+
+SEARCH_RANGE = 0.5                    # assumptions.REVERSE_DCF_SEARCH_RANGE
+SEARCH_TOLERANCE = 1e-9               # assumptions.REVERSE_DCF_TOLERANCE
+
+
+def adobe_dcf_inputs():
+    """The inputs of the base-case DCF as the page builds them, in the shape run_full_dcf takes."""
+    return dict(
+        base_revenue=BASE_REVENUE, growth_rates=GROWTH_RATES, operating_margins=OPERATING_MARGINS,
+        tax_rate=TAX_RATE, da_pcts=DA_PCTS, capex_pcts=CAPEX_PCTS, wc_pcts=WC_PCTS,
+        risk_free_rate=RISK_FREE_RATE, beta=BETA, equity_risk_premium=EQUITY_RISK_PREMIUM,
+        pre_tax_cost_of_debt=PRE_TAX_COST_OF_DEBT, share_price=SHARE_PRICE, shares=SHARES, debt=DEBT,
+        cash_and_investments=CASH_AND_INVESTMENTS,
+    )
+
+
+def adobe_reverse_dcf(market_price=SHARE_PRICE, wacc_override=None):
+    return v.reverse_dcf(
+        adobe_dcf_inputs(), market_price, TERMINAL_GROWTH_RATE, wacc_override, SEARCH_RANGE, SEARCH_TOLERANCE
+    )
+
+
+def test_the_solver_finds_where_a_rising_function_reaches_the_target():
+    assert v.solve_for_target(lambda x: 2 * x + 1, 7, -10, 10, 1e-9) == pytest.approx(3.0, abs=1e-8)
+
+
+def test_the_solver_also_works_for_a_falling_function():
+    assert v.solve_for_target(lambda x: 10 - x, 4, -10, 10, 1e-9) == pytest.approx(6.0, abs=1e-8)
+
+
+def test_the_solver_gives_none_when_the_target_is_out_of_reach():
+    assert v.solve_for_target(lambda x: x, 50, -10, 10, 1e-9) is None          # too high
+    assert v.solve_for_target(lambda x: x, -50, -10, 10, 1e-9) is None         # too low
+
+
+def test_the_solver_finds_a_target_at_the_edge_of_the_range():
+    assert v.solve_for_target(lambda x: x, 10, -10, 10, 1e-9) == pytest.approx(10, abs=1e-8)
+
+
+def test_the_reverse_dcf_margin_matches_the_reverse_dcf_sheets_goal_seek():
+    margin = adobe_reverse_dcf()["margin"]
+    assert margin["shift"] * 100 == pytest.approx(-7.463986711549321, abs=1e-5)                # C41, in points
+    assert margin["model_average"] == pytest.approx(0.37650000000000006)                       # C38
+    assert margin["implied_average"] == pytest.approx(0.30186013288450703, abs=1e-7)           # D41
+
+
+def test_the_reverse_dcf_growth_matches_the_reverse_dcf_sheets_goal_seek():
+    growth = adobe_reverse_dcf()["growth"]
+    assert growth["shift"] * 100 == pytest.approx(-4.752290554834703, abs=1e-5)                # C42, in points
+    assert growth["model_average"] == pytest.approx(0.081)                                     # D38
+    assert growth["implied_average"] == pytest.approx(0.033477094451653, abs=1e-7)             # D42
+
+
+def test_the_price_at_the_implied_shift_is_the_market_price():
+    answers = adobe_reverse_dcf()
+    for inputs_key, name in (("operating_margins", "margin"), ("growth_rates", "growth")):
+        changed = dict(adobe_dcf_inputs())
+        changed[inputs_key] = v.shift_rates(changed[inputs_key], answers[name]["shift"])
+        price = v.run_full_dcf(**changed, terminal_growth_rate=TERMINAL_GROWTH_RATE)["implied_share_price"]
+        assert price == pytest.approx(SHARE_PRICE, abs=1e-5)
+
+
+def test_at_the_dcf_price_the_implied_shift_is_zero():
+    # The market price equal to the model's own price (valuation C26) needs no shift at all.
+    answers = adobe_reverse_dcf(market_price=305.60201673218938)
+    assert answers["margin"]["shift"] == pytest.approx(0, abs=1e-7)
+    assert answers["growth"]["shift"] == pytest.approx(0, abs=1e-7)
+
+
+def test_a_market_price_above_the_dcf_implies_a_higher_margin_and_growth():
+    answers = adobe_reverse_dcf(market_price=400)
+    assert answers["margin"]["shift"] > 0 and answers["growth"]["shift"] > 0
+    assert answers["margin"]["implied_average"] > answers["margin"]["model_average"]
+
+
+def test_a_price_no_margin_or_growth_can_reach_gives_no_answer():
+    answers = adobe_reverse_dcf(market_price=1e9)
+    assert answers["margin"] is None and answers["growth"] is None
+
+
+def test_the_reverse_dcf_uses_a_wacc_the_reader_set():
+    own = adobe_reverse_dcf()["margin"]["shift"]
+    higher = adobe_reverse_dcf(wacc_override=0.13)["margin"]["shift"]     # a higher discount rate needs a higher margin
+    assert higher > own
+    changed = dict(adobe_dcf_inputs())
+    changed["operating_margins"] = v.shift_rates(changed["operating_margins"], higher)
+    price = v.run_full_dcf(**changed, terminal_growth_rate=TERMINAL_GROWTH_RATE, wacc_override=0.13)["implied_share_price"]
+    assert price == pytest.approx(SHARE_PRICE, abs=1e-5)

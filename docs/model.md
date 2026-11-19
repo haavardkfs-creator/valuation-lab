@@ -200,6 +200,28 @@ from the Peers box.
   only price".
 The peers table has a "Flag" column and a line under it explains each flagged peer.
 
+## What the market price implies (the reverse DCF)
+
+Instead of asking what the company is worth, this asks what the market is already assuming
+(workbook: sheet `reverse dcf`, a copy of the DCF with a margin shift and a growth shift). It finds the
+shift in every year's operating margin that makes the DCF price equal today's market price, and
+separately the shift in every year's revenue growth that does it. Each answer changes one thing and
+holds the other as modelled.
+- Margin shift = the number of percentage points added to every forecast year's operating margin at
+  which the DCF price equals the market price. The page quotes the average margin over the five
+  forecast years: the model's average plus the shift.
+- Growth shift: the same for revenue growth. The page quotes the average growth a year.
+- Adobe on the workbook's $251.47 (model $305.60): the margin shift is -7.46 points, an average margin of
+  30.19% against 37.65% (`reverse dcf` C41, D41); the growth shift is -4.75 points, an average growth of
+  3.35% against 8.10% (C42, D42). Excel finds them with Goal Seek; Python finds them by repeatedly
+  halving a search range (50 points either way) and matches to within 0.00001 points.
+- Both answers use the page's current WACC, terminal growth and sliders, so they move when the reader
+  moves those. If no shift within 50 points reaches the price, the page says "No answer".
+- Each answer is set against the company's own history: whether the implied margin or growth is above
+  its best year, below its worst, or within the range it has had. On 18 Nov 2026: First Solar's price
+  implies a 20.3% margin against 30.6% in the model, within its history of -10.7% to 33.1%; Coca-Cola's
+  implies 42.6%, above its best year of 31.1%; Nvidia's implies 94.7%, far above its best year.
+
 ## Overview of the stock
 
 Eight numbers for a quick picture of a company, shown on the page under the DCF section

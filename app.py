@@ -297,6 +297,99 @@ def multiple_or_note(multiple, decimals=1):
     return NOT_MEANINGFUL if multiple is None else f"{multiple:.{decimals}f}x"
 
 
+def history_range_clause(label, implied, values):
+    """Set an implied figure against the company's own history: say what range the figure had over
+    the years and whether the implied one is above the best year, below the worst, or within the
+    range. Returns an empty string when the history has no figure to compare with.
+    """
+    known = [value for value in values if value is not None]
+    if not known:
+        return ""
+    best, worst = max(known), min(known)
+    if implied > best:
+        verdict = "above its best year"
+    elif implied < worst:
+        verdict = "below its worst year"
+    else:
+        verdict = "within that range"
+    return (
+        f" In its history {label} ranged from {percent(worst)} to {percent(best)}, so the implied "
+        f"figure is {verdict}."
+    )
+
+
+def implied_margin_sentence(market_price, answer, history):
+    """Say what operating margin the market price implies: the average over the five forecast
+    years against the model's, with revenue growth as modelled, and how that compares with the
+    company's history. Says so plainly when no margin within the search range reaches the price.
+    """
+    if answer is None:
+        return (
+            f"No operating margin within {assumptions.REVERSE_DCF_SEARCH_RANGE * 100:.0f} points of the "
+            f"model's makes the DCF equal the market price of {dollars(market_price)}."
+        )
+    sentence = (
+        f"To justify the market price of {dollars(market_price)}, the market is pricing in an average "
+        f"operating margin of {percent(answer['implied_average'])} over the five forecast years, against "
+        f"{percent(answer['model_average'])} in the model, with revenue growth as modelled."
+    )
+    if history is not None:
+        margins = valuation.ratios_by_year(history["operating_income"], history["revenue"])
+        sentence += history_range_clause("the operating margin", answer["implied_average"], margins)
+    return sentence
+
+
+def implied_growth_sentence(market_price, answer, history):
+    """Say what revenue growth the market price implies: the average a year over the five forecast
+    years against the model's, with the margin as modelled, and how that compares with the
+    company's history. Says so plainly when no growth within the search range reaches the price.
+    """
+    if answer is None:
+        return (
+            f"No revenue growth within {assumptions.REVERSE_DCF_SEARCH_RANGE * 100:.0f} points of the "
+            f"model's makes the DCF equal the market price of {dollars(market_price)}."
+        )
+    sentence = (
+        f"Or, holding the margin as modelled, an average revenue growth of {percent(answer['implied_average'])} "
+        f"a year, against {percent(answer['model_average'])} in the model."
+    )
+    if history is not None:
+        sentence += history_range_clause("revenue growth", answer["implied_average"], valuation.yearly_growth(history["revenue"]))
+    return sentence
+
+
+def draw_reverse_dcf(company, dcf_inputs, terminal_growth_rate, wacc_override, history):
+    """Draw "What the market price implies": the operating margin, and separately the revenue
+    growth, that would make the DCF equal today's market price, each against the model's and the
+    company's history. It uses the page's current sliders, terminal growth and WACC.
+    """
+    st.subheader("What the market price implies")
+    answers = valuation.reverse_dcf(
+        dcf_inputs, company["share_price"], terminal_growth_rate, wacc_override,
+        assumptions.REVERSE_DCF_SEARCH_RANGE, assumptions.REVERSE_DCF_TOLERANCE,
+    )
+    price_column, margin_column, growth_column = st.columns(3)
+    price_column.metric("Market price", dollars(company["share_price"]))
+    margin_column.metric(
+        "Operating margin it implies",
+        "No answer" if answers["margin"] is None else percent(answers["margin"]["implied_average"]),
+        help="The average operating margin over the five forecast years at which the DCF equals the market price, holding revenue growth as modelled.",
+    )
+    growth_column.metric(
+        "Revenue growth it implies",
+        "No answer" if answers["growth"] is None else percent(answers["growth"]["implied_average"]),
+        help="The average revenue growth a year over the five forecast years at which the DCF equals the market price, holding the margin as modelled.",
+    )
+    # Each dollar sign is escaped with a backslash, because Streamlit reads text between two
+    # unescaped dollar signs as a maths formula.
+    st.caption(implied_margin_sentence(company["share_price"], answers["margin"], history).replace("$", "\\$"))
+    st.caption(implied_growth_sentence(company["share_price"], answers["growth"], history).replace("$", "\\$"))
+    st.caption(
+        "Each answer changes one thing and holds the other as modelled. They use the page's current "
+        "settings (the sliders, the terminal growth and the WACC), so they move when you move those."
+    )
+
+
 def draw_overview(overview):
     """Draw the overview: how fast the company is growing, what it earns, how much cash it
     makes for its price and how heavy its debt is, then what the market pays for it.
@@ -1131,8 +1224,8 @@ def draw_error(ticker, error):
 
 def draw_page():
     """Draw the whole page: ticker box, sliders, peer box (companies other than Adobe), title,
-    DCF section, overview, history, assumptions, how the WACC is built, charts, heatmap, multiples
-    and footer. If the company cannot be valued, draw
+    DCF section, what the market price implies, overview, history, assumptions, how the WACC is
+    built, charts, heatmap, multiples and footer. If the company cannot be valued, draw
     the reason instead.
     """
     ticker = draw_ticker_box()
@@ -1157,12 +1250,13 @@ def draw_page():
     st.title("Valuation Lab")
     st.write(f"{company['company_name']} ({company['ticker']})")
     draw_source_note(company, source_used)
-    draw_dcf(company, dcf, wacc_override is not None)
-    draw_overview(overview)
     try:
         history, history_error = load_history(company["ticker"], company.get("usd_per_statement_unit", 1.0)), None
     except ValueError as error:
         history, history_error = None, str(error)
+    draw_dcf(company, dcf, wacc_override is not None)
+    draw_reverse_dcf(company, dcf_inputs, terminal_growth_rate, wacc_override, history)
+    draw_overview(overview)
     draw_history(history, history_error, overview, company["company_name"])
     year_labels = assumptions.FORECAST_YEAR_LABELS if is_base_case(company) else assumptions.GENERIC_YEAR_LABELS
     draw_assumptions(
