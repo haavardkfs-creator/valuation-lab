@@ -601,3 +601,21 @@ differences are expected. In Python, `stock_overview` and the small functions be
 the peer figures in `data.py`. The page's tooltips are short plain definitions; the glossary
 entries for the new terms are Haavard's to write. Existing tests of the peers table now expect the
 extra rows and column. No new files.
+
+## 2026-11-18 — The website roadmap and the order of work
+
+Haavard shared a list of 11 improvements to make the site a good tool, most important first:
+history, a reverse DCF, a margin-and-growth sensitivity, visible assumptions, more robust peer
+multiples, scenarios, quality metrics, adjustments for one-off items, a transparent WACC, forward
+multiples, and a thesis field with export. It is recorded in full in `docs/status.md` under "Next".
+Before ordering it, Yahoo was checked for what it can supply: 4-5 years of annual statements (not
+10), 7 quarters (enough for a trailing-twelve-month view) and analyst estimates. So history starts
+with 4-5 years, and 10 would need a second data source later. The order of work follows dependency
+and size, not only importance: transparency first (visible assumptions and a transparent WACC, both
+small), because the reverse DCF, scenarios and one-off adjustments all depend on seeing exactly which
+path the model uses; then the quick peer warnings; then history; then the reverse DCF and the second
+sensitivity table; then the larger peer changes; then quality metrics, adjustments and scenarios;
+then forward multiples and the thesis export. Haavard agreed to this order and can change it. Two
+items need decisions when their turn comes: how to choose peers by business type (Yahoo only has
+industry), and a new dependency for PDF export. This is a plan, not a build: nothing in the code
+changes in this pull request, and no new files.

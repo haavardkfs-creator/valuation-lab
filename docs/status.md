@@ -135,9 +135,40 @@
   table now has the company's own row first, a "Peer median" row last and an "Op. margin" column
   (peers' margins come from Yahoo; for Adobe they are fetched live). "Not meaningful" where a number
   would mean nothing. 29 new or changed tests; 339 tests pass.
-- Next: Haavard's ideas for the website. Also planned: an adjusted beta (two thirds of the raw beta
-  plus one third of 1), built in Excel first. Glossary entries for the new terms (free cash flow
-  yield, net debt over EBITDA, EV/Sales and so on) are Haavard's to write.
+- Next: the website roadmap, agreed with Haavard on 18 Nov 2026 (his list of 11, in his words below,
+  worked in the order after it). One pull request, one idea; each model change is built in Excel
+  first, and Haavard writes the glossary entries for new terms (free cash flow yield, net debt
+  over EBITDA, EV/Sales and so on).
+  1. History: 5 to 10 years of revenue, operating margin, free cash flow, net income and share
+     count. Yahoo gives only 4-5 annual years, so 4-5 first; 10 years would need a second data
+     source (for example SEC filings), later. Reason: one year can be a peak or a bottom.
+  2. Reverse DCF: solve for the margin or growth the market price implies ("the market is pricing
+     in a 20% margin"). Excel first (Goal Seek); a solver in Python needs no new dependency.
+  3. A second sensitivity table that varies operating margin and revenue growth, since WACC and
+     terminal growth are not the biggest risks.
+  4. Visible assumptions: show the actual growth path, margin, capex and working capital the model
+     uses, and make clear what the sliders' "0 %" means (an adjustment, not the value). Fix "-0 %".
+  5. Peer robustness, in three parts: (5a) warn when peers' margins differ a lot from the
+     company's, flag or exclude peers with depressed or negative earnings, and warn when "the
+     middle" is only the average of two prices; (5b) put the company on trailing twelve months
+     like the peers (Yahoo has 7 quarters); (5c) choose peers by business type, not size (Yahoo
+     only has industry, so this needs a decision).
+  6. Scenarios: bear, base and bull, each with its own growth and margin, and a
+     probability-weighted price. Haavard decides the inputs and probabilities.
+  7. Quality metrics: ROIC, free cash flow over net income (cash conversion), interest coverage and
+     share count change. ROIC needs balance sheet figures; interest cover is blank for some
+     companies.
+  8. Adjustments for one-off items: a field to adjust EBIT (for example to remove tax credits such
+     as First Solar's 45X, or one-time gains). Labelled as the reader's own number.
+  9. Transparent WACC: show the risk-free rate, beta, equity risk premium and cost of debt behind it.
+  10. Forward multiples (nice to have): analyst estimates for next year; Yahoo has them.
+  11. A thesis field and export (nice to have): thesis, risks and a sell trigger, exported as a PDF.
+      A PDF needs a new dependency (tell Haavard first); text typed into the page is lost on reload
+      until Phase 7 (saving via Supabase).
+  Order of work, by dependency and size: this roadmap; #4 and #9 (small, and the later features need
+  the model's path to be visible); #5a; #1; #2 then #3; #5b and #5c; #7, #8, #6; #10 and #11.
+  Also planned, not on the list: an adjusted beta (two thirds of the raw beta plus one third of 1),
+  built in Excel first, the cure for low-beta prices (see Open).
 - Open:
   - Low-beta companies get odd DCF prices: on 16 Nov 2026 Pfizer's WACC is 5.96% and its DCF
     price $94.96 against a market price of $28.89, and both terminal value cautions fire. The
