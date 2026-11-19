@@ -175,6 +175,31 @@ How the page uses them (companies other than Adobe; Adobe keeps its four peers a
 | Peer medians EV/Sales / EV/EBITDA / P/E | 5.78x / 18.20x / 26.85x |
 | Multiples prices EV/Sales / EV/EBITDA / P/E | $333.58 / $420.52 / $463.54 |
 
+## Warnings about the peers
+
+Three screening rules tell the reader when the peer comparison may mislead. They are rules of
+thumb, not valuation maths, so they have no cell in the workbook. They flag, and never remove, a
+peer: a flagged peer still counts in the medians, and the reader can leave it out by removing it
+from the Peers box.
+- **Margins far apart.** If the company's operating margin is more than 10 percentage points above
+  or below the middle of its peers' margins, a yellow warning says so. Multiples, EV/Sales most of
+  all, compare badly between companies with different margins, so lean more on EV/EBITDA and P/E.
+  On 18 Nov 2026: First Solar 30.6% against 6.3% (24.3 points), Coca-Cola 31.1% against 18.3% (12.8),
+  Adobe 36.6% against 24.8% (11.8). Pfizer, 7.4 points below, is within the limit.
+- **Depressed earnings.** A peer whose operating margin is below 5% (a loss counts) is flagged
+  "Low margin": its earnings are depressed, so its multiples look inflated (Enphase: margin 0.6%,
+  EV/EBITDA 31.9x).
+- **A multiple far from the rest.** A peer whose EV/Sales, EV/EBITDA or P/E is more than 3 times
+  above, or less than a third of, the middle of all the peers' (the same middle the page uses for
+  the price) is flagged "outlier": often a one-off gain or loss (Sunrun's P/E of 3.9x, Merck's
+  139x, Synopsys's 82.6x). The middle of all the peers is used, not of the others, because with
+  few peers one outlier would drag the others' middle around and make a normal peer look odd.
+  A multiple needs at least 2 usable peers to be judged.
+- **The middle price.** With three prices the page says "Middle of the three prices". With two it
+  says "Average of two prices" and warns that two numbers have no middle; with one it says "The
+  only price".
+The peers table has a "Flag" column and a line under it explains each flagged peer.
+
 ## Overview of the stock
 
 Eight numbers for a quick picture of a company, shown on the page under the DCF section

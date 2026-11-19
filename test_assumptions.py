@@ -214,3 +214,9 @@ def test_stepping_a_shift_slider_up_from_its_minimum_lands_exactly_on_zero():
 def test_the_decimal_shift_range_is_the_points_range_divided_by_100():
     assert (a.GROWTH_SHIFT_MIN, a.GROWTH_SHIFT_MAX, a.GROWTH_SHIFT_STEP) == (-0.05, 0.05, 0.005)
     assert (a.MARGIN_SHIFT_MIN, a.MARGIN_SHIFT_MAX, a.MARGIN_SHIFT_STEP) == (-0.05, 0.05, 0.005)
+
+
+def test_the_peer_warning_limits_are_the_ones_agreed_with_haavard():
+    # 18 Nov 2026: a margin gap over 10 points, a margin under 5%, and a multiple over 3 times
+    # (or under a third of) the others' middle.
+    assert (a.PEER_MARGIN_GAP_WARNING, a.DEPRESSED_PEER_MARGIN, a.PEER_OUTLIER_FACTOR) == (0.10, 0.05, 3)

@@ -307,6 +307,54 @@ def last_year_free_cash_flow(ebit, tax_rate, depreciation_and_amortisation, cape
     )
 
 
+def margin_gap(company_margin, peer_margins, minimum_peers):
+    """Work out how far the company's operating margin is above (positive) or below (negative)
+    the middle of its peers' margins, in decimals (0.10 is ten percentage points). Gives None if
+    the company has no margin or fewer than minimum_peers peers have one.
+    """
+    peer_median_margin = median_of_available(peer_margins, minimum_peers)
+    if company_margin is None or peer_median_margin is None:
+        return None
+    return company_margin - peer_median_margin
+
+
+def is_outlier(multiple, middle_of_peers, outlier_factor):
+    """Say whether a peer's multiple is far from the rest: more than outlier_factor times above,
+    or less than one over outlier_factor times, the middle of the peers' multiples. A multiple
+    that is not usable, or with nothing to compare it with, is not called an outlier.
+    """
+    if middle_of_peers is None or not usable_multiples([multiple]):
+        return False
+    return multiple > outlier_factor * middle_of_peers or multiple < middle_of_peers / outlier_factor
+
+
+def flag_peers(peers, depressed_margin, outlier_factor, minimum_peers):
+    """Find the peers whose figures may distort the comparison. For each peer, in order, return a
+    list of reasons (empty if none): "low_margin" when its operating margin is below
+    depressed_margin (depressed earnings inflate its multiples), and "ev_sales", "ev_ebitda" or
+    "pe" when that multiple is far from the middle of all the peers' (see is_outlier), the same
+    middle the page's prices use. `peers` holds the lists peer_tickers, peer_ev_sales,
+    peer_ev_ebitda, peer_pe and peer_operating_margin; a multiple needs at least minimum_peers
+    usable peers to be judged.
+    """
+    columns = {
+        "ev_sales": peers["peer_ev_sales"],
+        "ev_ebitda": peers["peer_ev_ebitda"],
+        "pe": peers["peer_pe"],
+    }
+    middles = {name: median_of_usable_multiples(values, minimum_peers) for name, values in columns.items()}
+    flags = []
+    for position, margin in enumerate(peers["peer_operating_margin"]):
+        reasons = []
+        if margin is not None and not math.isnan(margin) and margin < depressed_margin:
+            reasons.append("low_margin")
+        for name, values in columns.items():
+            if is_outlier(values[position], middles[name], outlier_factor):
+                reasons.append(name)
+        flags.append(reasons)
+    return flags
+
+
 def median_of_available(values, minimum_peers):
     """Find the middle value of the figures that exist, ignoring blanks. Unlike a multiple,
     a negative figure counts (a peer that loses money on its sales is real information).

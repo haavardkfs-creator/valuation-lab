@@ -656,3 +656,24 @@ companies exposed a problem, recorded under "Open" in `docs/status.md`: Pfizer's
 negative (-3.54%, a tax benefit), and the starting point holds it flat, which flatters its cash flows.
 Together with its low beta (0.30, a cost of equity of 6.60%) this explains its odd DCF price. Not
 fixed here: one idea per pull request. No new files.
+
+## 2026-11-18 — Warnings about the peers (roadmap #5a)
+
+The first part of the peer-robustness item. Real peer groups were tried before choosing the rules:
+First Solar's own margin of 30.6% against its peers' 6.3%, Enphase with a margin of 0.6% and an
+EV/EBITDA of 31.9x, Sunrun with a P/E of 3.9x, Merck with 139x. Haavard chose to flag and not
+exclude (the median already resists one outlier, excluding hides information, and he can still
+remove a peer from the box), and agreed the limits: a margin gap over 10 points, a margin under 5%,
+and a multiple over 3 times or under a third of the peers' middle. A "Flag" column marks the peers,
+a line explains each, a yellow warning says when the margins are far apart, and the "middle" price
+is named honestly: "Middle of the three prices", "Average of two prices" (with a warning) or "The
+only price". In `valuation.py`: `margin_gap`, `is_outlier` and `flag_peers`; the limits are named
+constants in `assumptions.py`. One change after the agreement, found while checking on live data:
+the multiple was first compared with the middle of the OTHER peers, which gave a false alarm for
+Pfizer's Bristol-Myers (a normal P/E of 13.2 looked far from 49.1, because Merck's 139.2 had dragged
+the others' middle up). It is now compared with the middle of ALL the peers, the same middle the
+price uses; Merck is flagged, Bristol-Myers is not, and Sunrun, Enphase and Synopsys still are. This
+makes the rule simpler to explain and consistent with the page, and is easy to revert. Known limit:
+Adobe's page now shows the margin warning too (11.8 points), and a flag on Synopsys, which the
+Excel notes already call an outlier. Rules of thumb, so no Excel step; the rules are written up in
+`docs/model.md` ("Warnings about the peers") for Haavard to check. No new files.

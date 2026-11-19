@@ -1051,3 +1051,104 @@ def test_the_wacc_breakdown_matches_every_step_of_the_wacc_sheet():
 
 def test_the_breakdowns_wacc_is_the_wacc_the_dcf_uses():
     assert adobe_wacc_breakdown()["wacc"] == close(run_base_case()["wacc"])
+
+
+# ---------------------------------------------------------------------------
+# Warnings about the peers (not cells in the Excel model: screening rules, so the expected numbers
+# are worked out by hand; see docs/model.md, "Warnings about the peers")
+# ---------------------------------------------------------------------------
+
+# Three peers like First Solar's, as Yahoo showed them on 18 Nov 2026 (NXT, ENPH, RUN).
+SOLAR_PEERS = {
+    "peer_tickers": ["NXT", "ENPH", "RUN"],
+    "peer_ev_sales": [2.8, 2.2, 4.7],
+    "peer_ev_ebitda": [14.3, 31.9, 18.0],
+    "peer_pe": [19.8, 34.3, 3.9],
+    "peer_operating_margin": [0.186, 0.006, 0.063],
+}
+DEPRESSED_MARGIN = 0.05               # assumptions.DEPRESSED_PEER_MARGIN
+OUTLIER_FACTOR = 3                    # assumptions.PEER_OUTLIER_FACTOR
+
+
+def test_margin_gap_is_the_company_margin_minus_the_peer_median():
+    # Peers' margins 18.6%, 0.6%, 6.3% have a median of 6.3%; First Solar's 30.6% is 24.3 points above.
+    assert v.margin_gap(0.306, SOLAR_PEERS["peer_operating_margin"], 2) == close(0.243)
+
+
+def test_margin_gap_is_negative_when_the_company_earns_less_than_its_peers():
+    assert v.margin_gap(0.278, [0.382, 0.324, 0.341, 0.352, 0.366], 2) == close(0.278 - 0.352)    # like Pfizer
+
+
+def test_margin_gap_gives_none_without_a_company_margin_or_enough_peer_margins():
+    assert v.margin_gap(None, [0.1, 0.2], 2) is None
+    assert v.margin_gap(0.3, [0.1, None], 2) is None
+    assert v.margin_gap(0.3, [], 2) is None
+
+
+def test_a_multiple_far_above_or_below_the_rest_is_an_outlier():
+    assert v.is_outlier(139.2, 37.8, OUTLIER_FACTOR)                  # like Merck's P/E: over 3 times
+    assert v.is_outlier(3.9, 19.8, OUTLIER_FACTOR)                    # like Sunrun's P/E: under a third
+    assert not v.is_outlier(31.9, 18.0, OUTLIER_FACTOR)               # Enphase's EV/EBITDA is not 3 times
+
+
+def test_exactly_the_outlier_factor_is_not_an_outlier():
+    assert not v.is_outlier(30, 10, 3) and not v.is_outlier(10 / 3, 10, 3)
+    assert v.is_outlier(30.01, 10, 3) and v.is_outlier(3.3, 10, 3)
+
+
+def test_a_multiple_that_cannot_be_judged_is_not_an_outlier():
+    assert not v.is_outlier(None, 20, OUTLIER_FACTOR)
+    assert not v.is_outlier(-5, 20, OUTLIER_FACTOR)
+    assert not v.is_outlier(100, None, OUTLIER_FACTOR)                # nothing to compare with
+
+
+def test_flag_peers_finds_the_distorted_solar_peers():
+    flags = v.flag_peers(SOLAR_PEERS, DEPRESSED_MARGIN, OUTLIER_FACTOR, 2)
+    # Enphase: margin 0.6% is under 5%. Sunrun: P/E of 3.9 is under a third of the peers' middle, 19.8.
+    assert flags == [[], ["low_margin"], ["pe"]]
+
+
+def test_flag_peers_finds_synopsys_in_adobes_peers_and_nothing_else():
+    flags = v.flag_peers(
+        {
+            "peer_tickers": ["ADSK", "INTU", "CRM", "SNPS"], "peer_ev_sales": [6.71, 4.35, 4.85, 10.19],
+            "peer_ev_ebitda": [22.94, 13.45, 12.63, 26.18], "peer_pe": [32.73, 20.72, 20.97, 82.62],
+            "peer_operating_margin": [0.281, 0.288, 0.215, 0.110],
+        },
+        DEPRESSED_MARGIN, OUTLIER_FACTOR, 2,
+    )
+    assert flags == [[], [], [], ["pe"]]            # Synopsys's 82.6x is 3.9 times the others' 21.0
+
+
+def test_a_margin_of_exactly_the_depressed_level_is_not_flagged_and_a_loss_is():
+    peers = dict(SOLAR_PEERS, peer_operating_margin=[0.05, -0.25, None])
+    flags = v.flag_peers(peers, DEPRESSED_MARGIN, OUTLIER_FACTOR, 2)
+    assert "low_margin" not in flags[0]               # exactly 5%
+    assert "low_margin" in flags[1]                   # a loss is depressed earnings
+    assert "low_margin" not in flags[2]               # no margin: nothing to say
+
+
+def test_a_peer_can_be_flagged_for_several_reasons():
+    peers = {
+        "peer_tickers": ["A", "B", "C"], "peer_ev_sales": [2.0, 2.0, 2.0], "peer_ev_ebitda": [10.0, 10.0, 90.0],
+        "peer_pe": [20.0, 20.0, 200.0], "peer_operating_margin": [0.2, 0.2, 0.01],
+    }
+    assert v.flag_peers(peers, DEPRESSED_MARGIN, OUTLIER_FACTOR, 2)[2] == ["low_margin", "ev_ebitda", "pe"]
+
+
+def test_one_extreme_peer_does_not_make_a_normal_peer_look_odd():
+    # Pfizer's peers on 18 Nov 2026. Against the middle of the OTHERS, Bristol-Myers's P/E of 13.2 looked
+    # far below 49.1, because Merck's 139.2 had dragged that middle up. Against the middle of all the
+    # peers (37.8) only Merck is an outlier.
+    pfizers_peers = {
+        "peer_tickers": ["GILD", "BMY", "AMGN", "MRK", "ABBV"], "peer_ev_sales": [7.4, 3.1, 7.2, 5.7, 8.7],
+        "peer_ev_ebitda": [15.5, 8.4, 15.9, 13.0, 18.1], "peer_pe": [None, 13.2, 26.5, 139.2, 49.1],
+        "peer_operating_margin": [0.382, 0.324, 0.341, 0.352, 0.366],
+    }
+    flags = v.flag_peers(pfizers_peers, DEPRESSED_MARGIN, OUTLIER_FACTOR, 2)
+    assert flags == [[], [], [], ["pe"], []]
+
+
+def test_a_multiple_with_too_few_usable_peers_is_not_judged():
+    peers = dict(SOLAR_PEERS, peer_pe=[None, None, 3.9])               # only one usable P/E: no middle to compare with
+    assert "pe" not in v.flag_peers(peers, DEPRESSED_MARGIN, OUTLIER_FACTOR, 2)[2]

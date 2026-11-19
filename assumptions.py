@@ -57,6 +57,22 @@ SUGGESTED_PEERS = 5
 # a peer). Chosen with Haavard on 16 Nov 2026.
 MAX_TYPED_PEERS = 8
 
+# When the page warns that the peers may not be comparable (see docs/model.md, "Warnings about the
+# peers"). All three are rules of thumb, chosen with Haavard on 18 Nov 2026 after trying real peer
+# groups (First Solar, Coca-Cola, Adobe, Pfizer); they flag, and never remove, a peer.
+# - PEER_MARGIN_GAP_WARNING: warn when the company's operating margin is more than this many
+#   percentage points above or below its peers' median. EV/Sales especially compares badly between
+#   companies with different margins. (First Solar's gap is 24 points, Coca-Cola's 13, Adobe's 12.)
+# - DEPRESSED_PEER_MARGIN: flag a peer whose operating margin is below this, because its multiples
+#   are inflated by depressed earnings (Enphase: margin 0.6%, EV/EBITDA 31.9x).
+# - PEER_OUTLIER_FACTOR: flag a peer whose multiple is more than this many times above, or below one
+#   over this many times, the median of all the peers' (often a one-off: Sunrun's P/E of 3.9x).
+#   The median of all the peers, not of the others, because with few peers one outlier (Merck's
+#   P/E of 139x) would drag the others' median around and make a normal peer look odd.
+PEER_MARGIN_GAP_WARNING = 0.10
+DEPRESSED_PEER_MARGIN = 0.05
+PEER_OUTLIER_FACTOR = 3
+
 # The company the hand-chosen forecast assumptions above were made for. The page uses them
 # only for this company; any other ticker gets a starting point from its own last year.
 BASE_CASE_TICKER = "ADBE"
