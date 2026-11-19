@@ -141,6 +141,11 @@
   changes below. The growth and margin sliders are now in percentage points ("+0.0 pts"), which fixes
   the "-0 %" (stepping in 0.005 landed on -5e-18); `percent()` never writes -0.0%. 11 new tests;
   350 tests pass. Checked in the running app.
+- Done (in the open pull request): roadmap #9, a transparent WACC. A "How the WACC is built" section
+  shows every step of the WACC sheet with where each input comes from (typed in by hand, Yahoo Finance
+  today, the 10-K, or an estimate) and a sentence that says why the number is what it is. New
+  `capital_weights` and `wacc_breakdown` in `valuation.py` match the sheet's cells, and `wacc()` now
+  uses `capital_weights`. `MARKET_FIGURES_SOURCE` in `data.py`. 9 new tests; 363 tests pass.
 - Next: the website roadmap, agreed with Haavard on 18 Nov 2026 (his list of 11, in his words below,
   worked in the order after it). One pull request, one idea; each model change is built in Excel
   first, and Haavard writes the glossary entries for new terms (free cash flow yield, net debt
@@ -171,11 +176,16 @@
   11. A thesis field and export (nice to have): thesis, risks and a sell trigger, exported as a PDF.
       A PDF needs a new dependency (tell Haavard first); text typed into the page is lost on reload
       until Phase 7 (saving via Supabase).
-  Order of work, by dependency and size: this roadmap (done); #4 (done) and #9 (small, and the later features need
+  Order of work, by dependency and size: this roadmap (done); #4 (done) and #9 (done) (small, and the later features need
   the model's path to be visible); #5a; #1; #2 then #3; #5b and #5c; #7, #8, #6; #10 and #11.
   Also planned, not on the list: an adjusted beta (two thirds of the raw beta plus one third of 1),
   built in Excel first, the cure for low-beta prices (see Open).
 - Open:
+  - A negative tax rate flows into the forecast. Pfizer's last-year tax rate is -3.54% (a tax
+    benefit; seen on 18 Nov 2026 in the new WACC table), and the starting point holds the tax rate
+    flat, so its forecast cash flows are too high and its after-tax cost of debt (4.32%) is above
+    its pre-tax cost (4.18%). Together with its low beta this explains its DCF price. Needs a
+    decision, for example floor the tax rate at zero or use a normal rate, built in Excel first.
   - Low-beta companies get odd DCF prices: on 16 Nov 2026 Pfizer's WACC is 5.96% and its DCF
     price $94.96 against a market price of $28.89, and both terminal value cautions fire. The
     caution says so, but the cure is the planned adjusted beta.

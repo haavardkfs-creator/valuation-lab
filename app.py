@@ -367,6 +367,109 @@ def draw_assumptions(company, dcf_inputs, year_labels, dcf, terminal_growth_rate
     )
 
 
+def wacc_sources(company, source_used):
+    """Say, in plain words, where each input to the WACC comes from: typed in by hand, from
+    Yahoo Finance today, from the frozen snapshot of the Excel model, or estimated. Returns a
+    dictionary with one entry per input that has a source.
+    """
+    live = source_used != data.FALLBACK_SOURCE            # Yahoo today (live, or the yahoo source)
+    snapshot_note = "Frozen snapshot of the Excel model"
+    if company.get("cost_of_debt_is_fallback"):
+        cost_of_debt = "Estimate: the risk-free rate plus a typical credit spread (Yahoo has no interest expense)"
+    elif "pre_tax_cost_of_debt" in company:
+        cost_of_debt = "The weighted average interest rate in the 10-K's debt notes"
+    else:
+        cost_of_debt = "Estimate: last year's interest expense divided by debt"
+    return {
+        "risk_free_rate": f"{data.MARKET_FIGURES_SOURCE} (typed in by hand)",
+        "beta": "Yahoo Finance, 5-year monthly" if live else f"{snapshot_note} (Yahoo Finance, 5-year monthly)",
+        "equity_risk_premium": f"{data.MARKET_FIGURES_SOURCE} (typed in by hand)",
+        "pre_tax_cost_of_debt": cost_of_debt,
+        "tax_rate": (
+            "The forecast tax rate (the Projection sheet)" if is_base_case(company)
+            else "Last year's rate: income tax divided by pre-tax income"
+        ),
+        "market_value_of_equity": (
+            "Today's share price from Yahoo Finance, times shares" if live
+            else f"{snapshot_note}: share price times shares"
+        ),
+        "debt": (
+            "The 10-K: current plus long-term debt" if is_base_case(company)
+            else "Yahoo Finance: current plus long-term debt"
+        ),
+    }
+
+
+def wacc_table(company, dcf_inputs, source_used):
+    """Make the table that shows how the WACC is built, one step per row: the three inputs of
+    the cost of equity, the cost of equity itself, the cost of debt and tax rate, the cost of
+    debt after tax, the market values and weights of equity and debt, and the WACC. Returns the
+    table and the breakdown behind it.
+    """
+    build = valuation.wacc_breakdown(
+        share_price=dcf_inputs["share_price"],
+        shares=dcf_inputs["shares"],
+        debt=dcf_inputs["debt"],
+        risk_free_rate=dcf_inputs["risk_free_rate"],
+        beta=dcf_inputs["beta"],
+        equity_risk_premium=dcf_inputs["equity_risk_premium"],
+        pre_tax_cost_of_debt=dcf_inputs["pre_tax_cost_of_debt"],
+        tax_rate=dcf_inputs["tax_rate"],
+    )
+    source = wacc_sources(company, source_used)
+    rows = [
+        ("Risk-free rate", precise_percent(dcf_inputs["risk_free_rate"]), source["risk_free_rate"]),
+        ("Beta", f"{dcf_inputs['beta']:.2f}", source["beta"]),
+        ("Equity risk premium", precise_percent(dcf_inputs["equity_risk_premium"]), source["equity_risk_premium"]),
+        ("Cost of equity", precise_percent(build["cost_of_equity"]), "Risk-free rate + beta × equity risk premium"),
+        ("Pre-tax cost of debt", precise_percent(dcf_inputs["pre_tax_cost_of_debt"]), source["pre_tax_cost_of_debt"]),
+        ("Tax rate", precise_percent(dcf_inputs["tax_rate"]), source["tax_rate"]),
+        ("Cost of debt after tax", precise_percent(build["after_tax_cost_of_debt"]), "Pre-tax cost of debt × (1 − tax rate)"),
+        ("Market value of equity", f"${build['market_value_of_equity']:,.0f}m", source["market_value_of_equity"]),
+        ("Debt", f"${build['debt']:,.0f}m", source["debt"]),
+        ("Weight of equity", precise_percent(build["weight_of_equity"]), "Equity ÷ (equity + debt)"),
+        ("Weight of debt", precise_percent(build["weight_of_debt"]), "Debt ÷ (equity + debt)"),
+        ("WACC", precise_percent(build["wacc"]), "Weight of equity × cost of equity + weight of debt × cost of debt after tax"),
+    ]
+    table = pd.DataFrame(rows, columns=["Step", "Value", "Where it comes from"]).set_index("Step")
+    return table, build
+
+
+def wacc_explanation(build, used_wacc, wacc_is_set_by_user):
+    """Say in one or two sentences why the WACC is what it is: how much of the funding is equity
+    and what it costs, how much is debt and what it costs after tax, and the blend. If the reader
+    set their own WACC, say that the DCF uses that instead.
+    """
+    if build["weight_of_debt"] == 0:
+        sentence = (
+            f"The company has no debt, so the WACC is just its cost of equity, "
+            f"{precise_percent(build['cost_of_equity'])}."
+        )
+    else:
+        sentence = (
+            f"{build['weight_of_equity']:.0%} of the funding is equity, costing "
+            f"{precise_percent(build['cost_of_equity'])}; {build['weight_of_debt']:.0%} is debt, costing "
+            f"{precise_percent(build['after_tax_cost_of_debt'])} after tax. Blended, that is "
+            f"{precise_percent(build['wacc'])}."
+        )
+    if wacc_is_set_by_user:
+        sentence += (
+            f" You have set the WACC to {precise_percent(used_wacc)}, so the DCF uses that instead "
+            f"of the model's own {precise_percent(build['wacc'])}."
+        )
+    return sentence
+
+
+def draw_wacc_build(company, dcf_inputs, source_used, dcf, wacc_is_set_by_user):
+    """Draw "How the WACC is built": the table of steps with where each input comes from, and
+    a sentence that says why the number is what it is.
+    """
+    st.subheader("How the WACC is built")
+    table, build = wacc_table(company, dcf_inputs, source_used)
+    st.table(table)
+    st.caption(wacc_explanation(build, dcf["wacc"], wacc_is_set_by_user))
+
+
 def terminal_value_cautions(dcf, terminal_growth_rate):
     """List, in plain words, the reasons to treat this price with care because it rests mostly
     on the far future. Returns an empty list when neither check (the terminal value's share of
@@ -772,7 +875,8 @@ def draw_error(ticker, error):
 
 def draw_page():
     """Draw the whole page: ticker box, sliders, peer box (companies other than Adobe), title,
-    DCF section, overview, assumptions, charts, heatmap, multiples and footer. If the company cannot be valued, draw
+    DCF section, overview, assumptions, how the WACC is built, charts, heatmap, multiples and
+    footer. If the company cannot be valued, draw
     the reason instead.
     """
     ticker = draw_ticker_box()
@@ -804,6 +908,7 @@ def draw_page():
         company, dcf_inputs, year_labels, dcf, terminal_growth_rate, wacc_override is not None,
         growth_shift, margin_shift,
     )
+    draw_wacc_build(company, dcf_inputs, source_used, dcf, wacc_override is not None)
     draw_charts(dcf, year_labels, terminal_growth_rate)
     draw_heatmap(company, dcf_inputs, base_wacc)
     draw_multiples(

@@ -718,3 +718,104 @@ def test_points_text_writes_a_sign_and_never_negative_zero():
     assert app.points_text(0.015) == "+1.5 points"
     assert app.points_text(-0.02) == "-2.0 points"
     assert app.points_text(0.0) == "+0.0 points" and app.points_text(-0.0) == "+0.0 points"
+
+
+# ---------------------------------------------------------------------------
+# How the WACC is built: every step, and where each input comes from
+# ---------------------------------------------------------------------------
+
+def adobe_snapshot_wacc_table():
+    """The WACC table for Adobe's snapshot: the 10-K figures and the $251.47 price the workbook uses."""
+    company = data.get_company_data("ADBE", source="snapshot")
+    return app.wacc_table(company, app.build_dcf_inputs(company, 0, 0), "snapshot")
+
+
+def test_the_wacc_table_matches_every_step_of_the_wacc_sheet():
+    table, _ = adobe_snapshot_wacc_table()
+    assert list(table.index) == [
+        "Risk-free rate", "Beta", "Equity risk premium", "Cost of equity", "Pre-tax cost of debt",
+        "Tax rate", "Cost of debt after tax", "Market value of equity", "Debt", "Weight of equity",
+        "Weight of debt", "WACC",
+    ]
+    values = table["Value"].to_dict()
+    assert values == {
+        "Risk-free rate": "5.29%",                    # WACC C8
+        "Beta": "1.38",                               # C9
+        "Equity risk premium": "4.41%",               # C10
+        "Cost of equity": "11.38%",                   # C11
+        "Pre-tax cost of debt": "4.16%",              # C14
+        "Tax rate": "18.00%",                         # C15
+        "Cost of debt after tax": "3.41%",            # C16
+        "Market value of equity": "$103,857m",        # C21
+        "Debt": "$6,210m",                            # C22
+        "Weight of equity": "94.36%",                 # C24
+        "Weight of debt": "5.64%",                    # C25
+        "WACC": "10.93%",                             # C29
+    }
+
+
+def test_the_wacc_table_says_where_adobes_inputs_come_from():
+    table, _ = adobe_snapshot_wacc_table()
+    where = table["Where it comes from"].to_dict()
+    assert where["Risk-free rate"] == "Damodaran, 1 Nov 2026 (typed in by hand)"
+    assert where["Equity risk premium"] == "Damodaran, 1 Nov 2026 (typed in by hand)"
+    assert where["Beta"].startswith("Frozen snapshot of the Excel model")
+    assert where["Pre-tax cost of debt"] == "The weighted average interest rate in the 10-K's debt notes"
+    assert where["Tax rate"] == "The forecast tax rate (the Projection sheet)"
+    assert where["Debt"] == "The 10-K: current plus long-term debt"
+
+
+def test_the_wacc_table_is_on_the_page_and_its_wacc_is_the_one_the_dcf_uses(monkeypatch):
+    page = run_page(monkeypatch)
+    assert "How the WACC is built" in texts(page.subheader)
+    table = page.table[0].value
+    assert table.loc["Beta", "Where it comes from"] == "Yahoo Finance, 5-year monthly"      # live, not the snapshot
+    assert table.loc["WACC", "Value"].startswith(metrics(page)["WACC"][:-2])               # 10.9x% and 10.9%
+
+
+def test_another_companys_inputs_are_labelled_as_estimates_from_its_own_figures(monkeypatch):
+    page = run_page(monkeypatch, ticker="exmp", yahoo=other_company())
+    where = page.table[0].value["Where it comes from"]
+    assert where["Pre-tax cost of debt"] == "Estimate: last year's interest expense divided by debt"
+    assert where["Tax rate"] == "Last year's rate: income tax divided by pre-tax income"
+    assert where["Debt"] == "Yahoo Finance: current plus long-term debt"
+
+
+def test_a_company_using_the_fallback_cost_of_debt_says_so_in_the_wacc_table(monkeypatch):
+    page = run_page(monkeypatch, ticker="aapl", yahoo=no_interest_expense_company())
+    table = page.table[0].value
+    assert table.loc["Pre-tax cost of debt", "Value"] == "6.40%"                           # the risk-free rate plus 1.11%
+    assert table.loc["Pre-tax cost of debt", "Where it comes from"].startswith("Estimate: the risk-free rate plus")
+
+
+def test_the_wacc_sentence_says_why_the_number_is_what_it_is():
+    _, build = adobe_snapshot_wacc_table()
+    assert app.wacc_explanation(build, build["wacc"], False) == (
+        "94% of the funding is equity, costing 11.38%; 6% is debt, costing 3.41% after tax. "
+        "Blended, that is 10.93%."
+    )
+
+
+def test_a_company_with_no_debt_is_explained_as_all_equity():
+    build = {"weight_of_debt": 0.0, "weight_of_equity": 1.0, "cost_of_equity": 0.09,
+             "after_tax_cost_of_debt": 0.0, "wacc": 0.09}
+    assert app.wacc_explanation(build, 0.09, False) == (
+        "The company has no debt, so the WACC is just its cost of equity, 9.00%."
+    )
+
+
+def test_when_the_reader_sets_a_wacc_the_page_still_shows_the_models_own_build(monkeypatch):
+    page = run_page(monkeypatch)
+    own = page.table[0].value.loc["WACC", "Value"]
+    page.sidebar.checkbox[0].check().run()                                                 # "Set the WACC myself"
+    assert not page.exception
+    assert page.table[0].value.loc["WACC", "Value"] == own                                 # the build is unchanged
+    [line] = [c for c in texts(page.caption) if "You have set the WACC to 11.00%" in c]    # the slider's start
+    assert "instead of the model's own" in line
+
+
+def test_a_very_low_wacc_company_still_gets_its_wacc_table(monkeypatch):
+    low_beta = fake_statements_ticker(info=dict(ADOBE_YAHOO_INFO, beta=-0.3))
+    page = run_page(monkeypatch, ticker="lowb", yahoo=low_beta)
+    assert not page.exception
+    assert page.table[0].value.loc["Beta", "Value"] == "-0.30"

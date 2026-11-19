@@ -64,8 +64,9 @@ OPTIONAL_FIELDS = {
 # Market-wide figures: the same for every company, typed in by hand (no simple feed)
 # ---------------------------------------------------------------------------
 
-# Dated 1 Nov 2026. These go stale: update them, and the date in their comments, when
-# Damodaran publishes new ones.
+# Dated 1 Nov 2026. These go stale: update them, MARKET_FIGURES_SOURCE and the date in their
+# comments, when Damodaran publishes new ones.
+MARKET_FIGURES_SOURCE = "Damodaran, 1 Nov 2026"     # what the page says these two figures come from
 RISK_FREE_RATE = 0.0529             # Damodaran, US Treasury rate used in his implied ERP, 1 Nov 2026
 EQUITY_RISK_PREMIUM = 0.0441        # Damodaran, implied ERP (trailing 12 months, adjusted payout), 1 Nov 2026
 

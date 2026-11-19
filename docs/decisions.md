@@ -637,3 +637,22 @@ calculated, the table shows numbers the model already uses. Verified in the runn
 a slider up from its minimum to zero. One existing test changed: the very-low-WACC page test said
 "no table" when the heatmap is missing; it now says the only table is the assumptions table. The
 tooltips on the sliders point to the new table. No new files.
+
+## 2026-11-18 — A transparent WACC (roadmap #9)
+
+Haavard asked for the inputs behind the WACC to be visible so a reader can see why it is, for
+example, 12.7%. The `WACC` sheet already had every step (rows 8-29), so there was no Excel step.
+A new section, "How the WACC is built", under "What the model assumes", shows each step as a row
+(risk-free rate, beta, equity risk premium, cost of equity, pre-tax cost of debt, tax rate, cost of
+debt after tax, market value of equity, debt, the two weights, the WACC), a "where it comes from"
+column, and one sentence that says why the number is what it is. Agreed with Haavard: that place,
+and the source column. In Python, `capital_weights` (the sheet's C24 and C25) is new, `wacc()` now
+uses it so the table and the DCF cannot disagree, and `wacc_breakdown` returns every step; all are
+tested against the sheet's cells. `MARKET_FIGURES_SOURCE` in `data.py` holds the source and date of
+the two typed-in market figures, so the page and the constants cannot drift apart. The section uses
+a static table (`st.table`), so it does not count among the page's interactive tables. If the reader
+sets a WACC of their own, the table keeps showing the model's build. Seeing the inputs for real
+companies exposed a problem, recorded under "Open" in `docs/status.md`: Pfizer's last-year tax rate is
+negative (-3.54%, a tax benefit), and the starting point holds it flat, which flatters its cash flows.
+Together with its low beta (0.30, a cost of equity of 6.60%) this explains its odd DCF price. Not
+fixed here: one idea per pull request. No new files.

@@ -219,6 +219,24 @@ the reader set) and how many points the sliders are adding to growth and margin.
   Half points are exact in a computer's arithmetic, so the slider lands on exactly zero; the old
   decimal steps of 0.005 landed on -5e-18, which the page showed as "-0 %".
 
+## How the WACC is built, as the page shows it
+
+Under "What the model assumes" the page has "How the WACC is built": every step of the WACC sheet
+(rows 8-29) as a row, with where each input comes from, and a sentence under it. For Adobe on the
+workbook's price:
+- Risk-free rate 5.29%, beta 1.38, equity risk premium 4.41% give a cost of equity of 11.38%
+  (risk-free rate + beta × premium).
+- Pre-tax cost of debt 4.16% and a tax rate of 18.00% give a cost of debt after tax of 3.41%.
+- Market value of equity $103,857m and debt $6,210m give weights of 94.36% and 5.64% (each
+  divided by the two together).
+- WACC = weight of equity × cost of equity + weight of debt × cost of debt after tax = 10.93%.
+The "where it comes from" column says which inputs are typed in by hand (the risk-free rate and
+equity risk premium, from Damodaran on a stated date), which come from Yahoo Finance today (beta,
+share price, and for other companies the debt and tax rate), which come from the 10-K (Adobe's debt
+and cost of debt), and which are estimates (a cost of debt from interest expense divided by debt, or
+from the risk-free rate plus a credit spread). If the reader sets their own WACC with the slider,
+the table still shows the model's own build and a line says the DCF uses the reader's figure.
+
 ## Starting point for other companies
 
 Adobe's forecast assumptions are judgments made for Adobe. For any other company, the model
