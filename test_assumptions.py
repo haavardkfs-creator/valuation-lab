@@ -231,3 +231,10 @@ def test_the_history_warning_limits_are_the_ones_agreed_with_haavard():
 def test_the_reverse_dcf_search_settings():
     # Search 50 points either way and stop at a tolerance far below anything the page shows.
     assert a.REVERSE_DCF_SEARCH_RANGE == 0.5 and a.REVERSE_DCF_TOLERANCE == 1e-9
+
+
+def test_the_margin_and_growth_table_steps_are_the_ones_agreed_with_haavard():
+    # 19 Nov 2026: margin -10, -5, 0, +5, +10 points; growth -4, -2, 0, +2, +4 points; 0 is the base case.
+    assert a.MARGIN_GROWTH_TABLE_MARGIN_SHIFTS == [-0.10, -0.05, 0.0, 0.05, 0.10]
+    assert a.MARGIN_GROWTH_TABLE_GROWTH_SHIFTS == [-0.04, -0.02, 0.0, 0.02, 0.04]
+    assert 0.0 in a.MARGIN_GROWTH_TABLE_MARGIN_SHIFTS and 0.0 in a.MARGIN_GROWTH_TABLE_GROWTH_SHIFTS

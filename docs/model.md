@@ -200,6 +200,25 @@ from the Peers box.
   only price".
 The peers table has a "Flag" column and a line under it explains each flagged peer.
 
+## Sensitivity to margin and growth
+
+A second sensitivity table sits under the WACC table, because WACC and terminal growth are not the
+biggest risks: the margin and the growth are (workbook: sheet `reverse dcf`, shifts in C7 and C8).
+- Each row shifts every forecast year's operating margin, and each column every year's revenue growth,
+  by the points shown: margin -10, -5, 0, +5, +10 points and growth -4, -2, 0, +2, +4 points. The labels
+  show the five-year average each shift gives (for example 27.65% for -10 points), as two decimals like
+  "What the model assumes".
+- The table is centred on the page's current settings, so the bold middle cell is the DCF price above.
+  Unlike the WACC table, it uses the WACC in use (the model's own, or the one the reader set), because
+  it is the margin and growth that vary here.
+- Adobe on the workbook's price: the middle is $305.60; -10 points of margin with -4 of growth gives
+  $197.87, and +10 with +4 gives $443.67. Cutting the margin by 10 points costs $73 a share; cutting
+  growth by 4 points costs $47. The workbook checks six points by reading the price in `reverse dcf`
+  C36 at those shifts (C55:E60): the base case, the four corners and (+5, +2) = $370.49. Excel's Data
+  Table, which would fill all 25 cells at once, could not be made to work in Haavard's Excel, so the six
+  readings are the check; every cell is the same calculation at another pair of shifts.
+- Cells are coloured against the market price, green above and red below, like the WACC table.
+
 ## What the market price implies (the reverse DCF)
 
 Instead of asking what the company is worth, this asks what the market is already assuming

@@ -168,14 +168,20 @@
   peak") or below ("may be a bottom") the earlier average, and one when the margin has swung by more than
   15 points. Warnings only: the valuation is unchanged. Checked on live data (First Solar: both; Pfizer:
   the swing; Adobe, Coca-Cola, Apple: none). 16 new tests; 431 tests pass.
-- Done (in the open pull request): roadmap #2, the reverse DCF. Haavard built the `reverse dcf` sheet
+- Done: roadmap #2 (merged, PR #41), the reverse DCF. Haavard built the `reverse dcf` sheet
   (a copy of the DCF with a margin shift and a growth shift, and two Goal Seek results). `solve_for_target`
   and `reverse_dcf` in `valuation.py` match them; the search range and tolerance are in `assumptions.py`.
   A "What the market price implies" section under the DCF numbers gives the average operating margin, and
   separately the average revenue growth, that would make the DCF equal the market price, against the model's
   and against the company's history. Uses the page's WACC, terminal growth and sliders. 23 new tests; 454
   tests pass. Checked on live data (First Solar, Adobe, Coca-Cola, Nvidia) and in the running app.
-- Next: roadmap #3, a second sensitivity table (operating margin by revenue growth), then #5b and so on,
+- Done (in the open pull request): roadmap #3, a second sensitivity table. Haavard read the price on the
+  `reverse dcf` sheet at six pairs of shifts (C55:E60; Excel's Data Table would not fill). A table under the
+  WACC heatmap gives the price at operating margins of -10 to +10 points and revenue growth of -4 to +4
+  points, labelled with the average each gives, coloured against the market price, centred on the page's
+  current settings so the middle is the DCF price. `margin_growth_table` in `valuation.py` matches the six
+  readings; the steps are in `assumptions.py`. 17 new tests; 471 tests pass. Checked in the running app.
+- Next: roadmap #5b, the company on trailing twelve months like the peers, then #5c, #7, #8, #6, #10 and #11,
   as below. Small items waiting for Haavard's decision: Pfizer's negative tax rate, the adjusted beta, the
   empty-Yahoo-reply retry, and drawing the overview and history even when the DCF cannot be built.
 - Open:

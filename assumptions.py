@@ -155,6 +155,15 @@ HEATMAP_TERMINAL_GROWTH_RATES = [0.015, 0.02, 0.025, 0.03, 0.035]
 
 
 # ---------------------------------------------------------------------------
+# The second sensitivity table: price at different operating margins and revenue growth (see
+# docs/model.md, "Sensitivity to margin and growth"). Each row shifts every forecast year's operating
+# margin by this many percentage points, each column shifts every year's revenue growth, and 0 is
+# the page's current setting. WACC and terminal growth are not the biggest risks; the margin and
+# growth are. Chosen with Haavard on 19 Nov 2026 after trying Adobe and First Solar: a 10-point cut in
+# margin costs Adobe $73 a share, a 4-point cut in growth $47.
+MARGIN_GROWTH_TABLE_MARGIN_SHIFTS = [-0.10, -0.05, 0.0, 0.05, 0.10]
+MARGIN_GROWTH_TABLE_GROWTH_SHIFTS = [-0.04, -0.02, 0.0, 0.02, 0.04]
+
 # The WACC slider (Phase 5). Only used when the box "Set the WACC myself" is ticked; unticked,
 # the model works out its own WACC (10.9266%).
 # ---------------------------------------------------------------------------
