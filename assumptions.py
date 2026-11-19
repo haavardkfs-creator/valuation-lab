@@ -70,12 +70,22 @@ BASE_CASE_TICKER = "ADBE"
 
 # How far the growth and margin sliders can shift every forecast year, up or down.
 # Chosen for Phase 5 as wide enough to see a big effect: +/-5 percentage points.
-GROWTH_SHIFT_MIN = -0.05
-GROWTH_SHIFT_MAX = 0.05
-GROWTH_SHIFT_STEP = 0.005
-MARGIN_SHIFT_MIN = -0.05
-MARGIN_SHIFT_MAX = 0.05
-MARGIN_SHIFT_STEP = 0.005
+# The sliders work in percentage points (+1.0 pts), in half-point steps. Half points are exactly
+# representable in a computer's arithmetic, so stepping up from -5 lands on exactly 0, not on a
+# tiny negative number that the page would show as "-0 %". The model then uses the same range
+# as decimals (0.05 is 5 percentage points), derived from these.
+GROWTH_SHIFT_MIN_POINTS = -5.0
+GROWTH_SHIFT_MAX_POINTS = 5.0
+GROWTH_SHIFT_STEP_POINTS = 0.5
+MARGIN_SHIFT_MIN_POINTS = -5.0
+MARGIN_SHIFT_MAX_POINTS = 5.0
+MARGIN_SHIFT_STEP_POINTS = 0.5
+GROWTH_SHIFT_MIN = GROWTH_SHIFT_MIN_POINTS / 100
+GROWTH_SHIFT_MAX = GROWTH_SHIFT_MAX_POINTS / 100
+GROWTH_SHIFT_STEP = GROWTH_SHIFT_STEP_POINTS / 100
+MARGIN_SHIFT_MIN = MARGIN_SHIFT_MIN_POINTS / 100
+MARGIN_SHIFT_MAX = MARGIN_SHIFT_MAX_POINTS / 100
+MARGIN_SHIFT_STEP = MARGIN_SHIFT_STEP_POINTS / 100
 
 # Terminal growth slider. The top is capped at 4% because the Gordon growth formula needs
 # terminal growth to stay well below the WACC (10.93%), and long-run growth above the

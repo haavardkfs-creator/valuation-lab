@@ -203,6 +203,22 @@ G43:G46, where the Coca-Cola peers' margins (16.05%, 18.26%, 14.57%) have a medi
 The company's own figures come from its last full year, the peers' from Yahoo's trailing twelve
 months, so small differences between them are expected.
 
+## What the model assumes, and the sliders
+
+The page shows the assumptions the DCF really uses, so a slider is never mistaken for the
+assumption itself. Under the Overview, "What the model assumes" has one row per forecast year:
+revenue growth, operating margin, tax rate, D&A, capex and working capital (as a share of revenue;
+working capital is positive when it brings cash in). They are the figures after the sliders have
+moved them. A line below says the terminal growth rate, the WACC (the model's own, or the one
+the reader set) and how many points the sliders are adding to growth and margin.
+- For Adobe they are the hand-chosen assumptions on the `Projection` sheet (H6:L6 growth, H9:L9
+  margin, H10:L10 tax, H13:L13 D&A, H15:L15 capex, H17:L17 working capital).
+- For any other company they are the starting point worked out from its last year (see below).
+- The growth and margin sliders are changes, in percentage points: "+1.0 pts" adds one point to
+  every year. At +0.0 pts the table is the base case. Their range is ±5 points in half-point steps.
+  Half points are exact in a computer's arithmetic, so the slider lands on exactly zero; the old
+  decimal steps of 0.005 landed on -5e-18, which the page showed as "-0 %".
+
 ## Starting point for other companies
 
 Adobe's forecast assumptions are judgments made for Adobe. For any other company, the model

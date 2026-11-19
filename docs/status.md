@@ -135,6 +135,12 @@
   table now has the company's own row first, a "Peer median" row last and an "Op. margin" column
   (peers' margins come from Yahoo; for Adobe they are fetched live). "Not meaningful" where a number
   would mean nothing. 29 new or changed tests; 339 tests pass.
+- Done (in the open pull request): roadmap #4, visible assumptions. A "What the model assumes"
+  section under the Overview shows the actual growth, margin, tax rate, D&A, capex and working capital
+  for each forecast year after the sliders, with the terminal growth, the WACC and the slider
+  changes below. The growth and margin sliders are now in percentage points ("+0.0 pts"), which fixes
+  the "-0 %" (stepping in 0.005 landed on -5e-18); `percent()` never writes -0.0%. 11 new tests;
+  350 tests pass. Checked in the running app.
 - Next: the website roadmap, agreed with Haavard on 18 Nov 2026 (his list of 11, in his words below,
   worked in the order after it). One pull request, one idea; each model change is built in Excel
   first, and Haavard writes the glossary entries for new terms (free cash flow yield, net debt
@@ -165,7 +171,7 @@
   11. A thesis field and export (nice to have): thesis, risks and a sell trigger, exported as a PDF.
       A PDF needs a new dependency (tell Haavard first); text typed into the page is lost on reload
       until Phase 7 (saving via Supabase).
-  Order of work, by dependency and size: this roadmap; #4 and #9 (small, and the later features need
+  Order of work, by dependency and size: this roadmap (done); #4 (done) and #9 (small, and the later features need
   the model's path to be visible); #5a; #1; #2 then #3; #5b and #5c; #7, #8, #6; #10 and #11.
   Also planned, not on the list: an adjusted beta (two thirds of the raw beta plus one third of 1),
   built in Excel first, the cure for low-beta prices (see Open).

@@ -299,7 +299,9 @@ def test_a_very_low_wacc_still_shows_the_dcf_and_explains_the_missing_heatmap(mo
     assert "DCF implied price" in metrics(page)
     assert "Sensitivity: price at different WACC and terminal growth" in texts(page.subheader)
     assert any("This table cannot be drawn" in caption for caption in texts(page.caption))
-    assert not page.dataframe
+    # The only table on the page is "What the model assumes": the heatmap is missing.
+    [table] = page.dataframe
+    assert list(table.value.columns)[0] == "Revenue growth"
 
 
 # ---------------------------------------------------------------------------
@@ -623,3 +625,96 @@ def test_a_company_that_lost_money_says_not_meaningful_instead_of_a_wrong_number
     assert got["operating_margin"] == pytest.approx(8706 / 23769)         # EBIT is still positive here
     assert app.percent_or_note(None) == app.NOT_MEANINGFUL and app.multiple_or_note(None) == app.NOT_MEANINGFUL
     assert app.multiple_or_note(14.566, 1) == "14.6x" and app.multiple_or_note(-0.0404, 2) == "-0.04x"
+
+
+# ---------------------------------------------------------------------------
+# What the model assumes: the actual numbers, and sliders that are clearly a change
+# ---------------------------------------------------------------------------
+
+def assumptions_on(page):
+    """The 'What the model assumes' table of a page: it is the first table, before the heatmap."""
+    return page.dataframe[0].value
+
+
+def test_the_page_shows_what_the_model_assumes_for_adobe_year_by_year(monkeypatch):
+    page = run_page(monkeypatch)
+    assert "What the model assumes" in texts(page.subheader)
+    table = assumptions_on(page)
+    assert list(table.index) == assumptions.FORECAST_YEAR_LABELS
+    assert list(table.columns) == [
+        "Revenue growth", "Operating margin", "Tax rate", "D&A % of revenue",
+        "Capex % of revenue", "Working capital % of revenue",
+    ]
+    # Adobe's hand-chosen assumptions (Projection H6:L17), shown as the model uses them.
+    assert table["Revenue growth"].tolist() == ["9.00%", "9.00%", "8.00%", "7.50%", "7.00%"]
+    assert table["Operating margin"].tolist() == ["36.80%", "36.95%", "37.50%", "38.00%", "39.00%"]
+    assert table["Tax rate"].tolist() == ["18.00%"] * 5
+    assert table["D&A % of revenue"].tolist() == ["3.30%", "3.20%", "3.10%", "3.00%", "2.90%"]
+    assert table["Capex % of revenue"].tolist() == ["0.90%", "1.00%", "1.00%", "1.10%", "1.20%"]
+    assert table["Working capital % of revenue"].tolist() == ["1.00%"] * 5
+
+
+def test_the_assumptions_line_says_where_they_come_from_and_what_the_sliders_do(monkeypatch):
+    page = run_page(monkeypatch)
+    [line] = [caption for caption in texts(page.caption) if caption.startswith("Adobe's assumptions")]
+    assert "hand-chosen" in line and "2.50%" in line
+    assert "growth by +0.0 points" in line and "operating margin by +0.0 points" in line
+
+
+def test_moving_a_slider_changes_the_table_by_that_many_points(monkeypatch):
+    page = run_page(monkeypatch)
+    page.sidebar.slider[0].set_value(1.5).run()                  # growth: +1.5 points
+    page.sidebar.slider[1].set_value(-2.0).run()                 # margin: -2.0 points
+    assert not page.exception
+    table = assumptions_on(page)
+    assert table["Revenue growth"].tolist() == ["10.50%", "10.50%", "9.50%", "9.00%", "8.50%"]
+    assert table["Operating margin"].tolist() == ["34.80%", "34.95%", "35.50%", "36.00%", "37.00%"]
+    assert table["Tax rate"].tolist() == ["18.00%"] * 5          # the sliders leave everything else alone
+    line = [caption for caption in texts(page.caption) if caption.startswith("Adobe's assumptions")][0]
+    assert "growth by +1.5 points" in line and "operating margin by -2.0 points" in line
+
+
+def test_the_shift_sliders_are_in_points_and_start_at_zero(monkeypatch):
+    page = run_page(monkeypatch)
+    growth, margin = page.sidebar.slider[0], page.sidebar.slider[1]
+    assert growth.label == "Revenue growth: change every year by" and growth.value == 0.0
+    assert margin.label == "Operating margin: change every year by" and margin.value == 0.0
+    assert (growth.min, growth.max, growth.step) == (-5.0, 5.0, 0.5)
+
+
+def test_another_company_gets_the_table_with_numbered_years_and_the_faded_path(monkeypatch):
+    page = run_page(monkeypatch, ticker="exmp", yahoo=other_company())
+    table = assumptions_on(page)
+    assert list(table.index) == assumptions.GENERIC_YEAR_LABELS
+    assert table["Revenue growth"].tolist()[-1] == "2.50%"       # the fade ends at the terminal growth rate
+    assert table["Working capital % of revenue"].tolist()[-1] == "0.00%"      # working capital fades to zero
+    assert any("starting point worked out from the company's own last reported year" in caption
+               for caption in texts(page.caption))
+
+
+def test_the_line_says_whose_wacc_it_is(monkeypatch):
+    page = run_page(monkeypatch)
+    assert any("the model's own WACC" in caption for caption in texts(page.caption))
+    page.sidebar.checkbox[0].check().run()
+    assert any("the WACC you set" in caption for caption in texts(page.caption))
+
+
+# The "-0 %" problem: a zero must be written as a plain zero.
+
+def test_a_rate_too_small_to_show_is_never_written_as_negative_zero():
+    assert app.percent(-0.00004) == "0.0%" and app.percent(0.0) == "0.0%"
+    assert app.precise_percent(-0.000001) == "0.00%"
+    assert app.percent(-0.123) == "-12.3%" and app.precise_percent(-0.0001) == "-0.01%"      # real values are kept
+
+
+def test_shift_from_points_turns_points_into_a_decimal_and_a_zero_stays_zero():
+    import math
+    assert app.shift_from_points(1.5) == 0.015
+    assert app.shift_from_points(-5.0) == -0.05
+    assert math.copysign(1, app.shift_from_points(-0.0)) == 1       # not a negative zero
+
+
+def test_points_text_writes_a_sign_and_never_negative_zero():
+    assert app.points_text(0.015) == "+1.5 points"
+    assert app.points_text(-0.02) == "-2.0 points"
+    assert app.points_text(0.0) == "+0.0 points" and app.points_text(-0.0) == "+0.0 points"

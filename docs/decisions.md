@@ -619,3 +619,21 @@ then forward multiples and the thesis export. Haavard agreed to this order and c
 items need decisions when their turn comes: how to choose peers by business type (Yahoo only has
 industry), and a new dependency for PDF export. This is a plan, not a build: nothing in the code
 changes in this pull request, and no new files.
+
+## 2026-11-18 — Visible assumptions, and sliders that are clearly a change (roadmap #4)
+
+The first item built from the roadmap. The sliders said "0 %", which could mean the actual growth or
+an adjustment, and sometimes "-0 %". The cause of "-0 %" was found: stepping from -5% in steps of
+0.005 comes to -5.2e-18, not 0, and the browser shows that as "-0 %"; the page's own `percent()`
+also wrote tiny negative rates as "-0.0%". Decided with Haavard: the growth and margin sliders now
+work in percentage points ("+0.0 pts", half-point steps, the same ±5 range), which lands exactly
+on zero and says plainly that the slider is a change from the base case; and a new section, "What
+the model assumes", shows the actual growth, margin, tax rate, D&A, capex and working capital for
+each forecast year after the sliders, with the terminal growth rate, the WACC and the slider
+changes in a line below. `percent()` and `precise_percent()` never write a negative zero. In
+`assumptions.py` the points constants are the single source, and the old decimal ones are derived
+from them (divided by 100), so the model and its tests are unchanged. No Excel step: nothing new is
+calculated, the table shows numbers the model already uses. Verified in the running app by stepping
+a slider up from its minimum to zero. One existing test changed: the very-low-WACC page test said
+"no table" when the heatmap is missing; it now says the only table is the assumptions table. The
+tooltips on the sliders point to the new table. No new files.
