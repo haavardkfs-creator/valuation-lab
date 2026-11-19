@@ -146,6 +146,14 @@
   today, the 10-K, or an estimate) and a sentence that says why the number is what it is. New
   `capital_weights` and `wacc_breakdown` in `valuation.py` match the sheet's cells, and `wacc()` now
   uses `capital_weights`. `MARKET_FIGURES_SOURCE` in `data.py`. 9 new tests; 363 tests pass.
+- Done (in the open pull request): roadmap #5a, warnings about the peers. A yellow warning when the
+  company's operating margin is more than 10 points from its peers' middle; a "Flag" column and a line
+  under the table for peers with a margin under 5% or a multiple more than 3 times, or under a third
+  of, the peers' middle (flag only: they still count in the medians); and an honest label for the
+  middle price ("Middle of the three prices", "Average of two prices" with a warning, "The only
+  price"). `margin_gap`, `is_outlier` and `flag_peers` in `valuation.py`; the limits are in
+  `assumptions.py`. Checked on live data (First Solar, Coca-Cola, Pfizer, Adobe). 26 new or changed
+  tests; 389 tests pass.
 - Next: the website roadmap, agreed with Haavard on 18 Nov 2026 (his list of 11, in his words below,
   worked in the order after it). One pull request, one idea; each model change is built in Excel
   first, and Haavard writes the glossary entries for new terms (free cash flow yield, net debt
@@ -177,7 +185,7 @@
       A PDF needs a new dependency (tell Haavard first); text typed into the page is lost on reload
       until Phase 7 (saving via Supabase).
   Order of work, by dependency and size: this roadmap (done); #4 (done) and #9 (done) (small, and the later features need
-  the model's path to be visible); #5a; #1; #2 then #3; #5b and #5c; #7, #8, #6; #10 and #11.
+  the model's path to be visible); #5a (done); #1; #2 then #3; #5b and #5c; #7, #8, #6; #10 and #11.
   Also planned, not on the list: an adjusted beta (two thirds of the raw beta plus one third of 1),
   built in Excel first, the cure for low-beta prices (see Open).
 - Open:

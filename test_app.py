@@ -437,7 +437,7 @@ def test_the_peer_box_starts_with_the_closest_dollar_peers_and_the_multiples_fol
     assert metrics(page)["EV/Sales price"] == app.dollars(sales)
     assert metrics(page)["EV/EBITDA price"] == app.dollars(ebitda)
     assert metrics(page)["P/E price"] == app.dollars(pe)      # LOSS has no P/E, so the median is of three
-    assert metrics(page)["Middle of the prices"] == app.dollars(sorted([sales, ebitda, pe])[1])
+    assert metrics(page)["Middle of the three prices"] == app.dollars(sorted([sales, ebitda, pe])[1])
     assert any("Peers suggested from Yahoo's industry list" in caption for caption in texts(page.caption))
 
 
@@ -460,7 +460,7 @@ def test_the_table_has_the_company_itself_and_the_peer_medians(monkeypatch):
     # The medians of the four peers: EV/Sales of 5, 2, 3, 4 is 3.5; EV/EBITDA of 14, 12, 16, 10 is
     # 13; P/E of 20, 30, 25 (LOSS has none) is 25; margins of -25%, 30%, 20%, 10% make 15%.
     median = table.loc["Peer median"]
-    assert median.tolist() == ["3.5x", "13.0x", "25.0x", "15.0%"]
+    assert median.tolist() == ["3.5x", "13.0x", "25.0x", "15.0%", ""]
 
 
 def test_the_reader_can_change_the_peers(monkeypatch):
@@ -488,7 +488,7 @@ def test_a_multiple_with_too_few_peers_is_skipped_and_the_others_still_count(mon
     assert metrics(page)["P/E price"] == "Not enough peers"
     sales, ebitda, _ = example_prices([5.0, 2.0], [14.0, 12.0], [None, 20.0])
     assert metrics(page)["EV/Sales price"] == app.dollars(sales)
-    assert metrics(page)["Middle of the prices"] == app.dollars((sales + ebitda) / 2)
+    assert metrics(page)["Average of two prices"] == app.dollars((sales + ebitda) / 2)      # two prices: an average
 
 
 def test_an_empty_peer_box_shows_how_to_add_peers_instead_of_prices(monkeypatch):
@@ -567,10 +567,10 @@ def test_the_peer_table_shows_dashes_for_missing_zero_and_negative_multiples():
     overview = {"ev_sales": 4.0, "ev_ebitda": None, "pe": 20.0, "operating_margin": 0.3}
     medians = {"median_ev_sales": None, "median_ev_ebitda": None, "median_pe": None}
     table = app.peer_table(peers, "ME (this company)", overview, medians)
-    assert table.loc["A"].tolist() == ["2.0x", "–", "–", "-10.0%"]
-    assert table.loc["B"].tolist() == ["–", "12.3x", "–", "–"]
-    assert table.loc["ME (this company)"].tolist() == ["4.0x", "–", "20.0x", "30.0%"]
-    assert table.loc["Peer median"].tolist() == ["–", "–", "–", "–"]         # one margin is not enough
+    assert table.loc["A"].tolist() == ["2.0x", "–", "–", "-10.0%", "⚠ Low margin"]       # a loss: depressed earnings
+    assert table.loc["B"].tolist() == ["–", "12.3x", "–", "–", ""]
+    assert table.loc["ME (this company)"].tolist() == ["4.0x", "–", "20.0x", "30.0%", ""]
+    assert table.loc["Peer median"].tolist() == ["–", "–", "–", "–", ""]         # one margin is not enough
 
 
 def test_a_price_that_could_not_be_worked_out_says_so():
@@ -819,3 +819,149 @@ def test_a_very_low_wacc_company_still_gets_its_wacc_table(monkeypatch):
     page = run_page(monkeypatch, ticker="lowb", yahoo=low_beta)
     assert not page.exception
     assert page.table[0].value.loc["Beta", "Value"] == "-0.30"
+
+
+# ---------------------------------------------------------------------------
+# Warnings about the peers: a margin far from theirs, distorted peers, and an honest middle
+# ---------------------------------------------------------------------------
+
+def run_page_with_industry(monkeypatch, peers_in_industry):
+    """Run Example Corp's page with a made-up industry of the given peers (ticker -> Yahoo info)."""
+    import pandas as pandas_
+
+    class Industry:
+        def __init__(self, key):
+            self.top_companies = pandas_.DataFrame(
+                {"name": ["x"] * (len(peers_in_industry) + 1)}, index=["EXMP", *peers_in_industry]
+            )
+
+    base = fake_statements_ticker(info=dict(ADOBE_YAHOO_INFO, longName="Example Corp", industryKey="widgets"))
+
+    class Fake(base):
+        def __init__(self, ticker):
+            super().__init__(ticker)
+            if ticker in peers_in_industry:
+                self.info = dict(peers_in_industry[ticker])
+
+    monkeypatch.setattr("yfinance.Industry", Industry)
+    return run_page(monkeypatch, ticker="exmp", yahoo=Fake)
+
+
+# Three peers like First Solar's, as Yahoo showed them on 18 Nov 2026: a healthy one, one with a
+# margin of 0.6% (Enphase) and one with a one-off P/E of 3.9 (Sunrun).
+SOLAR_LIKE_PEERS = {
+    "AAA": peer_info(30, 2.8, 14.3, 19.8, operating_margin=0.186),
+    "BBB": peer_info(25, 2.2, 31.9, 34.3, operating_margin=0.006),
+    "CCC": peer_info(20, 4.7, 18.0, 3.9, operating_margin=0.063),
+}
+
+
+def test_the_middle_price_is_named_for_how_many_prices_it_is_the_middle_of():
+    def with_prices(sales, ebitda, pe):
+        return {"price_ev_sales": sales, "price_ev_ebitda": ebitda, "price_pe": pe}
+
+    assert app.middle_price_label(with_prices(1, 2, 3)) == "Middle of the three prices"
+    assert app.middle_price_label(with_prices(1, None, 3)) == "Average of two prices"
+    assert app.middle_price_label(with_prices(None, None, 3)) == "The only price"
+    assert app.middle_price_label(with_prices(None, None, None)) == "Middle of the prices"
+
+
+def test_two_prices_get_a_warning_that_they_have_no_middle(monkeypatch):
+    page = run_example_page(monkeypatch)
+    peer_box(page).set_value("LOSS, AAA").run()                 # LOSS has no P/E: two prices only
+    assert any("their average, not a middle" in warning for warning in texts(page.warning))
+
+
+def test_three_prices_get_no_such_warning(monkeypatch):
+    page = run_example_page(monkeypatch)
+    assert not any("their average, not a middle" in warning for warning in texts(page.warning))
+
+
+def test_the_margin_warning_says_how_far_above_or_below_the_peers_the_company_is():
+    peers = {"peer_operating_margin": [0.186, 0.006, 0.063]}               # a middle of 6.3%
+    warning = app.margin_gap_warning("First Solar", 0.306, peers)
+    assert warning.startswith("First Solar's operating margin (30.6%) is 24.3 points above its peers' middle (6.3%).")
+    assert "lean more on EV/EBITDA and P/E" in warning
+    peers_like_pfizers = {"peer_operating_margin": [0.38, 0.32, 0.34, 0.35, 0.37]}      # a middle of 35.0%
+    assert app.margin_gap_warning("Pfizer", 0.278, peers_like_pfizers) is None          # 7.2 points below: within the limit
+    below = app.margin_gap_warning("Pfizer", 0.20, peers_like_pfizers)
+    assert "is 15.0 points below its peers' middle (35.0%)" in below
+
+
+def test_no_margin_warning_within_the_limit_or_without_margins_to_compare():
+    peers = {"peer_operating_margin": [0.20, 0.20, 0.20]}
+    assert app.margin_gap_warning("A", 0.299, peers) is None               # 9.9 points: within the limit
+    assert app.margin_gap_warning("A", 0.301, peers) is not None           # 10.1 points
+    assert app.margin_gap_warning("A", 0.101, peers) is None               # 9.9 points below: within the limit
+    assert app.margin_gap_warning("A", 0.099, peers) is not None           # 10.1 points below
+    assert app.margin_gap_warning("A", None, peers) is None
+    assert app.margin_gap_warning("A", 0.3, {"peer_operating_margin": [0.2, None, None]}) is None
+
+
+def test_the_page_warns_when_the_companys_margin_is_far_from_its_peers(monkeypatch):
+    page = run_example_page(monkeypatch)
+    # Example Corp earns 36.6%; its peers' margins of -25%, 30%, 20% and 10% have a middle of 15.0%.
+    [warning] = [w for w in texts(page.warning) if "operating margin" in w]
+    assert warning.startswith("Example Corp's operating margin (36.6%) is 21.6 points above its peers' middle (15.0%).")
+
+
+def test_no_margin_warning_on_the_page_with_too_few_peer_margins(monkeypatch):
+    page = run_example_page(monkeypatch)
+    peer_box(page).set_value("AAA").run()
+    assert not any("operating margin" in w for w in texts(page.warning))
+
+
+def test_the_flag_text_names_every_reason():
+    assert app.flag_text([]) == ""
+    assert app.flag_text(["low_margin"]) == "⚠ Low margin"
+    assert app.flag_text(["low_margin", "ev_ebitda", "pe"]) == "⚠ Low margin, EV/EBITDA outlier, P/E outlier"
+
+
+def test_flagged_peers_are_marked_in_the_table_and_explained_under_it(monkeypatch):
+    page = run_page_with_industry(monkeypatch, SOLAR_LIKE_PEERS)
+    table = page.dataframe[-1].value
+    assert table.loc["AAA", "Flag"] == ""
+    assert table.loc["BBB", "Flag"] == "⚠ Low margin"                       # margin of 0.6%
+    assert table.loc["CCC", "Flag"] == "⚠ P/E outlier"                      # 3.9 against the peers' middle, 19.8
+    assert table.loc["EXMP (this company)", "Flag"] == "" and table.loc["Peer median", "Flag"] == ""
+    captions = texts(page.caption)
+    assert any(c.startswith("⚠ BBB: its operating margin (0.6%) is below 5%") for c in captions)
+    import statistics
+    middle = f"{statistics.median([19.8, 34.3, 3.9]):.1f}x"                 # all three peers' P/Es
+    assert any(c.startswith(f"⚠ CCC: its P/E of 3.9x is far from the peers' middle ({middle})") for c in captions)
+    assert any("Flagged peers still count in the medians" in c for c in captions)
+
+
+def test_a_flagged_peer_still_counts_in_the_median(monkeypatch):
+    page = run_page_with_industry(monkeypatch, SOLAR_LIKE_PEERS)
+    # Flag only: the P/E median is still over all three peers (19.8, 34.3, 3.9), which is 19.8.
+    assert page.dataframe[-1].value.loc["Peer median", "P/E"] == "19.8x"
+
+
+def test_a_solar_like_company_gets_the_margin_warning_too(monkeypatch):
+    page = run_page_with_industry(monkeypatch, SOLAR_LIKE_PEERS)
+    [warning] = [w for w in texts(page.warning) if "operating margin" in w]
+    assert "points above its peers' middle (6.3%)" in warning                # 36.6% against 6.3%
+
+
+def test_no_flag_text_or_explanations_when_no_peer_is_distorted(monkeypatch):
+    healthy = {
+        "AAA": peer_info(80, 2.0, 12.0, 20.0, operating_margin=0.30),
+        "BBB": peer_info(120, 3.0, 16.0, 30.0, operating_margin=0.20),
+        "CCC": peer_info(60, 4.0, 10.0, 25.0, operating_margin=0.10),
+    }
+    page = run_page_with_industry(monkeypatch, healthy)
+    assert set(page.dataframe[-1].value["Flag"]) == {""}
+    assert not any(c.startswith("⚠") for c in texts(page.caption))
+    assert not any("Flagged peers still count" in c for c in texts(page.caption))
+
+
+def test_adobes_page_flags_synopsys_for_its_pe(monkeypatch):
+    page = run_page(monkeypatch)
+    table = page.dataframe[-1].value
+    assert table.loc["SNPS", "Flag"] == "⚠ P/E outlier"                      # 82.6x is 3.1 times the peers' middle
+    assert table.loc["ADSK", "Flag"] == ""
+    import statistics
+    middle = f"{statistics.median([32.73, 20.72, 20.97, 82.62]):.1f}x"       # all four peers' P/Es
+    assert any(c.startswith(f"⚠ SNPS: its P/E of 82.6x is far from the peers' middle ({middle})") for c in texts(page.caption))
+    assert "Middle of the three prices" in metrics(page)                     # Adobe has all three prices

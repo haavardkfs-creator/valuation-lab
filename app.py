@@ -591,6 +591,91 @@ def price_or_note(price):
     return "Not enough peers" if price is None else dollars(price)
 
 
+FLAG_NAMES = {
+    "low_margin": "Low margin",
+    "ev_sales": "EV/Sales outlier",
+    "ev_ebitda": "EV/EBITDA outlier",
+    "pe": "P/E outlier",
+}
+
+
+def peer_flags(peers):
+    """For each peer, in order, list the reasons its figures may distort the comparison (see
+    valuation.flag_peers), using the page's agreed limits.
+    """
+    return valuation.flag_peers(
+        peers,
+        assumptions.DEPRESSED_PEER_MARGIN,
+        assumptions.PEER_OUTLIER_FACTOR,
+        assumptions.MINIMUM_PEERS,
+    )
+
+
+def flag_text(reasons):
+    """Write a peer's reasons as short text for the table, for example "⚠ Low margin, P/E outlier",
+    or nothing if the peer has none.
+    """
+    return "⚠ " + ", ".join(FLAG_NAMES[reason] for reason in reasons) if reasons else ""
+
+
+def flag_explanations(peers):
+    """Explain, one sentence per flagged peer, why it was flagged: depressed earnings inflate its
+    multiples, or a multiple is far from the other peers' middle (often a one-off). Returns an
+    empty list when no peer is flagged.
+    """
+    columns = {"ev_sales": ("EV/Sales", "peer_ev_sales"), "ev_ebitda": ("EV/EBITDA", "peer_ev_ebitda"), "pe": ("P/E", "peer_pe")}
+    sentences = []
+    for position, reasons in enumerate(peer_flags(peers)):
+        ticker = peers["peer_tickers"][position]
+        parts = []
+        if "low_margin" in reasons:
+            margin = peers["peer_operating_margin"][position]
+            parts.append(
+                f"its operating margin ({percent(margin)}) is below {assumptions.DEPRESSED_PEER_MARGIN:.0%}, "
+                "so its earnings are depressed and its multiples look inflated"
+            )
+        for reason in ("ev_sales", "ev_ebitda", "pe"):
+            if reason in reasons:
+                label, key = columns[reason]
+                middle = valuation.median_of_usable_multiples(peers[key], assumptions.MINIMUM_PEERS)
+                parts.append(
+                    f"its {label} of {peers[key][position]:.1f}x is far from the peers' middle "
+                    f"({middle:.1f}x), which is often a one-off gain or loss"
+                )
+        if parts:
+            sentences.append(f"{ticker}: " + "; ".join(parts) + ".")
+    return sentences
+
+
+def margin_gap_warning(company_name, company_margin, peers):
+    """Warn, in one sentence, when the company's operating margin is far from its peers' middle
+    margin, because multiples (EV/Sales most of all) do not compare well between companies with
+    different margins. Returns None when the gap is within the limit or cannot be worked out.
+    """
+    gap = valuation.margin_gap(company_margin, peers["peer_operating_margin"], assumptions.MINIMUM_PEERS)
+    if gap is None or abs(gap) <= assumptions.PEER_MARGIN_GAP_WARNING:
+        return None
+    middle = company_margin - gap
+    direction = "above" if gap > 0 else "below"
+    return (
+        f"{company_name}'s operating margin ({percent(company_margin)}) is {abs(gap) * 100:.1f} points "
+        f"{direction} its peers' middle ({percent(middle)}). Multiples, EV/Sales most of all, compare "
+        "badly between companies with different margins, so lean more on EV/EBITDA and P/E."
+    )
+
+
+def middle_price_label(multiples):
+    """Name the middle price honestly: with three prices it is a true middle, with two it is only
+    their average, with one it is just that price.
+    """
+    prices = [
+        multiples[key] for key in ("price_ev_sales", "price_ev_ebitda", "price_pe") if multiples[key] is not None
+    ]
+    return {3: "Middle of the three prices", 2: "Average of two prices", 1: "The only price"}.get(
+        len(prices), "Middle of the prices"
+    )
+
+
 def peer_table(peers, own_label, overview, multiples):
     """Make the table of the peers and what each one has: three multiples and an operating
     margin, as text. The company itself comes first, so it can be compared at a glance, and the
@@ -598,7 +683,8 @@ def peer_table(peers, own_label, overview, multiples):
 
     A peer multiple that is missing, or zero or negative, shows as a dash because it is left out
     of the median; an operating margin shows as a dash only when it is missing, since a negative
-    margin is real information. `multiples` is the result of run_multiples, which holds the medians.
+    margin is real information. A last column flags peers whose figures may distort the comparison
+    (see flag_explanations). `multiples` is the result of run_multiples, which holds the medians.
     """
     def show_multiple(multiple):
         return f"{multiple:.1f}x" if valuation.usable_multiples([multiple]) else "–"
@@ -634,20 +720,23 @@ def peer_table(peers, own_label, overview, multiples):
                 + [show_margin(margin) for margin in peers["peer_operating_margin"]]
                 + [show_margin(median_margin)]
             ),
+            "Flag": [""] + [flag_text(reasons) for reasons in peer_flags(peers)] + [""],
         },
         index=pd.Index(rows, name="Company"),
     )
 
 
-def draw_multiples(multiples, peers, notes, peers_are_suggested, own_label, overview):
+def draw_multiples(multiples, peers, notes, peers_are_suggested, own_label, overview, company_name):
     """Draw the multiples section: the price each peer multiple gives, their middle value, how
     far the DCF price is from it, and the table of peers behind them.
 
     `multiples` is None when there are no peers to compare with, and then the section says how
     to add some. A price that could not be worked out (too few peers with that multiple) says
     so. `notes` are the messages from the peer box, and peers_are_suggested says whether to
-    point out that the peers were suggested by Yahoo's industry list. `own_label` and `overview`
-    put the company itself in the table.
+    point out that the peers were suggested by Yahoo's industry list. `own_label`, `company_name`
+    and `overview` put the company itself in the table and in the margin warning. A yellow
+    warning says when the company's margin is far from its peers', or when the "middle" price is
+    only the average of two; peers whose figures may distort the comparison are flagged.
     """
     st.subheader("Peer multiples")
     for kind, text in notes:
@@ -655,14 +744,22 @@ def draw_multiples(multiples, peers, notes, peers_are_suggested, own_label, over
     if multiples is None:
         draw_explanations("multiples")
         return
+    margin_warning = margin_gap_warning(company_name, overview["operating_margin"], peers)
+    if margin_warning:
+        st.warning(margin_warning)
     sales_column, ebitda_column, pe_column = st.columns(3)
     sales_column.metric("EV/Sales price", price_or_note(multiples["price_ev_sales"]))
     ebitda_column.metric("EV/EBITDA price", price_or_note(multiples["price_ev_ebitda"]))
     pe_column.metric("P/E price", price_or_note(multiples["price_pe"]))
     median_column, gap_column = st.columns(2)
-    median_column.metric("Middle of the prices", price_or_note(multiples["median_price"]))
+    median_column.metric(middle_price_label(multiples), price_or_note(multiples["median_price"]))
     gap = multiples["dcf_vs_multiples"]
     gap_column.metric("DCF vs multiples", "Not available" if gap is None else percent(gap))
+    if middle_price_label(multiples) == "Average of two prices":
+        st.warning(
+            "Only two of the three multiples gave a price, so this is their average, not a middle: "
+            "two numbers have no middle. Treat it with care, and see the table for which peers are missing."
+        )
     st.dataframe(peer_table(peers, own_label, overview, multiples))
     st.caption(
         f"Each multiple needs at least {assumptions.MINIMUM_PEERS} peers with a usable figure; "
@@ -671,6 +768,13 @@ def draw_multiples(multiples, peers, notes, peers_are_suggested, own_label, over
         "last full year and today's price; the peers' figures are Yahoo's trailing twelve months, "
         "so small differences are expected."
     )
+    for sentence in flag_explanations(peers):
+        st.caption(f"⚠ {sentence}")
+    if flag_explanations(peers):
+        st.caption(
+            "Flagged peers still count in the medians. To leave one out, remove it from the "
+            "Peers box in the sidebar."
+        )
     if peers_are_suggested:
         st.caption(
             "Peers suggested from Yahoo's industry list, closest in size. Closest in size is "
@@ -914,6 +1018,7 @@ def draw_page():
     draw_multiples(
         multiples, peers, peer_notes, peers_are_suggested=not is_base_case(company),
         own_label=f"{company['ticker']} (this company)", overview=overview,
+        company_name=company["company_name"],
     )
     st.divider()
     st.caption(FOOTER_TEXT)
