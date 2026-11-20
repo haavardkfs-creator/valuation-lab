@@ -270,7 +270,7 @@
   and Yahoo's top 5 officers with titles. Headlines and names are shown safely (formatting characters escaped, only
   https links), and if Yahoo cannot give them the section says so and the page carries on. No maths, so no Excel step.
   756 tests pass (33 new).
-- Done (in the open pull request): redesign Phase 1 of 5, the design system. Haavard asked for a much more professional
+- Done: redesign Phase 1 of 5, the design system (merged, pull request 56). Haavard asked for a much more professional
   look (answer first, football field and other charts, tabs, polish). Phase 1 changes only how things look: a dark navy
   theme in `.streamlit/config.toml` (colours, rounded corners, the Inter font, chart colours) and a new `theme.py` that
   holds the same six-colour palette as Python constants, the card styling (rounded, bordered, soft shadow), a readable-text
@@ -279,10 +279,24 @@
   format. No valuation logic or text changed: all 756 earlier tests pass unchanged; 792 pass in all. Haavard chose: dark
   navy (replacing the earlier light-theme decision), one pull request per phase, existing number formats kept (the new
   style only in new visuals), English.
-- Next: redesign Phase 2, the "answer first" header (company name, four KPI cards, verdict badge, 12-month sparkline).
-  Phases 3 (Plotly charts: football field, waterfall, cash flow, heatmap, peers, terminal value share), 4 (tabs, layout,
-  mobile) and 5 (polish) follow, one at a time on Haavard's OK. #11 part 2 (macro backdrop, needs a free FRED key) and part 3
-  (thesis page with Haavard's reasons boxes and a Markdown download) wait until after the redesign.
+- Done (in the open pull request): redesign Phase 2 of 5, the "answer first" header. The top of the page now shows the
+  company's name with a ticker badge and a verdict badge (UNDERVALUED / FAIRLY VALUED / OVERVALUED, from the DCF upside
+  against the market price with a 15% limit; NO VERDICT when no DCF could be built), four cards (current price, DCF
+  value per share, upside or downside as an arrow, a sign and a colour, and the middle of the five multiples prices),
+  a line saying what the verdict rests on and that it is not advice, and a 12-month price sparkline. Plotly 7.1.0 is a
+  new pinned dependency (first used for the sparkline; Phase 3's charts need it too). `valuation.verdict` and
+  `assumptions.VERDICT_THRESHOLD`; `data.get_price_history`; header builders and the Plotly look in `theme.py`. Haavard chose:
+  add Plotly now, a ticker badge instead of a logo (Yahoo has none), and the verdict from the DCF upside alone. Two old
+  assertions that looked for a "Adobe Inc. (ADBE)" text line now look in the header (the old line was a duplicate and is
+  gone); nothing else in the old tests changed. 846 tests pass (54 new).
+- Next: redesign Phase 3, the charts (Plotly): football field, waterfall, cash flow, peers (bars and a scatter), terminal
+  value share, and the sensitivity tables as proper heatmaps. Haavard (20 Nov 2026): "make the sensitivity charts look
+  different/better, I don't get much use for them as they are": both the WACC against terminal growth table and the
+  margin against growth table are to be redesigned there. He picked (20 Nov 2026): show the upside or downside in percent
+  in each cell, and mark where today's market price sits (what the market is pricing in); he also asked that they look
+  more professional and different. Then Phases 4
+  (tabs, layout, mobile) and 5 (polish; removes the DCF cards that now duplicate the header). #11 part 2 (macro, needs a
+  free FRED key) and part 3 (thesis page with Haavard's reasons boxes and a Markdown download) wait until the redesign is done.
 - Open:
   - CLAUDE.md still says "Light theme in config.toml, colours only" under "Already decided", and lists `.streamlit/config.toml`
     as "Theme settings only" with no row for `theme.py` or `test_theme.py`. Haavard changes his own rules file: the lines

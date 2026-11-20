@@ -764,6 +764,21 @@ def price_from_ps(revenue, ps_multiple, shares):
     return revenue * ps_multiple / shares
 
 
+def verdict(upside, threshold):
+    """Say in one word what the DCF price says about the market price: "undervalued" when the DCF price is
+    more than `threshold` above it (an upside of 0.15 or more than 15%), "overvalued" when it is more than
+    `threshold` below it, and "fair" in between, limits included. A missing upside gives None (no verdict).
+    This is a screening rule, not a cell in the workbook: it only names a number the page already shows.
+    """
+    if upside is None:
+        return None
+    if upside > threshold:
+        return "undervalued"
+    if upside < -threshold:
+        return "overvalued"
+    return "fair"
+
+
 def dcf_vs_multiples(dcf_price, multiples_price):
     """Say how far the DCF price is above (positive) or below (negative) the price the
     multiples give, as a decimal.

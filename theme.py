@@ -8,6 +8,8 @@ The same colours are also written in .streamlit/config.toml, because Streamlit r
 from that file and cannot import Python. test_theme.py checks that the two files agree.
 """
 
+import html
+
 # ---------------------------------------------------------------------------
 # The palette: six colours, and every colour always means something
 # ---------------------------------------------------------------------------
@@ -41,7 +43,7 @@ CARD_RADIUS = "0.75rem"
 CARD_CSS = f"""
 <style>
 /* Less empty space at the top and a comfortable reading width. */
-.block-container {{ padding-top: 2.5rem; padding-bottom: 3rem; max-width: 1200px; }}
+.block-container {{ padding-top: 4rem; padding-bottom: 3rem; max-width: 1200px; }}
 
 /* Each headline number (st.metric) becomes a card: rounded corners, a thin border and a soft shadow. */
 [data-testid="stMetric"] {{
@@ -57,9 +59,36 @@ CARD_CSS = f"""
 [data-testid="stExpander"] {{ border-radius: {CARD_RADIUS}; border: 1px solid {BORDER}; }}
 [data-testid="stDataFrame"], [data-testid="stTable"] {{ border-radius: {CARD_RADIUS}; }}
 
+/* The "answer first" header at the top of the page. */
+.vl-brand {{ color: {GREY}; font-size: 0.8rem; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; }}
+.vl-name {{ display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; margin: 0.25rem 0 0.6rem 0; }}
+.vl-name h1 {{ margin: 0; padding: 0; font-size: 2.4rem; line-height: 1.15; color: {TEXT}; }}
+.vl-badge {{
+    display: inline-block; padding: 0.2rem 0.7rem; border-radius: 999px; font-size: 0.85rem; font-weight: 700;
+    letter-spacing: 0.04em; border: 1px solid {BORDER}; background: {SURFACE}; color: {GREY};
+}}
+.vl-badge-ticker {{ color: {ACCENT}; border-color: {ACCENT}; }}
+.vl-badge-up {{ color: {UP}; border-color: {UP}; }}
+.vl-badge-down {{ color: {DOWN}; border-color: {DOWN}; }}
+.vl-basis {{ color: {GREY}; font-size: 0.85rem; margin: 0 0 1rem 0; }}
+
+/* Four headline cards in a row; on a phone they wrap onto as many rows as they need. */
+.vl-kpis {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.9rem; margin-bottom: 0.75rem; }}
+.vl-kpi {{
+    background: {SURFACE}; border: 1px solid {BORDER}; border-radius: {CARD_RADIUS}; padding: 1rem 1.25rem;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+}}
+.vl-kpi-label {{ color: {GREY}; font-size: 0.85rem; }}
+.vl-kpi-value {{ color: {TEXT}; font-size: 1.7rem; font-weight: 700; line-height: 1.25; white-space: nowrap; }}
+.vl-kpi-value.vl-up {{ color: {UP}; }}
+.vl-kpi-value.vl-down {{ color: {DOWN}; }}
+.vl-kpi-value.vl-muted {{ color: {GREY}; font-size: 1.1rem; font-weight: 500; line-height: 2.2rem; }}
+.vl-kpi-note {{ color: {GREY}; font-size: 0.8rem; }}
+
 /* On a phone the cards get a little less padding, so the numbers are not squeezed. */
 @media (max-width: 640px) {{
-    [data-testid="stMetric"] {{ padding: 0.75rem 0.9rem; }}
+    [data-testid="stMetric"], .vl-kpi {{ padding: 0.75rem 0.9rem; }}
+    .vl-name h1 {{ font-size: 1.8rem; }}
 }}
 </style>
 """
@@ -128,3 +157,97 @@ def money_short(amount_in_millions):
     else:
         text = f"${amount:,.0f}M"
     return sign + text
+
+
+def change_text(change):
+    """Write a change as a signed percentage with the arrow that goes with it, so it reads without colour:
+    "▲ +41.3%" for up, "▼ -12.0%" for down. Exactly zero has no arrow: "0.0%".
+    """
+    text = f"{change:+.1%}"
+    if text in ("+0.0%", "-0.0%"):
+        return "0.0%"                       # too small to show a direction
+    return ("▲ " if change > 0 else "▼ ") + text
+
+
+def tone_of(change):
+    """Say which colour a change gets: "up" for a gain, "down" for a loss, None when it is too small to show."""
+    text = f"{change:+.1%}"
+    if text in ("+0.0%", "-0.0%"):
+        return None
+    return "up" if change > 0 else "down"
+
+
+# ---------------------------------------------------------------------------
+# The "answer first" header: small functions that write HTML. Everything that came from outside (a company
+# name from Yahoo) is escaped first, so it can only ever be shown as text.
+# ---------------------------------------------------------------------------
+
+def kpi_card_html(label, value, note=None, tone=None, muted=False):
+    """Write one headline card: a small grey label, a big value (in the up colour or the down colour when
+    `tone` is "up" or "down") and, if given, a small grey note underneath. A `muted` card is one with no
+    number to show ("Not available"): its value is written small and grey, so a gap never looks like a result.
+    """
+    tone_class = " vl-muted" if muted else (f" vl-{tone}" if tone in ("up", "down") else "")
+    note_html = f'<div class="vl-kpi-note">{html.escape(note)}</div>' if note else ""
+    return (
+        f'<div class="vl-kpi"><div class="vl-kpi-label">{html.escape(label)}</div>'
+        f'<div class="vl-kpi-value{tone_class}">{html.escape(value)}</div>{note_html}</div>'
+    )
+
+
+# What each verdict looks like: its words, and the badge colour. The words always say it, colour only adds to it.
+VERDICT_LOOKS = {
+    "undervalued": ("▲ UNDERVALUED", "up"),
+    "fair": ("● FAIRLY VALUED", None),
+    "overvalued": ("▼ OVERVALUED", "down"),
+    None: ("NO VERDICT", None),
+}
+
+
+def verdict_badge_html(verdict):
+    """Write the verdict badge for "undervalued", "fair", "overvalued" or None (no verdict could be made)."""
+    words, tone = VERDICT_LOOKS[verdict]
+    tone_class = f" vl-badge-{tone}" if tone else ""
+    return f'<span class="vl-badge{tone_class}">{html.escape(words)}</span>'
+
+
+def header_html(company_name, ticker, verdict, cards, basis):
+    """Write the whole header: the small app name, the company's name with its ticker badge and the verdict
+    badge, a line saying what the verdict is based on, and then the headline cards (a list of the HTML that
+    kpi_card_html wrote).
+    """
+    return (
+        '<div class="vl-header">'
+        '<div class="vl-brand">Valuation Lab</div>'
+        f'<div class="vl-name"><h1>{html.escape(company_name)}</h1>'
+        f'<span class="vl-badge vl-badge-ticker">{html.escape(ticker)}</span>{verdict_badge_html(verdict)}</div>'
+        f'<div class="vl-basis">{html.escape(basis)}</div>'
+        f'<div class="vl-kpis">{"".join(cards)}</div>'
+        "</div>"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Charts: the Plotly look, shared by every chart (more of them come in Phase 3)
+# ---------------------------------------------------------------------------
+
+def with_opacity(colour, opacity):
+    """Write a #RRGGBB colour as a see-through rgba() colour, for the faint fill under a line."""
+    red, green, blue = hex_to_rgb(colour)
+    return f"rgba({red}, {green}, {blue}, {opacity})"
+
+
+def style_figure(figure, height):
+    """Give a Plotly figure the page's look: transparent so the navy shows through, the off-white Inter text,
+    no outer margin, and a hover label in the card colours.
+    """
+    figure.update_layout(
+        height=height,
+        margin={"l": 0, "r": 0, "t": 0, "b": 0},
+        paper_bgcolor="rgba(0, 0, 0, 0)",
+        plot_bgcolor="rgba(0, 0, 0, 0)",
+        font={"family": "Inter, sans-serif", "color": TEXT},
+        hoverlabel={"bgcolor": SURFACE, "bordercolor": BORDER, "font": {"family": "Inter, sans-serif", "color": TEXT}},
+        showlegend=False,
+    )
+    return figure

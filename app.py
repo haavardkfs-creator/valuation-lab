@@ -9,6 +9,7 @@ import datetime
 import os
 
 import pandas as pd
+import plotly.graph_objects as go
 import streamlit as st
 
 import assumptions
@@ -1487,6 +1488,14 @@ def load_adobe_peer_margins(tickers):
 
 
 @st.cache_data(ttl=LIVE_DATA_CACHE_SECONDS, show_spinner=False)
+def load_price_history(ticker, usd_per_unit):
+    """Fetch a share's closing prices over the last year (in US dollars) and remember them for
+    LIVE_DATA_CACHE_SECONDS. Stops with a plain error if Yahoo is busy or has none.
+    """
+    return data.get_price_history(ticker, usd_per_unit)
+
+
+@st.cache_data(ttl=LIVE_DATA_CACHE_SECONDS, show_spinner=False)
 def load_company_context(ticker):
     """Fetch a company's recent headlines and top officers and remember them for LIVE_DATA_CACHE_SECONDS
     (news changes through the day). Stops with a plain error if Yahoo is busy or gave neither.
@@ -1796,6 +1805,78 @@ def draw_news_and_management(ticker):
     )
 
 
+NOT_AVAILABLE = "Not available"
+
+
+def verdict_basis_text(verdict):
+    """Say, under the company name, what the verdict badge rests on, so nobody reads it as more than it is."""
+    if verdict is None:
+        return "No DCF could be built for this company, so there is no verdict. The cards show what can be said."
+    limit = f"{assumptions.VERDICT_THRESHOLD:.0%}"
+    return (
+        f"The verdict compares the model's DCF price with today's market price: more than {limit} above is "
+        f"undervalued, more than {limit} below is overvalued. It is the model's output, not investment advice."
+    )
+
+
+def price_sparkline(prices):
+    """Draw a small line chart of the share price over the last year, with no axes: just the shape, and the
+    date and price when the reader hovers. `prices` is the list get_price_history gives.
+    """
+    closes = [price["close"] for price in prices]
+    figure = go.Figure(go.Scatter(
+        x=[price["date"] for price in prices],
+        y=closes,
+        mode="lines",
+        line={"color": theme.ACCENT, "width": 2},
+        fill="tozeroy",
+        fillcolor=theme.with_opacity(theme.ACCENT, 0.12),
+        hovertemplate="%{x|%d %b %Y}<br>$%{y:,.2f}<extra></extra>",
+    ))
+    padding = (max(closes) - min(closes)) * 0.1 or max(closes) * 0.05      # a little air above and below the line
+    figure.update_yaxes(visible=False, range=[min(closes) - padding, max(closes) + padding])
+    figure.update_xaxes(visible=False)
+    return theme.style_figure(figure, height=120)
+
+
+def draw_header(company, dcf, multiples):
+    """Draw the top of the page, the answer first: the company's name and ticker, a verdict badge, four headline
+    cards (the market price, the DCF value per share, the upside or downside, and the middle of the multiples
+    prices) and a small chart of the share price over the last year. When no DCF could be built (`dcf` is None)
+    the badge says so and the cards that need it say "Not available". The chart is left out if Yahoo cannot
+    give the prices; nothing else depends on it.
+    """
+    upside = None if dcf is None else dcf["upside"]
+    verdict = valuation.verdict(upside, assumptions.VERDICT_THRESHOLD)
+    middle = None if multiples is None else multiples["median_price"]
+    cards = [
+        theme.kpi_card_html("Current price", dollars(company["share_price"]), "Market price today"),
+        theme.kpi_card_html(
+            "DCF value per share", NOT_AVAILABLE if dcf is None else dollars(dcf["implied_share_price"]),
+            "Discounted cash flow", muted=dcf is None,
+        ),
+        theme.kpi_card_html(
+            "Upside / downside", NOT_AVAILABLE if upside is None else theme.change_text(upside),
+            "DCF value against the market price", tone=None if upside is None else theme.tone_of(upside),
+            muted=upside is None,
+        ),
+        theme.kpi_card_html(
+            "Multiples value", NOT_AVAILABLE if middle is None else dollars(middle),
+            middle_price_label(multiples) if middle is not None else "No peer figures to work it out from",
+            muted=middle is None,
+        ),
+    ]
+    st.html(theme.header_html(
+        company["company_name"], company["ticker"], verdict, cards, verdict_basis_text(verdict)
+    ))
+    try:
+        prices = load_price_history(company["ticker"], company.get("usd_per_price_unit") or 1.0)
+    except ValueError:
+        return
+    st.caption("Share price, last 12 months")
+    st.plotly_chart(price_sparkline(prices), width="stretch", config={"displayModeBar": False})
+
+
 def draw_dcf_unavailable(ticker, error):
     """Say, in plain words, that no DCF could be built for a company whose figures did load, and that the
     overview and history below still show what can be said about it.
@@ -1843,8 +1924,7 @@ def draw_page():
         dcf_error = error
     overview = company_overview(company)
 
-    st.title("Valuation Lab")
-    st.write(f"{company['company_name']} ({company['ticker']})")
+    draw_header(company, dcf, multiples)
     draw_source_note(company, source_used)
     note = adjustment_note(adjustment)
     if note:

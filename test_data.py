@@ -2095,3 +2095,70 @@ def test_the_context_leaves_yahoo_alone_while_it_is_cooling_down(monkeypatch):
 
     with pytest.raises(data.SourceUnavailable, match="isn't answering"):
         data.get_company_context("ADBE", fetch_news=must_not_be_called, fetch_officers=must_not_be_called)
+
+
+# ---------------------------------------------------------------------------
+# The share price over the last twelve months (for the sparkline; not Excel: just Yahoo's closing prices)
+# ---------------------------------------------------------------------------
+
+class FakeHistoryTicker:
+    """A stand-in for yfinance.Ticker whose history() gives a small table of closing prices, one gap included."""
+    closes = {"2026-11-18": 100.0, "2026-11-19": float("nan"), "2026-11-20": 104.5}
+
+    def __init__(self, ticker):
+        pass
+
+    def history(self, period):
+        assert period == "1y"
+        return pd.DataFrame({"Close": list(self.closes.values())}, index=pd.to_datetime(list(self.closes)))
+
+
+def test_the_price_history_is_a_list_of_dates_and_closes_without_the_days_that_have_no_price(monkeypatch):
+    monkeypatch.setattr("yfinance.Ticker", FakeHistoryTicker)
+    assert data.fetch_yahoo_price_history("ADBE") == [
+        {"date": "2026-11-18", "close": 100.0},
+        {"date": "2026-11-20", "close": 104.5},
+    ]
+
+
+def test_prices_are_converted_to_dollars_at_the_given_rate():
+    prices = data.get_price_history(
+        "AKER.OL", usd_per_unit=0.10, fetch_prices=lambda ticker: [{"date": "2026-11-20", "close": 1034.0}]
+    )
+    assert prices == [{"date": "2026-11-20", "close": pytest.approx(103.4)}]
+
+
+def test_a_dollar_share_keeps_its_prices():
+    prices = data.get_price_history("ADBE", fetch_prices=lambda ticker: [{"date": "2026-11-20", "close": 217.71}])
+    assert prices == [{"date": "2026-11-20", "close": 217.71}]
+
+
+def test_a_price_in_pence_is_converted_through_pounds():
+    # Like Shell in London: 9,358 pence is $121.65 at $1.30 a pound.
+    prices = data.get_price_history(
+        "SHEL.L", usd_per_unit=0.013, fetch_prices=lambda ticker: [{"date": "2026-11-20", "close": 9358.0}]
+    )
+    assert prices[0]["close"] == pytest.approx(121.654)
+
+
+def test_no_prices_stops_with_a_plain_error():
+    with pytest.raises(ValueError, match="no price history for ZZZ"):
+        data.get_price_history("ZZZ", fetch_prices=lambda ticker: [])
+
+
+def test_yahoo_failing_stops_with_a_plain_error():
+    def broken(ticker):
+        raise ConnectionError("no internet")
+
+    with pytest.raises(data.SourceUnavailable, match="Could not get the price history from Yahoo Finance: no internet"):
+        data.get_price_history("ADBE", fetch_prices=broken)
+
+
+def test_the_price_history_leaves_yahoo_alone_while_it_is_cooling_down(monkeypatch):
+    monkeypatch.setattr("data._yahoo_busy_until", 10**12)
+
+    def must_not_be_called(ticker):
+        pytest.fail("asked Yahoo")
+
+    with pytest.raises(data.SourceUnavailable, match="isn't answering"):
+        data.get_price_history("ADBE", fetch_prices=must_not_be_called)

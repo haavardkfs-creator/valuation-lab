@@ -258,3 +258,13 @@ NEWS_ITEMS_SHOWN = 5
 # executive vice presidents, so the first five are the people who run the company. Chosen with Haavard
 # on 20 Nov 2026.
 OFFICERS_SHOWN = 5
+
+
+# ---------------------------------------------------------------------------
+# The verdict badge in the page header (redesign, Phase 2)
+# ---------------------------------------------------------------------------
+
+# The DCF price must be more than this far above the market price for the badge to say UNDERVALUED, or more
+# than this far below it for OVERVALUED; anything in between is FAIRLY VALUED. 15% is a common rule of thumb
+# for a margin of safety, not a result from the model. Chosen with Haavard on 20 Nov 2026.
+VERDICT_THRESHOLD = 0.15

@@ -1960,3 +1960,33 @@ def test_the_adjusted_ttm_figures_match_the_ttm_sheet():
 
 def test_shares_from_market_value_is_market_value_over_price():
     assert v.shares_from_market_value(100_000, 250) == pytest.approx(400)       # $100bn at $250 a share: 400 million shares
+
+
+# ---------------------------------------------------------------------------
+# The verdict badge (a screening rule, not a cell in the workbook: it only names the upside the page shows)
+# ---------------------------------------------------------------------------
+
+VERDICT_THRESHOLD = 0.15              # assumptions.VERDICT_THRESHOLD
+
+
+@pytest.mark.parametrize("upside, expected", [
+    (0.413, "undervalued"),           # Adobe on 20 Nov 2026: DCF $307.59 against $217.71
+    (0.1501, "undervalued"),
+    (0.15, "fair"),                   # exactly the limit is still fair
+    (0.0, "fair"),
+    (-0.15, "fair"),
+    (-0.1501, "overvalued"),
+    (-0.60, "overvalued"),
+    (None, None),                     # no DCF, no verdict
+])
+def test_the_verdict_names_what_the_upside_says(upside, expected):
+    assert v.verdict(upside, VERDICT_THRESHOLD) == expected
+
+
+def test_the_verdict_follows_the_limit_it_is_given():
+    assert v.verdict(0.10, 0.05) == "undervalued" and v.verdict(0.10, 0.25) == "fair"
+
+
+def test_adobes_base_case_upside_is_undervalued():
+    # The workbook's base case: DCF $305.60 against its $251.47 market price is +21.5%.
+    assert v.verdict(run_base_case()["upside"], VERDICT_THRESHOLD) == "undervalued"

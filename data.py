@@ -639,6 +639,39 @@ def get_company_context(ticker, fetch_news=fetch_yahoo_news, fetch_officers=fetc
 
 
 # ---------------------------------------------------------------------------
+# The share price over the last twelve months (for the sparkline in the page header)
+# ---------------------------------------------------------------------------
+
+def fetch_yahoo_price_history(ticker):
+    """Ask Yahoo Finance for a share's daily closing prices over the last year, oldest first, as a list of
+    {"date": "2026-11-20", "close": 217.71} in the currency the share trades in. A day without a price is
+    left out. This is the only function in this part that touches the internet.
+    """
+    import yfinance
+
+    closes = yfinance.Ticker(ticker).history(period="1y")["Close"].dropna()
+    return [{"date": day.strftime("%Y-%m-%d"), "close": float(close)} for day, close in closes.items()]
+
+
+def get_price_history(ticker, usd_per_unit=1.0, fetch_prices=fetch_yahoo_price_history):
+    """Get a share's closing prices over the last year in US dollars, oldest first. `usd_per_unit` is what one
+    unit of the currency the share trades in is worth in dollars (1 for a dollar share), the same rate the page's
+    share price was converted with. Leaves Yahoo alone while it is cooling down, and stops with a plain error if
+    Yahoo cannot be reached or has no prices. `fetch_prices` can be swapped, which is how the tests run without
+    the internet.
+    """
+    if _yahoo_cooling_down():
+        raise SourceUnavailable(YAHOO_BUSY_MESSAGE)
+    try:
+        prices = fetch_prices(ticker)
+    except Exception as error:      # Yahoo can fail in many ways; the reader needs one clear message
+        raise SourceUnavailable("Could not get the price history from Yahoo Finance: %s" % error) from error
+    if not prices:
+        raise ValueError("Yahoo Finance has no price history for %s." % ticker)
+    return [{"date": price["date"], "close": valuation.convert_currency(price["close"], usd_per_unit)} for price in prices]
+
+
+# ---------------------------------------------------------------------------
 # Trailing twelve months: the latest four quarters, to compare with the peers
 # ---------------------------------------------------------------------------
 
