@@ -842,3 +842,22 @@ move with the market. The 6 hours were agreed with Haavard. In the tests the pau
 (`data._pause`) that they replace; replacing `time.sleep` for the whole program made Streamlit's own test
 harness busy-loop and slowed the suite from 16 to 75 seconds. A second data source that does not depend on
 Yahoo is the real fix and is still open. No new files.
+
+## 2026-11-20 — A field to adjust operating income for one-off items (roadmap #8)
+
+Without it a margin can look better or worse than it really is: First Solar's 45X tax credits sit inside its
+operating income. Tried first on First Solar with assumed amounts: -$500m takes the DCF from $221 to $156 (the
+market price is $152), -$1,000m to $91. Three decisions with Haavard. (1) One yearly amount, applied to both the
+last fiscal year and the last twelve months, so the DCF, the margins, EV/EBITDA and the peer comparison agree; a
+recurring distortion such as a tax credit is in both. (2) Net income and the P/E stay as reported, with a note, and a
+one-time gain in net income is a different adjustment, not built. (3) A sidebar box for companies other than
+Adobe, whose DCF uses hand-chosen assumptions. Built Excel first: `starting point` rows 60-66 (adjusted EBIT 7,706,
+adjusted margin 32.42%) and `ttm` rows 27-33 (adjusted TTM margin 31.85%, adjusted EV/EBITDA 11.57x); the existing
+`last_year_ratios` and `ttm_overview` already reproduce those cells exactly, so no new maths was needed.
+`apply_adjustment` and `apply_adjustment_to_ttm` in `app.py` add the amount to EBIT and to TTM operating income
+before anything else is worked out, so every number worked from them follows, and `adjustment_note` writes the yellow
+note saying what changed and what is as reported. The box has its own state per company. Two things found while
+testing: the implied margin in the reverse DCF does not change with the adjustment (what the price needs is
+absolute; it is the model's own margin in the sentence and the implied growth that move), and the tax rate is left
+as reported (income tax over pre-tax income) rather than recomputed. Known limit: the same amount is applied to both
+periods, which suits a recurring item but only approximates a one-off in a single period. No new files.

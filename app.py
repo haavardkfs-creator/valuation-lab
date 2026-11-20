@@ -1299,6 +1299,58 @@ def parse_peer_tickers(text, own_ticker, how_many):
     return tickers[:how_many], len(tickers) > how_many
 
 
+def draw_adjustment_box(company):
+    """Draw the one-off adjustment box in the sidebar and return the amount typed in, in $ millions
+    a year (0 when left alone; negative to take out a gain such as a tax credit, positive to add back
+    a one-off cost). There is one box per company, so an amount is not carried over.
+    """
+    st.sidebar.header("One-off items")
+    return float(
+        st.sidebar.number_input(
+            "Adjust operating income by ($ millions a year)",
+            value=0.0,
+            step=100.0,
+            format="%.0f",
+            key=f"oneoff_{company['ticker']}",
+            help=(
+                "Add or take off a yearly amount from operating income, in US dollars: for example -1000 "
+                "to take out a tax credit that flatters the profit. It is applied to the last fiscal year "
+                "and to the last twelve months, so the DCF, the margins and the EV/EBITDA agree. Net income "
+                "and the P/E stay as reported."
+            ),
+        )
+    )
+
+
+def apply_adjustment(company, amount):
+    """Return the company's figures with the last fiscal year's operating income (EBIT) adjusted by
+    the amount. Everything worked out from EBIT afterwards, such as the starting point's margin, uses
+    the adjusted figure; net income, income tax and the tax rate stay as reported.
+    """
+    return dict(company, ebit=company["ebit"] + amount)
+
+
+def apply_adjustment_to_ttm(ttm, amount):
+    """Return the last twelve months with operating income adjusted by the same yearly amount, or
+    None if the last twelve months are not available.
+    """
+    return None if ttm is None else dict(ttm, operating_income=ttm["operating_income"] + amount)
+
+
+def adjustment_note(amount):
+    """Say, when an adjustment is active, what it changes and what stays as reported. Returns None when
+    there is no adjustment.
+    """
+    if amount == 0:
+        return None
+    return (
+        f"You have adjusted operating income by {millions_text(amount)} a year, for the last fiscal year and for "
+        "the last twelve months. The DCF, the margins, EV/EBITDA, net debt ÷ EBITDA, free cash flow yield, ROIC, "
+        "interest cover, the reverse DCF and both sensitivity tables use the adjusted figure. The History, the P/E, "
+        "cash conversion and revenue growth are as reported, and the peers' figures are Yahoo's."
+    )
+
+
 def draw_peer_box(company):
     """Draw the peer ticker box in the sidebar, filled in with suggestions from Yahoo's
     industry list the first time a company is shown (the reader can change them), and fetch
@@ -1441,12 +1493,13 @@ def draw_error(ticker, error):
 
 def draw_page():
     """Draw the whole page: ticker box, sliders, peer box (companies other than Adobe), title,
-    DCF section, what the market price implies, overview, history, assumptions, how the WACC is
+    DCF section, a note about any one-off adjustment, what the market price implies, overview, history, assumptions, how the WACC is
     built, charts, the two sensitivity tables, multiples and footer. If the company cannot be valued, draw
     the reason instead.
     """
     ticker = draw_ticker_box()
     growth_shift, margin_shift, terminal_growth_rate, wacc_override = draw_sliders()
+    adjustment = 0.0
     try:
         company, source_used = load_company(ticker)
         if is_base_case(company):
@@ -1456,6 +1509,8 @@ def draw_page():
             peers, peer_notes = draw_peer_box(company)
             if peers is not None:
                 company = dict(company, **peers)
+            adjustment = draw_adjustment_box(company)
+            company = apply_adjustment(company, adjustment)
         dcf_inputs = build_dcf_inputs(company, growth_shift, margin_shift)
         dcf, multiples = run_valuation(company, dcf_inputs, terminal_growth_rate, wacc_override)
         base_wacc = model_wacc(dcf_inputs)
@@ -1467,11 +1522,14 @@ def draw_page():
     st.title("Valuation Lab")
     st.write(f"{company['company_name']} ({company['ticker']})")
     draw_source_note(company, source_used)
+    note = adjustment_note(adjustment)
+    if note:
+        st.warning(note)
     try:
         ttm, ttm_error = load_ttm(company["ticker"], company.get("usd_per_statement_unit", 1.0)), None
     except ValueError as error:
         ttm, ttm_error = None, str(error)
-    overview = apply_ttm(overview, company, ttm, ttm_error)
+    overview = apply_ttm(overview, company, apply_adjustment_to_ttm(ttm, adjustment), ttm_error)
     try:
         history, history_error = load_history(company["ticker"], company.get("usd_per_statement_unit", 1.0)), None
     except ValueError as error:

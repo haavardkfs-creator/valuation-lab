@@ -1614,3 +1614,46 @@ def test_the_share_count_change_covers_the_first_to_the_last_known_year():
 def test_the_share_count_change_needs_two_years_with_a_count():
     assert v.share_count_change([None, 450, None]) is None and v.share_count_change([]) is None
     assert v.share_count_change([0, 100]) is None                                    # nothing to divide by
+
+
+# ---------------------------------------------------------------------------
+# A one-off adjustment to operating income (workbook: `starting point` rows 60-66 and `ttm` rows 27-33)
+# ---------------------------------------------------------------------------
+
+EBIT_ADJUSTMENT = -1000               # starting point C63: one yearly amount, also used on the ttm sheet (C28)
+
+
+def adobes_last_year_ratios(ebit):
+    return v.last_year_ratios(
+        revenue=BASE_REVENUE, prior_revenue=PRIOR_YEAR_REVENUE, ebit=ebit, income_tax=INCOME_TAX,
+        income_before_tax=INCOME_BEFORE_TAX, depreciation_and_amortisation=ADOBE_DA, capex=CAPEX,
+        cash_from_working_capital=CASH_FROM_WORKING_CAPITAL,
+    )
+
+
+def test_the_adjusted_fiscal_year_margin_matches_the_starting_point_sheet():
+    assert adobes_last_year_ratios(ADOBE_EBIT)["operating_margin"] == close(0.36627540073204595)                 # C66, reported
+    assert adobes_last_year_ratios(ADOBE_EBIT + EBIT_ADJUSTMENT)["operating_margin"] == close(0.32420379485884976)   # C65, adjusted
+
+
+def test_the_adjustment_leaves_the_other_last_year_ratios_alone():
+    reported = adobes_last_year_ratios(ADOBE_EBIT)
+    adjusted = adobes_last_year_ratios(ADOBE_EBIT + EBIT_ADJUSTMENT)
+    for name in ("revenue_growth", "tax_rate", "da_pct", "capex_pct", "wc_pct"):
+        assert adjusted[name] == reported[name], name
+
+
+def test_the_adjusted_ttm_figures_match_the_ttm_sheet():
+    def ttm_with(operating_income):
+        return v.ttm_overview(
+            share_price=SHARE_PRICE, shares=SHARES, debt=v.financial_debt(1597, 4766), cash_and_investments=5639,
+            revenue=25970, operating_income=operating_income, depreciation_and_amortisation=766, net_income=7284,
+        )
+
+    adjusted = ttm_with(9271 + EBIT_ADJUSTMENT)
+    assert adjusted["operating_margin"] == close(0.31848286484405081)              # ttm C30
+    assert adjusted["ebitda"] == 9037                                              # C31
+    assert adjusted["ev_ebitda"] == close(11.572547305521743)                      # C32
+    assert ttm_with(9271)["ev_ebitda"] == close(10.419558633057687)                # C33, reported
+    assert adjusted["pe"] == ttm_with(9271)["pe"]                                  # net income, and so the P/E, are as reported
+    assert adjusted["ev_sales"] == ttm_with(9271)["ev_sales"]                      # revenue is not touched
