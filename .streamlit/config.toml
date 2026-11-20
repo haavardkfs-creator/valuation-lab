@@ -1,6 +1,28 @@
+# Colours, font and corners for the whole app. The same colours are written in theme.py (Streamlit reads this
+# file, but it cannot import Python); test_theme.py checks that the two agree.
+# Palette: navy base, off-white text, one blue accent, mint green for up, vermilion red for down, grey for
+# secondary information. See docs/decisions.md ("A design system").
+
 [theme]
-base = "light"
-primaryColor = "#2E5077"
-backgroundColor = "#FFFFFF"
-secondaryBackgroundColor = "#F0F2F6"
-textColor = "#262730"
+base = "dark"
+primaryColor = "#4C9AFF"                    # ACCENT: the company, sliders, links
+backgroundColor = "#0B1F3A"                 # NAVY: the page
+secondaryBackgroundColor = "#132B4D"        # SURFACE: cards, sidebar, input boxes
+textColor = "#E8EDF5"                       # TEXT
+
+greenColor = "#3DDC97"                      # UP
+redColor = "#F2674A"                        # DOWN
+blueColor = "#4C9AFF"                       # ACCENT
+grayColor = "#8A94A6"                       # GREY
+
+borderColor = "#24426E"                     # BORDER: thin lines around cards
+dataframeBorderColor = "#24426E"
+baseRadius = "0.75rem"                      # CARD_RADIUS: rounded corners
+showSidebarBorder = false
+metricValueFontSize = "1.6rem"                # big enough to read at a glance, small enough that $307.59 is never cut off
+
+# Inter, loaded by the reader's browser from Google Fonts; if that fails the browser's own sans-serif is used.
+font = "Inter:https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap, sans-serif"
+
+# Built-in charts draw their series in this order: the company in the accent, the comparison in grey.
+chartCategoricalColors = ["#4C9AFF", "#8A94A6"]

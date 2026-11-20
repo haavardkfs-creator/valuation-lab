@@ -14,22 +14,17 @@ import streamlit as st
 import assumptions
 import data
 import explanations
+import theme
 import valuation
 
 # The company the page opens on, and the only one with hand-chosen assumptions and peer multiples.
 DEFAULT_TICKER = assumptions.BASE_CASE_TICKER
 
-# Heatmap colours, as red/green/blue numbers. Chosen for a calm, professional look: a price
-# at the market price is white, and the further above it the greener, the further below it
-# the redder. Prices 50% or more away from the market price get the full tint.
-HEATMAP_GREEN = (46, 139, 87)
-HEATMAP_RED = (192, 57, 43)
+# How far a heatmap cell moves from the card colour towards green (above the market price) or red (below it).
+# A price at the market price keeps the card colour; prices 50% or more away get the strongest tint. The colours
+# themselves are theme.UP and theme.DOWN.
 HEATMAP_FULL_TINT_GAP = 0.5
-HEATMAP_STRONGEST_TINT = 0.7        # below 1 so the numbers stay easy to read on top
-
-# Chart colours: the theme blue from .streamlit/config.toml, and a lighter blue to sit beside it.
-CHART_BLUE = "#2E5077"
-CHART_LIGHT_BLUE = "#8FB0D1"
+HEATMAP_STRONGEST_TINT = 0.4        # low enough that the text stays readable on every cell (4.5 contrast, checked in test_theme.py)
 
 # The six figures that make up a company's peers in a data package.
 PEER_KEYS = ["peer_tickers", "peer_ev_sales", "peer_ev_ebitda", "peer_pe", "peer_ps", "peer_forward_pe"]
@@ -291,14 +286,16 @@ def draw_dcf(company, dcf, wacc_is_set_by_user):
 
 
 def tint(price, market_price):
-    """Pick a background colour for one heatmap cell: white at the market price, greener the
-    further above it, redder the further below it.
+    """Pick a background colour for one heatmap cell: the card colour at the market price, greener the
+    further above it, redder the further below it, with whichever text colour reads best on top.
     """
     gap = (price - market_price) / market_price
     strength = min(abs(gap) / HEATMAP_FULL_TINT_GAP, 1) * HEATMAP_STRONGEST_TINT
-    target = HEATMAP_GREEN if gap >= 0 else HEATMAP_RED
-    red, green, blue = (round(255 + (colour - 255) * strength) for colour in target)
-    return f"background-color: rgb({red}, {green}, {blue}); color: #262730"
+    start = theme.hex_to_rgb(theme.SURFACE)
+    target = theme.hex_to_rgb(theme.UP if gap >= 0 else theme.DOWN)
+    red, green, blue = (round(begin + (end - begin) * strength) for begin, end in zip(start, target))
+    text_colour = theme.readable_text_on(f"#{red:02X}{green:02X}{blue:02X}")
+    return f"background-color: rgb({red}, {green}, {blue}); color: {text_colour}"
 
 
 NOT_MEANINGFUL = "Not meaningful"       # shown when a number would mean nothing (no P/E for a loss)
@@ -1004,9 +1001,9 @@ def draw_history(history, error, overview, company_name):
     amounts, margins = history_chart_data(history)
     amounts_column, margins_column = st.columns(2)
     amounts_column.markdown("**Revenue and free cash flow**")
-    amounts_column.bar_chart(amounts, stack=False, color=[CHART_BLUE, CHART_LIGHT_BLUE], y_label="$ millions")
+    amounts_column.bar_chart(amounts, stack=False, color=theme.CHART_COLOURS, y_label="$ millions")
     margins_column.markdown("**Operating margin and free cash flow margin**")
-    margins_column.line_chart(margins, color=[CHART_BLUE, CHART_LIGHT_BLUE], y_label="% of revenue")
+    margins_column.line_chart(margins, color=theme.CHART_COLOURS, y_label="% of revenue")
     # Each dollar sign is escaped with a backslash, because Streamlit reads text between two
     # unescaped dollar signs as a maths formula.
     st.caption(free_cash_flow_note(history, overview, company_name).replace("$", "\\$"))
@@ -1057,7 +1054,7 @@ def draw_charts(dcf, year_labels, terminal_growth_rate):
     forecast_column.bar_chart(
         forecast,
         stack=False,
-        color=[CHART_BLUE, CHART_LIGHT_BLUE],
+        color=theme.CHART_COLOURS,
         y_label="$ millions",
     )
 
@@ -1069,7 +1066,7 @@ def draw_charts(dcf, year_labels, terminal_growth_rate):
     build_column.bar_chart(
         build,
         sort=False,
-        color=CHART_BLUE,
+        color=theme.ACCENT,
         y_label="$ millions",
     )
     # Each dollar sign is escaped with a backslash, because Streamlit reads text between two
@@ -1895,5 +1892,6 @@ def draw_page():
 
 
 st.set_page_config(page_title="Valuation Lab")
+theme.inject_theme()
 bridge_fmp_key()
 draw_page()
