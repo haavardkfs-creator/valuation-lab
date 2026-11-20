@@ -66,10 +66,11 @@ OPTIONAL_FIELDS = {
     "stockholders_equity": "Stockholders' equity (book value) at the end of the latest full year, $ millions; used for the return on invested capital",
     "pre_tax_cost_of_debt": "Weighted average effective interest rate on the company's debt, decimal",
     "cost_of_debt_is_fallback": "True when pre_tax_cost_of_debt is the risk-free rate plus a credit spread, because the company's interest expense was not available",
-    "peer_tickers": "Tickers of the peer companies, in the same order as the three lists below",
+    "peer_tickers": "Tickers of the peer companies, in the same order as the lists below",
     "peer_ev_sales": "Each peer's EV/Sales multiple",
     "peer_ev_ebitda": "Each peer's EV/EBITDA multiple",
     "peer_pe": "Each peer's P/E multiple",
+    "peer_ps": "Each peer's P/S multiple (market value over revenue)",
     "peer_operating_margin": "Each peer's operating margin, trailing twelve months, decimal (negative for a loss); None when Yahoo has none",
     "statement_currency": "Currency the company reports in, before conversion to US dollars, for example NOK",
     "price_currency": "Currency the share trades in, before conversion to US dollars, for example NOK or GBp (pence)",
@@ -134,6 +135,9 @@ ADOBE_SNAPSHOT = {
     "peer_ev_sales": [6.71, 4.35, 4.85, 10.19],
     "peer_ev_ebitda": [22.94, 13.45, 12.63, 26.18],
     "peer_pe": [32.73, 20.72, 20.97, 82.62],
+    # P/S: Yahoo Finance, Price/Sales (ttm), 20 Nov 2026 (the three multiples above are older; workbook:
+    # Multiples G8:G11). Same order.
+    "peer_ps": [6.56, 3.30, 3.38, 8.06],
 }
 
 
@@ -680,7 +684,7 @@ def fetch_sector_candidates(ticker, how_many):
 
 def fetch_peer_quote(ticker):
     """Ask Yahoo Finance for one peer's market value (in $ millions), the currency it trades in
-    its three multiples (EV/Sales, EV/EBITDA and P/E), its operating margin and its revenue growth
+    its four multiples (EV/Sales, EV/EBITDA, P/E and P/S), its operating margin and its revenue growth
     (the latest quarter against a year earlier), all as Yahoo gives them. A figure Yahoo does not
     have comes back as None. This is the only function that looks up a peer on
     the internet.
@@ -696,6 +700,7 @@ def fetch_peer_quote(ticker):
         "ev_sales": info.get("enterpriseToRevenue"),
         "ev_ebitda": info.get("enterpriseToEbitda"),
         "pe": info.get("trailingPE"),
+        "ps": info.get("priceToSalesTrailing12Months"),
         "operating_margin": info.get("operatingMargins"),
         "revenue_growth": info.get("revenueGrowth"),
     }
@@ -711,6 +716,7 @@ def peer_figures(quotes):
         "peer_ev_sales": [quote["ev_sales"] for quote in quotes],
         "peer_ev_ebitda": [quote["ev_ebitda"] for quote in quotes],
         "peer_pe": [quote["pe"] for quote in quotes],
+        "peer_ps": [quote["ps"] for quote in quotes],
         "peer_operating_margin": [quote["operating_margin"] for quote in quotes],
     }
 
@@ -1063,6 +1069,7 @@ def fetch_fmp_peer_quote(symbol):
         "ev_sales": metrics.get("evToSalesTTM"),
         "ev_ebitda": metrics.get("evToEBITDATTM"),
         "pe": ratios.get("priceToEarningsRatioTTM"),
+        "ps": ratios.get("priceToSalesRatioTTM"),
         "operating_margin": ratios.get("operatingProfitMarginTTM"),
         "revenue_growth": None,
     }

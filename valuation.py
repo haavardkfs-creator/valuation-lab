@@ -355,16 +355,17 @@ def is_outlier(multiple, middle_of_peers, outlier_factor):
 def flag_peers(peers, depressed_margin, outlier_factor, minimum_peers):
     """Find the peers whose figures may distort the comparison. For each peer, in order, return a
     list of reasons (empty if none): "low_margin" when its operating margin is below
-    depressed_margin (depressed earnings inflate its multiples), and "ev_sales", "ev_ebitda" or
-    "pe" when that multiple is far from the middle of all the peers' (see is_outlier), the same
+    depressed_margin (depressed earnings inflate its multiples), and "ev_sales", "ev_ebitda", "pe" or
+    "ps" when that multiple is far from the middle of all the peers' (see is_outlier), the same
     middle the page's prices use. `peers` holds the lists peer_tickers, peer_ev_sales,
-    peer_ev_ebitda, peer_pe and peer_operating_margin; a multiple needs at least minimum_peers
-    usable peers to be judged.
+    peer_ev_ebitda, peer_pe, peer_ps and peer_operating_margin; a multiple needs at least
+    minimum_peers usable peers to be judged.
     """
     columns = {
         "ev_sales": peers["peer_ev_sales"],
         "ev_ebitda": peers["peer_ev_ebitda"],
         "pe": peers["peer_pe"],
+        "ps": peers["peer_ps"],
     }
     middles = {name: median_of_usable_multiples(values, minimum_peers) for name, values in columns.items()}
     flags = []
@@ -451,7 +452,7 @@ def ttm_overview(
     net_income,
 ):
     """Work out the numbers a reader compares with peers, on the last twelve months (workbook:
-    `ttm` sheet): EV/Sales, EV/EBITDA, P/E and the operating margin, with the market value and the
+    `ttm` sheet): EV/Sales, EV/EBITDA, P/E, P/S and the operating margin, with the market value and the
     enterprise value behind them. The flows (revenue, operating income, D&A, net income) are the
     trailing twelve months; debt and cash are from the latest quarter's balance sheet. A number
     that would mean nothing, or that needs a missing figure (D&A for EV/EBITDA), comes back as
@@ -469,6 +470,7 @@ def ttm_overview(
         "ev_sales": ratio_or_none(enterprise_value_amount, revenue),
         "ev_ebitda": None if ebitda_amount is None else ratio_or_none(enterprise_value_amount, ebitda_amount),
         "pe": ratio_or_none(market_value_amount, net_income),
+        "ps": ratio_or_none(market_value_amount, revenue),          # the same sum as in stock_overview, on the last twelve months
         "operating_margin": operating_margin(operating_income, revenue),
     }
 
@@ -607,6 +609,7 @@ def stock_overview(
         "ev_sales": ratio_or_none(enterprise_value_amount, revenue),
         "ev_ebitda": ratio_or_none(enterprise_value_amount, ebitda_amount),
         "pe": ratio_or_none(market_value_amount, net_income),
+        "ps": ratio_or_none(market_value_amount, revenue),          # workbook: Multiples C66
         "operating_margin": operating_margin(ebit, revenue),
         "revenue_growth": revenue_growth(revenue, prior_year_revenue),
         "free_cash_flow": free_cash_flow,
@@ -742,6 +745,14 @@ def price_from_pe(net_income, pe_multiple, shares):
     return net_income * pe_multiple / shares
 
 
+def price_from_ps(revenue, ps_multiple, shares):
+    """Value a company from the price-to-sales multiple (workbook: `Multiples` G30 and H30): revenue
+    times the multiple is already equity value, like net income times P/E, so it only needs
+    splitting across the shares. There is no net debt step, unlike EV/Sales.
+    """
+    return revenue * ps_multiple / shares
+
+
 def dcf_vs_multiples(dcf_price, multiples_price):
     """Say how far the DCF price is above (positive) or below (negative) the price the
     multiples give, as a decimal.
@@ -829,6 +840,7 @@ def run_multiples(
     peer_ev_sales,
     peer_ev_ebitda,
     peer_pe,
+    peer_ps,
     dcf_price,
     minimum_peers,
 ):
@@ -836,13 +848,15 @@ def run_multiples(
 
     Peers with a missing or meaningless multiple are left out of that one multiple, and a
     multiple with fewer than minimum_peers peers left is not used: its median and price come
-    back as None. Returns a dictionary holding the peer medians, the three prices (EV/Sales,
-    EV/EBITDA and P/E), the middle of the prices that exist (None if none do), and how far the
-    DCF price is above or below it, so a page can show any of them.
+    back as None. Returns a dictionary holding the peer medians, the four prices (EV/Sales,
+    EV/EBITDA, P/E and P/S), the middle of the prices that exist (None if none do; with four prices
+    it is the average of the two in the middle), and how far the DCF price is above or below it, so
+    a page can show any of them.
     """
     median_ev_sales = median_of_usable_multiples(peer_ev_sales, minimum_peers)
     median_ev_ebitda = median_of_usable_multiples(peer_ev_ebitda, minimum_peers)
     median_pe = median_of_usable_multiples(peer_pe, minimum_peers)
+    median_ps = median_of_usable_multiples(peer_ps, minimum_peers)
 
     price_ev_sales = (
         None
@@ -857,17 +871,20 @@ def run_multiples(
         )
     )
     price_pe = None if median_pe is None else price_from_pe(net_income, median_pe, shares)
+    price_ps = None if median_ps is None else price_from_ps(revenue, median_ps, shares)
 
-    prices = [price for price in (price_ev_sales, price_ev_ebitda, price_pe) if price is not None]
+    prices = [price for price in (price_ev_sales, price_ev_ebitda, price_pe, price_ps) if price is not None]
     median_price = peer_median(prices) if prices else None
 
     return {
         "median_ev_sales": median_ev_sales,
         "median_ev_ebitda": median_ev_ebitda,
         "median_pe": median_pe,
+        "median_ps": median_ps,
         "price_ev_sales": price_ev_sales,
         "price_ev_ebitda": price_ev_ebitda,
         "price_pe": price_pe,
+        "price_ps": price_ps,
         "median_price": median_price,
         "dcf_vs_multiples": None if median_price is None else dcf_vs_multiples(dcf_price, median_price),
     }

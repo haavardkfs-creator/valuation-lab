@@ -243,15 +243,26 @@
   (1.25) is in `assumptions.py`, and the History section warns when the model's free cash flow for the last year
   is more than 25% above the reported one (Pfizer 1.83; nine other real companies are quiet). 13 new tests; 703
   tests pass.
-- Done (in the open pull request): a company whose DCF cannot be built still gets its overview and history. Ford
+- Done: a company whose DCF cannot be built still gets its overview and history. Ford
   (operating profit -9.2bn, pre-tax profit -11.8bn) used to get only the error "no pre-tax profit"; now the page shows
   the reason in red and then the Overview and History sections, and skips everything that needs a DCF (the DCF, what
   the market price implies, scenarios, assumptions, WACC, charts, sensitivity tables and peer multiples). The same
   goes for a discount rate at or below terminal growth. A bad ticker or missing data still gets only the error. No
-  new maths, so no Excel step. 705 tests pass (one test rewritten, two added).
-- Next: roadmap #10 (forward multiples) and #11 (thesis and export), as below. Small item waiting for Haavard's
-  decision: a one-time net income adjustment (for the P/E).
+  new maths, so no Excel step. 705 tests pass (one test rewritten, two added). Merged (pull request 52).
+- Done (in the open pull request): P/S added to the multiples, and counted in the middle price. Haavard built it
+  in the `Multiples` sheet (G7:G13 peer P/S and median, row 30 the implied price, C35:C37 now over H27:H30, C66
+  Adobe's own P/S). `price_from_ps` and `run_multiples` in `valuation.py` match the cells: P/S median 4.97x, price
+  $286.03, the middle of the four prices $377.05 (was $420.52), DCF vs multiples -18.9% (was -27.3%). Yahoo's and
+  Financial Modeling Prep's peer lookups both give P/S (FMP's `priceToSalesRatioTTM`, checked live against Yahoo:
+  Apple 10.396 on both), the peer table has a P/S column, and a peer can be flagged "P/S outlier". Adobe's
+  frozen snapshot has the four P/S of 20 Nov 2026, the other three columns are from April. 710 tests pass.
+  Forward P/E is the next pull request (Yahoo already gives next year's analyst EPS, so no FMP requests).
+- Next: forward P/E (roadmap #10, Excel first; adjusted analyst EPS, so forward is compared with forward), then #11
+  (thesis and export, with design talk first). Small item waiting for Haavard's decision: a one-time net income
+  adjustment (for the P/E).
 - Open:
+  - P/S has no glossary entry yet: Haavard writes the wording in `docs/glossary.md`, then it goes into
+    `explanations.py` and the multiples box (it holds EV/Sales, EV/EBITDA and P/E today).
   - Ideas from Haavard (20 Nov 2026), not started: show recent news and management changes for a company (Yahoo has
     a list of officers and a news feed per ticker, probably free), and the important macro factors (interest rates,
     inflation, oil; the Federal Reserve's free FRED service is the usual source and needs its own key; interest
@@ -265,8 +276,9 @@
   - The live app has a backup for Yahoo now (Financial Modeling Prep), but only for US companies, and the free plan's 250
     requests a day would run out after roughly twenty fresh companies. The key is in Streamlit Cloud's Secrets. It was
     shown in a screenshot and in chat on 20 Nov 2026; Haavard says he replaced it with a new one (in
-    `.streamlit/secrets.toml` and in Streamlit Cloud) on 20 Nov 2026. Still to do: run the live FMP check
-    (Yahoo switched off) to prove the backup works against the real service.
+    `.streamlit/secrets.toml` and in Streamlit Cloud) on 20 Nov 2026. On 20 Nov 2026 the new key worked
+    against the real service (one `ratios-ttm` request for Apple answered, and its P/S matched Yahoo's). Still to do: the full live
+    check with Yahoo switched off, to prove every step of the backup chain.
   - Even after the capex fade, Microsoft's DCF price is 48% below its market price ($278 vs
     $532, 6 Nov 2026). A starting point from one year is not a forecast, and a 17.8% grower
     fading to 2.5% over five years is a conservative path for it.

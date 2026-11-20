@@ -30,8 +30,8 @@ HEATMAP_STRONGEST_TINT = 0.7        # below 1 so the numbers stay easy to read o
 CHART_BLUE = "#2E5077"
 CHART_LIGHT_BLUE = "#8FB0D1"
 
-# The four figures that make up a company's peers in a data package.
-PEER_KEYS = ["peer_tickers", "peer_ev_sales", "peer_ev_ebitda", "peer_pe"]
+# The five figures that make up a company's peers in a data package.
+PEER_KEYS = ["peer_tickers", "peer_ev_sales", "peer_ev_ebitda", "peer_pe", "peer_ps"]
 
 # Guard rail 13: the footer every page of the app must show.
 FOOTER_TEXT = "Valuation Lab is a learning project, not investment advice."
@@ -198,6 +198,7 @@ def run_valuation(company, dcf_inputs, terminal_growth_rate, wacc_override=None)
         peer_ev_sales=company["peer_ev_sales"],
         peer_ev_ebitda=company["peer_ev_ebitda"],
         peer_pe=company["peer_pe"],
+        peer_ps=company["peer_ps"],
         dcf_price=dcf["implied_share_price"],
         minimum_peers=assumptions.MINIMUM_PEERS,
     )
@@ -344,6 +345,7 @@ def apply_ttm(overview, company, ttm, ttm_error=None):
         ev_sales=recent["ev_sales"],
         ev_ebitda=recent["ev_ebitda"],
         pe=recent["pe"],
+        ps=recent["ps"],
         operating_margin=recent["operating_margin"],
         ttm_period_end=ttm["period_end"],
         ttm_error=None,
@@ -1197,6 +1199,7 @@ FLAG_NAMES = {
     "ev_sales": "EV/Sales outlier",
     "ev_ebitda": "EV/EBITDA outlier",
     "pe": "P/E outlier",
+    "ps": "P/S outlier",
 }
 
 
@@ -1224,7 +1227,7 @@ def flag_explanations(peers):
     multiples, or a multiple is far from the other peers' middle (often a one-off). Returns an
     empty list when no peer is flagged.
     """
-    columns = {"ev_sales": ("EV/Sales", "peer_ev_sales"), "ev_ebitda": ("EV/EBITDA", "peer_ev_ebitda"), "pe": ("P/E", "peer_pe")}
+    columns = {"ev_sales": ("EV/Sales", "peer_ev_sales"), "ev_ebitda": ("EV/EBITDA", "peer_ev_ebitda"), "pe": ("P/E", "peer_pe"), "ps": ("P/S", "peer_ps")}
     sentences = []
     for position, reasons in enumerate(peer_flags(peers)):
         ticker = peers["peer_tickers"][position]
@@ -1235,7 +1238,7 @@ def flag_explanations(peers):
                 f"its operating margin ({percent(margin)}) is below {assumptions.DEPRESSED_PEER_MARGIN:.0%}, "
                 "so its earnings are depressed and its multiples look inflated"
             )
-        for reason in ("ev_sales", "ev_ebitda", "pe"):
+        for reason in ("ev_sales", "ev_ebitda", "pe", "ps"):
             if reason in reasons:
                 label, key = columns[reason]
                 middle = valuation.median_of_usable_multiples(peers[key], assumptions.MINIMUM_PEERS)
@@ -1266,19 +1269,24 @@ def margin_gap_warning(company_name, company_margin, peers):
 
 
 def middle_price_label(multiples):
-    """Name the middle price honestly: with three prices it is a true middle, with two it is only
-    their average, with one it is just that price.
+    """Name the middle price honestly: with four or three prices it is a middle (with four, the average
+    of the two in the middle), with two it is only their average, with one it is just that price.
     """
     prices = [
-        multiples[key] for key in ("price_ev_sales", "price_ev_ebitda", "price_pe") if multiples[key] is not None
+        multiples[key]
+        for key in ("price_ev_sales", "price_ev_ebitda", "price_pe", "price_ps")
+        if multiples[key] is not None
     ]
-    return {3: "Middle of the three prices", 2: "Average of two prices", 1: "The only price"}.get(
-        len(prices), "Middle of the prices"
-    )
+    return {
+        4: "Middle of the four prices",
+        3: "Middle of the three prices",
+        2: "Average of two prices",
+        1: "The only price",
+    }.get(len(prices), "Middle of the prices")
 
 
 def peer_table(peers, own_label, overview, multiples):
-    """Make the table of the peers and what each one has: three multiples and an operating
+    """Make the table of the peers and what each one has: four multiples and an operating
     margin, as text. The company itself comes first, so it can be compared at a glance, and the
     peer medians come last.
 
@@ -1316,6 +1324,11 @@ def peer_table(peers, own_label, overview, multiples):
                 + [show_multiple(multiple) for multiple in peers["peer_pe"]]
                 + [show_multiple(multiples["median_pe"])]
             ),
+            "P/S": (
+                [show_multiple(overview["ps"])]
+                + [show_multiple(multiple) for multiple in peers["peer_ps"]]
+                + [show_multiple(multiples["median_ps"])]
+            ),
             "Op. margin": (
                 [show_margin(overview["operating_margin"])]
                 + [show_margin(margin) for margin in peers["peer_operating_margin"]]
@@ -1348,17 +1361,18 @@ def draw_multiples(multiples, peers, notes, peers_are_suggested, own_label, over
     margin_warning = margin_gap_warning(company_name, overview["operating_margin"], peers)
     if margin_warning:
         st.warning(margin_warning)
-    sales_column, ebitda_column, pe_column = st.columns(3)
+    sales_column, ebitda_column, pe_column, ps_column = st.columns(4)
     sales_column.metric("EV/Sales price", price_or_note(multiples["price_ev_sales"]))
     ebitda_column.metric("EV/EBITDA price", price_or_note(multiples["price_ev_ebitda"]))
     pe_column.metric("P/E price", price_or_note(multiples["price_pe"]))
+    ps_column.metric("P/S price", price_or_note(multiples["price_ps"]))
     median_column, gap_column = st.columns(2)
     median_column.metric(middle_price_label(multiples), price_or_note(multiples["median_price"]))
     gap = multiples["dcf_vs_multiples"]
     gap_column.metric("DCF vs multiples", "Not available" if gap is None else percent(gap))
     if middle_price_label(multiples) == "Average of two prices":
         st.warning(
-            "Only two of the three multiples gave a price, so this is their average, not a middle: "
+            "Only two of the four multiples gave a price, so this is their average, not a middle: "
             "two numbers have no middle. Treat it with care, and see the table for which peers are missing."
         )
     st.dataframe(peer_table(peers, own_label, overview, multiples))
@@ -1582,10 +1596,11 @@ def draw_peer_box(company):
         return None, notes
     unknown = [
         ticker
-        for ticker, sales, ebitda, pe in zip(
-            figures["peer_tickers"], figures["peer_ev_sales"], figures["peer_ev_ebitda"], figures["peer_pe"]
+        for ticker, sales, ebitda, pe, ps in zip(
+            figures["peer_tickers"], figures["peer_ev_sales"], figures["peer_ev_ebitda"], figures["peer_pe"],
+            figures["peer_ps"],
         )
-        if sales is None and ebitda is None and pe is None
+        if sales is None and ebitda is None and pe is None and ps is None
     ]
     if unknown:
         notes.append((
