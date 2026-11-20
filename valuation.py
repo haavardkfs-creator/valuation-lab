@@ -1081,18 +1081,38 @@ def fade_working_capital_pcts(last_year_wc_pct, years):
     return fade_growth_rates(last_year_wc_pct, 0.0, years)
 
 
-def starting_point_assumptions(ratios, terminal_growth_rate, years):
+def tax_rate_used(last_year_tax_rate, normal_tax_rate):
+    """Pick the tax rate for a forecast: last year's rate, unless it was negative (the company got a tax
+    benefit that year, which cannot go on forever), and then a normal rate instead (workbook: `starting
+    point` C73, the IF in that cell). A rate of zero or more is used as it is.
+    """
+    return normal_tax_rate if last_year_tax_rate < 0 else last_year_tax_rate
+
+
+def adjusted_beta(observed_beta, weight_on_observed, market_beta):
+    """Pull a company's observed beta part of the way towards the market's beta of 1, because extreme
+    betas tend to drift towards 1 over time (workbook: `starting point` C79). With the usual weights it is
+    two-thirds of the observed beta plus one-third of the market's.
+    """
+    return weight_on_observed * observed_beta + (1 - weight_on_observed) * market_beta
+
+
+def starting_point_assumptions(ratios, terminal_growth_rate, years, normal_tax_rate=None):
     """Turn last year's ratios into a starting forecast: growth fades to the terminal rate,
     capex fades down to the D&A level if it was above it, working capital fades to zero, and
-    the operating margin, tax rate and D&A % stay at last year's level.
+    the operating margin, tax rate and D&A % stay at last year's level. If a normal tax rate is given and
+    last year's rate was negative, the normal rate is used instead (see tax_rate_used).
 
     Returns the assumptions in the same shapes run_full_dcf takes, so they can be passed
     straight in. This is a starting point, not a forecast.
     """
+    tax_rate = ratios["tax_rate"]
+    if normal_tax_rate is not None:
+        tax_rate = tax_rate_used(tax_rate, normal_tax_rate)
     return {
         "growth_rates": fade_growth_rates(ratios["revenue_growth"], terminal_growth_rate, years),
         "operating_margins": [ratios["operating_margin"]] * years,
-        "tax_rate": ratios["tax_rate"],
+        "tax_rate": tax_rate,
         "da_pcts": [ratios["da_pct"]] * years,
         "capex_pcts": fade_capex_pcts(ratios["capex_pct"], ratios["da_pct"], years),
         "wc_pcts": fade_working_capital_pcts(ratios["wc_pct"], years),

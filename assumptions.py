@@ -105,6 +105,19 @@ MARGIN_VS_HISTORY_WARNING = 0.05
 MARGIN_SWING_WARNING = 0.15
 MINIMUM_HISTORY_YEARS = 3
 
+# The tax rate a company other than Adobe gets when last year's rate was negative (a tax benefit, as Pfizer's
+# -3.5% in FY2025). A negative rate cannot go on forever, and zero would be too kind, so the page uses the US
+# federal statutory corporate rate. A rate of zero or more is used as it is. Chosen with Haavard on 20 Nov 2026;
+# Excel: starting point C72.
+NORMAL_TAX_RATE = 0.21
+
+# The adjusted beta, for companies other than Adobe: two-thirds of the observed beta plus one-third of the
+# market's beta of 1 (the Blume adjustment, a standard analyst step), because extreme betas drift towards 1.
+# Adobe keeps its observed beta so its hand-built base case still gives $305.60. Excel: starting point C77
+# (the weight, typed as =2/3) and C78 (the market's beta).
+BETA_WEIGHT_ON_OBSERVED = 2 / 3
+MARKET_BETA = 1.0
+
 # The company the hand-chosen forecast assumptions above were made for. The page uses them
 # only for this company; any other ticker gets a starting point from its own last year.
 BASE_CASE_TICKER = "ADBE"

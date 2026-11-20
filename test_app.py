@@ -179,13 +179,14 @@ def test_another_companys_price_is_the_starting_point_dcf(monkeypatch):
         cash_from_working_capital=company["cash_from_working_capital"],
     )
     start = valuation.starting_point_assumptions(
-        ratios, assumptions.TERMINAL_GROWTH_RATE, assumptions.STARTING_POINT_YEARS
+        ratios, assumptions.TERMINAL_GROWTH_RATE, assumptions.STARTING_POINT_YEARS,
+        normal_tax_rate=assumptions.NORMAL_TAX_RATE,
     )
     expected = valuation.run_full_dcf(
         base_revenue=company["revenue"],
         **start,
         risk_free_rate=company["risk_free_rate"],
-        beta=company["beta"],
+        beta=valuation.adjusted_beta(company["beta"], assumptions.BETA_WEIGHT_ON_OBSERVED, assumptions.MARKET_BETA),
         equity_risk_premium=company["equity_risk_premium"],
         pre_tax_cost_of_debt=valuation.estimate_pre_tax_cost_of_debt(
             company["interest_expense"], company["debt"]
@@ -317,8 +318,9 @@ def test_the_conversion_note_names_what_was_converted():
 
 def test_a_very_low_wacc_still_shows_the_dcf_and_explains_the_missing_heatmap(monkeypatch):
     # A negative beta pulls the WACC to about 4%: fine for the DCF, but the heatmap's lowest
-    # row (a point lower) falls below its highest terminal growth rate (3.5%).
-    low_beta = fake_statements_ticker(info=dict(ADOBE_YAHOO_INFO, beta=-0.3))
+    # row (a point lower) falls below its highest terminal growth rate (3.5%). The page adjusts the beta
+    # towards 1 (two-thirds observed plus one-third of 1), so -0.95 observed is -0.30 in the model.
+    low_beta = fake_statements_ticker(info=dict(ADOBE_YAHOO_INFO, beta=-0.95))
     page = run_page(monkeypatch, ticker="lowb", yahoo=low_beta)
     assert_footer_and_no_crash(page)
     assert not page.error
@@ -841,10 +843,10 @@ def test_when_the_reader_sets_a_wacc_the_page_still_shows_the_models_own_build(m
 
 
 def test_a_very_low_wacc_company_still_gets_its_wacc_table(monkeypatch):
-    low_beta = fake_statements_ticker(info=dict(ADOBE_YAHOO_INFO, beta=-0.3))
+    low_beta = fake_statements_ticker(info=dict(ADOBE_YAHOO_INFO, beta=-0.95))
     page = run_page(monkeypatch, ticker="lowb", yahoo=low_beta)
     assert not page.exception
-    assert wacc_table_of(page).loc["Beta", "Value"] == "-0.30"
+    assert wacc_table_of(page).loc["Beta", "Value"] == "-0.30 (observed -0.95)"
 
 
 # ---------------------------------------------------------------------------
@@ -1832,8 +1834,8 @@ def test_another_company_is_valued_from_fmp_when_yahoo_is_not_answering(monkeypa
 def test_the_wacc_table_and_history_name_fmp_when_it_supplied_them(monkeypatch):
     page = run_page_with_yahoo_down(monkeypatch, ticker="exmp")
     [wacc_table] = [table.value for table in page.table if "Beta" in table.value.index]
-    assert wacc_table.loc["Beta", "Value"] == "1.50"
-    assert wacc_table.loc["Beta", "Where it comes from"] == "Financial Modeling Prep, 5-year monthly"
+    assert wacc_table.loc["Beta", "Value"] == "1.33 (observed 1.50)"
+    assert wacc_table.loc["Beta", "Where it comes from"].startswith("Financial Modeling Prep, 5-year monthly, adjusted")
     assert any(text.startswith("Financial Modeling Prep gives 3 years of figures") for text in texts(page.caption))
 
 
@@ -1992,6 +1994,70 @@ def test_another_company_gets_scenarios_too(monkeypatch):
 def test_scenarios_sit_right_after_what_the_market_price_implies(monkeypatch):
     headings = texts(run_page(monkeypatch).subheader)
     assert headings.index("Scenarios") == headings.index("What the market price implies") + 1
+
+
+# ---------------------------------------------------------------------------
+# A normal tax rate when last year's was negative, and the adjusted beta
+# ---------------------------------------------------------------------------
+
+def negative_tax_company():
+    """A stand-in for Yahoo's reply about a company that got a tax benefit last year (as Pfizer did)."""
+    income = dict(ADOBE_YAHOO_INCOME, **{"Tax Provision": (-266e6, 1371e6), "Pretax Income": (7520e6, 6931e6)})
+    return fake_statements_ticker(income=income, info=dict(ADOBE_YAHOO_INFO, longName="Example Corp"))
+
+
+def test_a_negative_tax_rate_is_replaced_and_the_page_says_so(monkeypatch):
+    page = run_page(monkeypatch, ticker="exmp", yahoo=negative_tax_company())
+    assert_footer_and_no_crash(page)
+    assert any(
+        "tax rate last year was -3.54%" in warning and "normal rate of 21.00%" in warning
+        for warning in texts(page.warning)
+    )
+    wacc = wacc_table_of(page)
+    assert wacc.loc["Tax rate", "Value"] == "21.00%"
+    assert wacc.loc["Tax rate", "Where it comes from"].startswith("The normal US rate, because last year's was negative")
+
+
+def test_a_positive_tax_rate_is_left_alone_and_there_is_no_tax_warning(monkeypatch):
+    page = run_page(monkeypatch, ticker="exmp", yahoo=other_company())
+    assert not any("tax rate last year" in warning for warning in texts(page.warning))
+    assert wacc_table_of(page).loc["Tax rate", "Where it comes from"].startswith("Last year's rate")
+
+
+def test_the_forecast_uses_the_normal_tax_rate_for_a_company_with_a_tax_benefit():
+    company = data.get_company_data("ADBE")
+    company = dict(company, ticker="PFE", income_tax=-266.0, income_before_tax=7520.0, prior_year_revenue=21505.0)
+    assert app.forecast_assumptions(company)["tax_rate"] == assumptions.NORMAL_TAX_RATE
+
+
+def test_another_company_uses_the_adjusted_beta_and_the_table_shows_both(monkeypatch):
+    page = run_page(monkeypatch, ticker="exmp", yahoo=other_company())          # observed beta 1.383
+    wacc = wacc_table_of(page)
+    adjusted = 2 / 3 * 1.383 + 1 / 3
+    assert wacc.loc["Beta", "Value"] == f"{adjusted:.2f} (observed 1.38)"
+    assert "adjusted" in wacc.loc["Beta", "Where it comes from"]
+
+
+def test_adobe_keeps_its_observed_beta(monkeypatch):
+    page = run_page(monkeypatch)
+    wacc = wacc_table_of(page)
+    assert wacc.loc["Beta", "Value"] == "1.38"
+    assert "adjusted" not in wacc.loc["Beta", "Where it comes from"]
+
+
+def test_the_model_beta_is_the_observed_one_for_adobe_and_adjusted_for_others():
+    adobe = dict(data.get_company_data("ADBE"), beta=1.5)
+    assert app.model_beta(adobe) == 1.5
+    assert app.model_beta(dict(adobe, ticker="PFE", beta=0.3)) == pytest.approx(2 / 3 * 0.3 + 1 / 3)
+
+
+def test_the_adjusted_beta_lifts_a_low_beta_companys_wacc_and_lowers_a_high_beta_companys(monkeypatch):
+    for observed_beta, lifted in ((0.3, True), (2.0, False)):
+        monkeypatch.setattr("yfinance.Ticker", fake_statements_ticker(info=dict(ADOBE_YAHOO_INFO, beta=observed_beta)))
+        company = data.get_company_data("EXMP", source="yahoo")
+        used = app.build_dcf_inputs(company, 0.0, 0.0)
+        unadjusted = dict(used, beta=observed_beta)
+        assert (app.model_wacc(used) > app.model_wacc(unadjusted)) is lifted
 
 
 # ---------------------------------------------------------------------------

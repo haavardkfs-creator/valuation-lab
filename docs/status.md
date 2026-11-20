@@ -231,22 +231,23 @@
   shows a table of the three cases and the weighted price, with editable boxes in a closed sidebar box; probabilities
   that do not add to 100% get a plain warning. Defaults in `assumptions.py`. 23 new tests; 673 tests pass. Checked in
   the running app. The FMP live check and key replacement are still to do (see Open).
-- Next: roadmap #10 (forward multiples) and #11 (thesis and export), as below. Small items waiting for Haavard's decision: Pfizer's negative tax rate,
-  the adjusted beta, a one-time net income adjustment (for the P/E), and drawing the overview and history even when the DCF cannot be built.
+- Done (in the open pull request): a normal tax rate and an adjusted beta. Haavard built both in `starting point` (rows
+  68-73: a negative last-year rate becomes 21%; rows 75-84: adjusted beta = 2/3 x observed + 1/3 x 1, Pfizer 0.297 to
+  0.5313). `tax_rate_used` and `adjusted_beta` in `valuation.py` match the cells; `NORMAL_TAX_RATE`, `BETA_WEIGHT_ON_OBSERVED` and
+  `MARKET_BETA` are in `assumptions.py`. Applies to every company except Adobe (Adobe's base case stays $305.60). The page
+  shows both betas and says when a tax rate was replaced. Pfizer's DCF goes from $96 to $65 against a market price of $28.
+  17 new tests, 4 updated; 690 tests pass.
+- Next: roadmap #10 (forward multiples) and #11 (thesis and export), as below. Small items waiting for Haavard's decision:
+  a one-time net income adjustment (for the P/E), and drawing the overview and history even when the DCF cannot be built.
 - Open:
-  - A negative tax rate flows into the forecast. Pfizer's last-year tax rate is -3.54% (a tax
-    benefit; seen on 18 Nov 2026 in the new WACC table), and the starting point holds the tax rate
-    flat, so its forecast cash flows are too high and its after-tax cost of debt (4.32%) is above
-    its pre-tax cost (4.18%). Together with its low beta this explains its DCF price. Needs a
-    decision, for example floor the tax rate at zero or use a normal rate, built in Excel first.
   - A company that lost money last year gets only an error, so no overview and no history. For Ford
     (18 Nov 2026) the page says "A tax rate can't be worked out because the company made no pre-tax
     profit", because the starting point needs last year's tax rate, and nothing below it is drawn. The
     overview and the history do not need a tax rate and would help most here. Needs a decision: draw them
     even when the DCF cannot be built.
-  - Low-beta companies get odd DCF prices: on 16 Nov 2026 Pfizer's WACC is 5.96% and its DCF
-    price $94.96 against a market price of $28.89, and both terminal value cautions fire. The
-    caution says so, but the cure is the planned adjusted beta.
+  - Pfizer's DCF price is still $65 against a market price of $28 (20 Nov 2026), even with the adjusted beta and the
+    normal tax rate; its WACC is 6.4%. The rest of the gap is not explained: the starting point holds last year's margin
+    flat, and the terminal value cautions still fire. Worth a look at what Pfizer's last year contains before trusting it.
   - The live app has a backup for Yahoo now (Financial Modeling Prep), but only for US companies, and the free plan's 250
     requests a day would run out after roughly twenty fresh companies. After the pull request is merged: add
     `FMP_API_KEY` to Streamlit Cloud's Secrets (App settings, Secrets) and reboot the app. The key was shown in a

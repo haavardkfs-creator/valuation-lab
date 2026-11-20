@@ -503,3 +503,32 @@ the WACC is 10.010% with the fallback and 10.002% with Apple's own AA spread (0.
 difference is 0.009 percentage points. The fallback is least accurate for companies with a lot
 of debt, where the cost of debt carries more weight.
 
+### A normal tax rate when last year's was negative
+
+(workbook: `starting point` rows 68-73, Pfizer FY2025.) The starting point holds last year's tax rate flat. A
+negative rate means the company got a tax benefit that year, which cannot go on forever, and keeping it makes
+the forecast cash flows too high and the after-tax cost of debt higher than the pre-tax one.
+- Last year's rate = income tax / pre-tax income. Pfizer: -266 / 7,520 = -3.54%.
+- Tax rate used = the normal rate if last year's rate is below zero, otherwise last year's rate.
+- The normal rate is 21%, the US federal statutory corporate rate. Zero would be too kind, because it assumes
+  the benefit lasts forever. A rate of zero or more is used as it is (a made-up company with 1,200 tax on 6,000
+  pre-tax income keeps its 20.00%).
+- It applies to every company except Adobe, whose forecast tax rate is hand-chosen (18%), and it feeds both the
+  forecast cash flows and the after-tax cost of debt. The ROIC keeps its own rule (a tax benefit counts as no tax)
+  and the free cash flow yield uses the reported rate.
+- The page says when it replaced a rate, and the WACC table says where the tax rate comes from.
+
+### The adjusted beta
+
+(workbook: `starting point` rows 75-84, Pfizer.) A beta measured over five years can be extreme by chance, and
+extreme betas tend to drift towards the market's beta of 1. The common analyst adjustment (the Blume
+adjustment) takes two-thirds of the observed beta and one-third of 1.
+- Adjusted beta = 2/3 x observed beta + 1/3 x 1. Pfizer: 0.297 becomes 0.5313.
+- Its effect on the cost of equity (risk-free rate 5.29%, equity risk premium 4.41%): 6.60% with the observed
+  beta, 7.63% with the adjusted one, a difference of 1.03 points.
+- It applies to every company except Adobe, whose observed beta (1.38) is kept so its hand-built base case still
+  gives $305.60. The WACC table shows both, for example "0.53 (observed 0.30)".
+- On live data (20 Nov 2026), the DCF price moves from $96 to $65 for Pfizer (market price $28), $69 to $52 for
+  Coca-Cola, $276 to $193 for Merck, and $96 to $114 for Nvidia, whose high beta falls.
+  A low-beta company's WACC stays low (Pfizer 6.4%): the adjustment helps, it does not cure.
+
