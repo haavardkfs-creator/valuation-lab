@@ -257,24 +257,31 @@
   Apple 10.396 on both), the peer table has a P/S column, and a peer can be flagged "P/S outlier". Adobe's
   frozen snapshot has the four P/S of 20 Nov 2026, the other three columns are from April. 710 tests pass.
   Merged (pull request 53).
-- Done (in the open pull request): forward P/E added, the fifth multiple, counted in the middle price. Haavard built it in
+- Done: forward P/E added, the fifth multiple, counted in the middle price. Haavard built it in
   the `Multiples` sheet (rows 68-77: the peers' forward P/E, their median 14.25 and Adobe's next-year EPS 27.41; row 31 the
   price; C35:C37 now over H27:H31). `price_from_forward_pe` and `run_multiples` in `valuation.py` match the cells:
   forward P/E price $390.59, the middle of the five prices $390.59 (was $377.05), DCF vs multiples -21.8% (was
   -18.9%). Yahoo supplies both the peers' forward P/E and the company's own next-year EPS for free (so no FMP requests),
   converted to dollars at the share price's rate; the page says "No estimate" when there is none, and a peer can be flagged
   "Forward P/E outlier". With Yahoo down the FMP backup gives no forward P/E (it would cost requests). 723 tests pass.
-- Next: #11 (thesis and export, with design talk first). Small item waiting for Haavard's decision: a one-time net income
+  Merged (pull request 54).
+- Done (in the open pull request): #11, part 1 of 3, news and management. A "News and management" section at the end of
+  the page, for every company that loads (Ford too): the 5 most recent Yahoo headlines as links, with publisher and date,
+  and Yahoo's top 5 officers with titles. Headlines and names are shown safely (formatting characters escaped, only
+  https links), and if Yahoo cannot give them the section says so and the page carries on. No maths, so no Excel step.
+  756 tests pass (33 new).
+- Next: #11 part 2, the macro backdrop (FRED; Haavard registers a free key first), then part 3, the thesis page with Haavard's
+  own reasons boxes and a Markdown download (nothing saved on the server). Small item waiting for Haavard's decision: a one-time net income
   adjustment (for the P/E).
 - Open:
   - P/S and forward P/E have no glossary entries yet: Haavard writes the wording in `docs/glossary.md`, then it goes into
     `explanations.py` and the multiples box (it holds EV/Sales, EV/EBITDA and P/E today).
   - Forward P/E uses analysts' adjusted EPS, which can sit far above GAAP EPS (Adobe 27.41 against 17.91). Fine for
     forward against forward, but the price from it leans on analysts' optimism; also only next year, not further out.
-  - Ideas from Haavard (20 Nov 2026), not started: show recent news and management changes for a company (Yahoo has
-    a list of officers and a news feed per ticker, probably free), and the important macro factors (interest rates,
-    inflation, oil; the Federal Reserve's free FRED service is the usual source and needs its own key; interest
-    rates feed straight into the WACC). They fit best with #11, the thesis page, as context next to the number.
+  - News and management are built (part 1); "management changes" cannot be shown, because Yahoo gives only today's officers
+    and nothing is stored. The macro factors (interest rates, inflation, oil; the Federal Reserve's free FRED service
+    needs its own key; rates feed straight into the WACC) are part 2 of #11, and the thesis page that gathers everything
+    is part 3.
   - For a loss-maker the page still shows the "Starting point, not a forecast" warning and, if Yahoo has no interest
     expense, the cost-of-debt warning, both about a forecast that is not drawn. Harmless, but could be hidden.
   - Pfizer's DCF price is still $65 against a market price of $28 (20 Nov 2026). Investigated: no bug, but the model

@@ -244,3 +244,17 @@ FORECAST_YEAR_LABELS = ["FY2026", "FY2027", "FY2028", "FY2029", "FY2030"]
 
 # Other companies have other fiscal year-ends, so their forecast years are simply numbered.
 GENERIC_YEAR_LABELS = [f"Year {number}" for number in range(1, STARTING_POINT_YEARS + 1)]
+
+
+# ---------------------------------------------------------------------------
+# News and management (roadmap #11, first part)
+# ---------------------------------------------------------------------------
+
+# How many of Yahoo's recent headlines the page shows. Yahoo sends about 10; five is enough to see what
+# is going on without a wall of links. Chosen with Haavard on 20 Nov 2026.
+NEWS_ITEMS_SHOWN = 5
+
+# How many top officers the page shows. Yahoo lists the chairman, CEO and CFO first and then the
+# executive vice presidents, so the first five are the people who run the company. Chosen with Haavard
+# on 20 Nov 2026.
+OFFICERS_SHOWN = 5

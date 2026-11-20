@@ -584,3 +584,24 @@ adjustment) takes two-thirds of the observed beta and one-third of 1.
   Coca-Cola, $276 to $193 for Merck, and $96 to $114 for Nvidia, whose high beta falls.
   A low-beta company's WACC stays low (Pfizer 6.4%): the adjustment helps, it does not cure.
 
+
+## News and management
+
+Not finance maths, so there is no workbook cell and no formula: the section shows what Yahoo Finance gives
+for a company, as context next to the valuation. Nothing in the valuation depends on it.
+- **Recent headlines.** The first 5 (`NEWS_ITEMS_SHOWN`) of the 10 or so Yahoo sends, newest first, each with its
+  publisher and date and, when Yahoo gives a plain `https://` address, a link to it. Yahoo sometimes mixes general
+  market stories in with a company's own news (Ford, 20 Nov 2026, got a story on the trade deficit), and the page
+  says so.
+- **Top officers.** The first 5 (`OFFICERS_SHOWN`) of Yahoo's list of officers, in Yahoo's order (chairman, CEO and
+  CFO first), with their titles. It is the team today: Yahoo does not say when anyone changed, so the page cannot
+  show management changes without storing old lists.
+- **Safe to show.** Headlines and names come from outside, so every character that markdown could read as formatting
+  (a dollar sign, brackets, asterisks) gets a backslash and is shown as written; a link that is not `https://` is
+  shown as plain text; a bracket inside a link address is encoded so it cannot end the link early.
+- **When it fails.** The headlines and the officers are fetched together and remembered for 15 minutes. If one part
+  cannot be fetched the section says so and shows the other; if Yahoo said it was busy a moment ago it is left
+  alone and the section says it is not available right now. There is no Financial Modeling Prep fallback (it
+  would cost requests of the free daily limit for something optional).
+- **Where.** At the end of the page, just above the footer, for every company that loads, including one whose DCF
+  cannot be built (Ford); a ticker that cannot be found gets only the error.

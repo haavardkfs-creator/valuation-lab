@@ -559,6 +559,86 @@ def get_history(ticker, usd_per_unit=1.0, fetch_history=fetch_yahoo_history):
 
 
 # ---------------------------------------------------------------------------
+# News and management: recent headlines and the top officers, from Yahoo (roadmap #11, first part)
+# ---------------------------------------------------------------------------
+
+def safe_link(address):
+    """Return a web address only if it is a plain https link, otherwise None. Headlines come from
+    outside, so a link that is not https (or is missing) is shown as plain text, never as a link.
+    """
+    if isinstance(address, str) and address.startswith("https://") and " " not in address:
+        return address
+    return None
+
+
+def tidy_text(text):
+    """Squeeze the stray double spaces Yahoo leaves inside names ("Mr. Shantanu  Narayen") and trim the ends.
+    Anything that is not text comes back as an empty string.
+    """
+    return " ".join(text.split()) if isinstance(text, str) else ""
+
+
+def fetch_yahoo_news(ticker):
+    """Ask Yahoo Finance for a company's recent headlines, newest first. Each is a dictionary with its
+    "title", "publisher", "published" (the date, such as 2026-11-20, or None) and "url" (an https link, or
+    None). An item without a title is dropped. This and fetch_yahoo_officers are the only functions in this
+    part that touch the internet.
+    """
+    import yfinance
+
+    headlines = []
+    for item in yfinance.Ticker(ticker).news or []:
+        content = item.get("content") or {}
+        title = tidy_text(content.get("title"))
+        if not title:
+            continue
+        link = (content.get("canonicalUrl") or {}).get("url") or (content.get("clickThroughUrl") or {}).get("url")
+        published = content.get("pubDate")
+        headlines.append({
+            "title": title,
+            "publisher": tidy_text((content.get("provider") or {}).get("displayName")) or None,
+            "published": published[:10] if isinstance(published, str) and len(published) >= 10 else None,
+            "url": safe_link(link),
+        })
+    return headlines
+
+
+def fetch_yahoo_officers(ticker):
+    """Ask Yahoo Finance for a company's top officers, in Yahoo's order (chairman, CEO and CFO first).
+    Each is a dictionary with a "name" and a "title" (None if Yahoo has none). An officer without a name
+    is dropped.
+    """
+    officers = []
+    for officer in _fetch_info(ticker).get("companyOfficers") or []:
+        name = tidy_text(officer.get("name"))
+        if name:
+            officers.append({"name": name, "title": tidy_text(officer.get("title")) or None})
+    return officers
+
+
+def get_company_context(ticker, fetch_news=fetch_yahoo_news, fetch_officers=fetch_yahoo_officers):
+    """Get a company's recent headlines and top officers from Yahoo, as {"news": [...], "officers": [...]}.
+    A part Yahoo could not give (it failed, as opposed to having none) comes back as None, so the page can
+    say which part is missing and show the other. Stops with a SourceUnavailable error when Yahoo said it was
+    busy a moment ago (it is then left alone) or when neither part could be had. `fetch_news` and
+    `fetch_officers` can be swapped, which is how the tests run without the internet.
+    """
+    if _yahoo_cooling_down():
+        raise SourceUnavailable(YAHOO_BUSY_MESSAGE)
+
+    def attempt(fetch):
+        try:
+            return fetch(ticker)
+        except Exception:       # Yahoo can fail in many ways; this part is optional, so it is just left out
+            return None
+
+    context = {"news": attempt(fetch_news), "officers": attempt(fetch_officers)}
+    if context["news"] is None and context["officers"] is None:
+        raise SourceUnavailable("Could not get the news or the officers from Yahoo Finance.")
+    return context
+
+
+# ---------------------------------------------------------------------------
 # Trailing twelve months: the latest four quarters, to compare with the peers
 # ---------------------------------------------------------------------------
 

@@ -37,7 +37,9 @@ before, on Yahoo alone.
   "Set the WACC myself" control replaces the model's own WACC.
 - A **sensitivity heatmap** shows the price at different WACCs and terminal growth rates.
 - **Two charts** show the five-year forecast and what the company is worth today.
-- A **peer multiples comparison** (EV/Sales, EV/EBITDA, P/E) sits beside the DCF.
+- A **peer multiples comparison** (EV/Sales, EV/EBITDA, P/E, P/S and forward P/E) sits beside the DCF.
+- **News and management** at the end of the page: the five most recent headlines (as links) and the top
+  officers, from Yahoo Finance. It is context only; nothing in the valuation depends on it.
 - A **"What do these terms mean?" box** under each section explains the terms in plain
   language, using the wording in `docs/glossary.md`.
 

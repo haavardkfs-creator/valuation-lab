@@ -2328,3 +2328,142 @@ def test_the_note_is_none_without_an_adjustment_and_names_the_amount_with_one():
     assert app.adjustment_note(0) is None and app.adjustment_note(0.0) is None
     assert "by -$1,000m a year" in app.adjustment_note(-1000)
     assert "by $250m a year" in app.adjustment_note(250)
+
+
+# ---------------------------------------------------------------------------
+# News and management: headlines and top officers under every company
+# ---------------------------------------------------------------------------
+
+def headline(title, provider="Zacks", published="2026-11-20", url="https://finance.yahoo.com/news/a.html"):
+    """A headline as data.fetch_yahoo_news hands it to the page."""
+    return {"title": title, "publisher": provider, "published": published, "url": url}
+
+
+def yahoo_with_news(headlines, officers, info=None, income=None):
+    """Yahoo's reply for an Adobe-like company that also has the given headlines (as yfinance's raw news items) and
+    officers.
+    """
+    base = fake_statements_ticker(
+        income=income, info=dict(ADOBE_YAHOO_INFO if info is None else info, companyOfficers=officers)
+    )
+
+    class WithNews(base):
+        @property
+        def news(self):
+            if headlines is None:
+                raise ConnectionError("no internet")
+            return [
+                {"content": {
+                    "title": item["title"], "pubDate": item["published"] + "T10:00:00Z",
+                    "provider": {"displayName": item["publisher"]}, "canonicalUrl": {"url": item["url"]},
+                }}
+                for item in headlines
+            ]
+
+    return WithNews
+
+
+def test_text_from_outside_is_made_safe_for_markdown():
+    assert app.plain_text_for_markdown("Profit up $5 to [a] *record*") == r"Profit up \$5 to \[a\] \*record\*"
+    assert app.plain_text_for_markdown("abc ABC 123") == "abc ABC 123"              # letters, digits and spaces: unchanged
+    assert app.plain_text_for_markdown("") == ""
+
+
+def test_a_headline_is_a_link_with_its_publisher_and_date():
+    assert app.headline_line(headline("Adobe wins")) == (
+        "- [Adobe wins](https://finance.yahoo.com/news/a.html) (Zacks, 20 Nov 2026)"
+    )
+
+
+def test_a_headline_without_a_safe_link_is_plain_text_and_loses_missing_parts():
+    assert app.headline_line(headline("No link", url=None, provider=None, published=None)) == "- No link"
+    assert app.headline_line(headline("Just the date", url=None, provider=None)) == "- Just the date (20 Nov 2026)"
+
+
+def test_a_bracket_in_a_link_address_cannot_end_the_link_early():
+    line = app.headline_line(headline("x", url="https://example.com/a(b)"))
+    assert "(https://example.com/a%28b%29)" in line
+
+
+def test_a_date_that_is_not_a_real_date_is_shown_as_it_came():
+    assert app.headline_line(headline("x", url=None, provider=None, published="soon")).endswith("(soon)")
+
+
+def test_an_officer_is_a_bold_name_and_a_title():
+    assert app.officer_line({"name": "Mr. Jane Doe", "title": "Chairman & CEO"}) == r"- **Mr\. Jane Doe**, Chairman \& CEO"
+    assert app.officer_line({"name": "Ms. No Title", "title": None}) == r"- **Ms\. No Title**"
+
+
+def test_the_page_shows_headlines_and_officers_for_adobe(monkeypatch):
+    yahoo = yahoo_with_news(
+        [headline("Adobe launches Firefly 5", "Simply Wall St.", "2026-11-19")],
+        [{"name": "Mr. Shantanu  Narayen", "title": "Chairman & CEO"}],
+    )
+    page = run_page(monkeypatch, yahoo=yahoo)
+    assert_footer_and_no_crash(page)
+    assert "News and management" in texts(page.subheader)
+    shown = "\n".join(texts(page.markdown)).splitlines()          # each list is one markdown block of bullet lines
+    # The full stop in "St." gets a backslash, which markdown shows as a plain full stop.
+    assert r"- [Adobe launches Firefly 5](https://finance.yahoo.com/news/a.html) (Simply Wall St\., 19 Nov 2026)" in shown
+    assert any(line.startswith("- **Mr\\. Shantanu Narayen**, Chairman") for line in shown)
+
+
+def test_the_section_is_at_the_end_of_the_page_just_above_the_footer(monkeypatch):
+    page = run_page(monkeypatch, yahoo=yahoo_with_news([headline("A")], []))
+    assert texts(page.subheader)[-1] == "News and management"
+    assert page.main.caption[-1].value == app.FOOTER_TEXT          # the main area only: the sidebar has captions too
+
+
+def test_only_the_newest_few_headlines_and_officers_are_shown(monkeypatch):
+    many = [headline(f"Story number {number}") for number in range(1, 9)]
+    officers = [{"name": f"Officer {number}", "title": "VP"} for number in range(1, 9)]
+    page = run_page(monkeypatch, yahoo=yahoo_with_news(many, officers))
+    shown = "\n".join(texts(page.markdown))
+    assert f"Story number {assumptions.NEWS_ITEMS_SHOWN}" in shown
+    assert f"Story number {assumptions.NEWS_ITEMS_SHOWN + 1}" not in shown
+    assert f"Officer {assumptions.OFFICERS_SHOWN}" in shown and f"Officer {assumptions.OFFICERS_SHOWN + 1}" not in shown
+
+
+def test_a_headline_with_a_dollar_sign_and_a_bracket_is_shown_as_written(monkeypatch):
+    page = run_page(monkeypatch, yahoo=yahoo_with_news([headline("Stock jumps $5 [update] *now*")], []))
+    assert any(r"[Stock jumps \$5 \[update\] \*now\*](" in line for line in texts(page.markdown))
+
+
+def test_no_headlines_and_no_officers_say_so_instead_of_leaving_a_hole(monkeypatch):
+    page = run_page(monkeypatch, yahoo=yahoo_with_news([], []))
+    assert_footer_and_no_crash(page)
+    captions = texts(page.caption)
+    assert "Yahoo Finance has no recent headlines for ADBE." in captions
+    assert "Yahoo Finance lists no officers for ADBE." in captions
+
+
+def test_headlines_that_cannot_be_fetched_still_leave_the_officers(monkeypatch):
+    page = run_page(monkeypatch, yahoo=yahoo_with_news(None, [{"name": "Ms. Jane Doe", "title": "CFO"}]))
+    assert_footer_and_no_crash(page)
+    assert "The headlines could not be fetched right now." in texts(page.caption)
+    assert any("Jane Doe" in line for line in texts(page.markdown))
+
+
+def test_when_yahoo_is_busy_the_section_says_so_and_the_rest_of_the_page_still_works(monkeypatch):
+    monkeypatch.setattr("data._yahoo_busy_until", 10**12)         # Adobe then comes from its snapshot, without Yahoo
+    page = AppTest.from_file(APP_FILE, default_timeout=60).run()
+    assert_footer_and_no_crash(page)
+    assert any(caption.startswith("The news and the officers are not available right now.") for caption in texts(page.caption))
+    assert "DCF implied price" in metrics(page)                 # the valuation is unaffected (Adobe's snapshot)
+
+
+def test_a_company_that_lost_money_still_gets_news_and_management(monkeypatch):
+    loss = dict(ADOBE_YAHOO_INCOME, **{"Pretax Income": (-100e6, 50e6)})
+    yahoo = yahoo_with_news([headline("Loss maker restructures")], [{"name": "Mr. Boss", "title": "CEO"}], income=loss)
+    page = run_page(monkeypatch, ticker="loss", yahoo=yahoo)
+    assert_footer_and_no_crash(page)
+    assert "Could not value LOSS." in texts(page.error)[0]
+    assert "News and management" in texts(page.subheader)
+    assert any("Loss maker restructures" in line for line in texts(page.markdown))
+
+
+def test_a_ticker_that_cannot_be_found_gets_no_news_section(monkeypatch):
+    nothing = fake_statements_ticker(income={}, cash_flow={}, balance={}, info={})
+    monkeypatch.setattr("data._start_yahoo_cooldown", lambda: None)
+    page = run_page(monkeypatch, ticker="nope", yahoo=nothing)
+    assert "News and management" not in texts(page.subheader)

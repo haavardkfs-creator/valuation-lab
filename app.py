@@ -5,6 +5,7 @@ assumptions.py, hands both to valuation.py, and puts what comes back on the page
 rail 5). Run it with: streamlit run app.py
 """
 
+import datetime
 import os
 
 import pandas as pd
@@ -1488,6 +1489,14 @@ def load_adobe_peer_margins(tickers):
         return [None] * len(tickers)
 
 
+@st.cache_data(ttl=LIVE_DATA_CACHE_SECONDS, show_spinner=False)
+def load_company_context(ticker):
+    """Fetch a company's recent headlines and top officers and remember them for LIVE_DATA_CACHE_SECONDS
+    (news changes through the day). Stops with a plain error if Yahoo is busy or gave neither.
+    """
+    return data.get_company_context(ticker)
+
+
 @st.cache_data(ttl=SLOW_DATA_CACHE_SECONDS, show_spinner=False)
 def load_history(ticker, usd_per_unit):
     """Fetch a company's yearly history (in US dollars) and remember it for
@@ -1724,6 +1733,72 @@ def draw_error(ticker, error):
     st.caption(FOOTER_TEXT)
 
 
+MARKDOWN_SPECIAL_CHARACTERS = "\\`*_{}[]()#+-.!|<>$~&"      # each gets a backslash in front, so it shows as itself
+
+
+def plain_text_for_markdown(text):
+    """Make text from outside (a headline, a name) safe to put in a markdown line: every character that
+    markdown or Streamlit could read as formatting (links, bold, a dollar sign starting a maths formula)
+    gets a backslash, so it is shown exactly as written.
+    """
+    return "".join("\\" + character if character in MARKDOWN_SPECIAL_CHARACTERS else character for character in text)
+
+
+def headline_line(item):
+    """Write one headline as a markdown bullet: a link when it has a safe https address, plain text
+    otherwise, followed by the publisher and the date when Yahoo gave them.
+    """
+    title = plain_text_for_markdown(item["title"])
+    address = item["url"].replace("(", "%28").replace(")", "%29") if item["url"] else None   # a bracket would end the link early
+    text = f"[{title}]({address})" if address else title
+    details = [plain_text_for_markdown(item["publisher"])] if item["publisher"] else []
+    if item["published"]:
+        try:
+            day = datetime.date.fromisoformat(item["published"])
+            details.append(f"{day.day} {day.strftime('%b %Y')}")
+        except ValueError:
+            details.append(plain_text_for_markdown(item["published"]))
+    return f"- {text}" + (f" ({', '.join(details)})" if details else "")
+
+
+def officer_line(officer):
+    """Write one officer as a markdown bullet: the name, then the title when Yahoo has one."""
+    name = plain_text_for_markdown(officer["name"])
+    return f"- **{name}**" + (f", {plain_text_for_markdown(officer['title'])}" if officer["title"] else "")
+
+
+def draw_news_and_management(ticker):
+    """Draw "News and management": the most recent headlines (as links) and the top officers, from Yahoo.
+    A part Yahoo could not give, or has none of, says so, and if Yahoo is busy the whole section says so;
+    nothing else on the page depends on it.
+    """
+    st.subheader("News and management")
+    try:
+        context = load_company_context(ticker)
+    except ValueError as error:
+        st.caption(f"The news and the officers are not available right now. {error}")
+        return
+    st.markdown("**Recent headlines**")
+    if context["news"] is None:
+        st.caption("The headlines could not be fetched right now.")
+    elif not context["news"]:
+        st.caption(f"Yahoo Finance has no recent headlines for {ticker}.")
+    else:
+        st.markdown("\n".join(headline_line(item) for item in context["news"][: assumptions.NEWS_ITEMS_SHOWN]))
+    st.markdown("**Top officers**")
+    if context["officers"] is None:
+        st.caption("The officers could not be fetched right now.")
+    elif not context["officers"]:
+        st.caption(f"Yahoo Finance lists no officers for {ticker}.")
+    else:
+        st.markdown("\n".join(officer_line(officer) for officer in context["officers"][: assumptions.OFFICERS_SHOWN]))
+    st.caption(
+        "From Yahoo Finance. Headlines are written by outside publishers, not by this app, and Yahoo sometimes "
+        "mixes in general market stories; nothing in the valuation depends on them. The officers are the team "
+        "today: Yahoo does not say when anyone changed."
+    )
+
+
 def draw_dcf_unavailable(ticker, error):
     """Say, in plain words, that no DCF could be built for a company whose figures did load, and that the
     overview and history below still show what can be said about it.
@@ -1791,6 +1866,7 @@ def draw_page():
         draw_dcf_unavailable(ticker, dcf_error)
         draw_overview(overview)
         draw_history(history, history_error, overview, company["company_name"])
+        draw_news_and_management(company["ticker"])
         st.divider()
         st.caption(FOOTER_TEXT)
         return
@@ -1813,6 +1889,7 @@ def draw_page():
         own_label=f"{company['ticker']} (this company)", overview=overview,
         company_name=company["company_name"],
     )
+    draw_news_and_management(company["ticker"])
     st.divider()
     st.caption(FOOTER_TEXT)
 
