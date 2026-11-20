@@ -333,6 +333,28 @@ FY2025), so the table shows as many as exist, oldest first, with a dash where a 
   elsewhere; the shares are not converted. Two charts show revenue and free cash flow, and the
   operating and free cash flow margins.
 
+## Quality numbers
+
+Four numbers help separate a good business from a cheap one (workbook: `history` sheet, rows 24-35, Adobe,
+last fiscal year). They are the last row of the Overview, and cash conversion is also a row of the History.
+- **Return on invested capital (ROIC)** = operating profit after tax ÷ invested capital. Operating profit
+  after tax (NOPAT) = EBIT × (1 − tax rate). Invested capital = debt + equity − cash and investments, the same
+  net debt idea used elsewhere; Yahoo's own invested capital does not subtract cash, so it gives a lower ROIC
+  (Adobe 40% against 63%). Adobe: NOPAT $7,107m ÷ $11,238m = 63.2%.
+- A tax rate below zero (a tax benefit, which does not last) is counted as zero in ROIC. Where there is no
+  pre-tax profit, no tax rate can be worked out and ROIC is not meaningful. Where invested capital is not above
+  zero (negative equity after buybacks), ROIC is not meaningful. Buybacks that shrink equity push ROIC up
+  (Apple 97%, Nvidia 107%).
+- **Cash conversion** = free cash flow as the company reports it (cash from operations minus capital spending)
+  ÷ net income. Above 1.00x means more cash than profit. Adobe FY2025: 9,852 ÷ 7,130 = 1.38x; each year
+  1.56x, 1.28x, 1.42x, 1.38x. Coca-Cola's last year is 0.40x: much of its profit did not arrive as cash.
+- **Interest cover** = EBIT ÷ interest expense (Adobe: 8,706 ÷ 263 = 33.1x). "No interest" when a company pays
+  none; "Not available" when Yahoo has no interest figure (Apple); a loss gives a negative cover.
+- **Share count change** = the diluted average shares of the latest year ÷ the first year of the history − 1
+  (Adobe: 427 ÷ 471 − 1 = -9.3% over 3 years). A fall means buybacks.
+- The equity is Yahoo's stockholders' equity for the last fiscal year, converted to US dollars for a company
+  that reports in another currency; for Adobe it is typed into the snapshot ($11,623m, `history` C26).
+
 ## Is the latest year typical?
 
 The DCF's starting point for another company is built from its last year alone, and one year can be a

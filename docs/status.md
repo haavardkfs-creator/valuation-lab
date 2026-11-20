@@ -190,7 +190,7 @@
   quarter with no figures yet (Nvidia) and a missing long-term debt line (First Solar). Falls back to the
   fiscal year, and says so, if Yahoo lacks the quarters. 27 new tests; 498 tests pass. Checked on live data
   (First Solar, Adobe, Coca-Cola, Nvidia, Apple).
-- Done (in the open pull request): roadmap #5c, peers by profile. Suggested peers are now the 5 whose
+- Done: roadmap #5c (merged, PR #44), peers by profile. Suggested peers are now the 5 whose
   operating margin and revenue growth are closest to the company's (within a tenth to ten times its size),
   not the closest in size, and a company whose industry gives fewer than 2 suitable peers (Apple, Microsoft)
   is topped up from its wider sector, with a note. `profile_distance` and the new `closest_peers` ranking in
@@ -198,8 +198,15 @@
   `data.py`; `PEER_SECTOR_CANDIDATES_TO_CHECK` in `assumptions.py`; the note and captions in `app.py`. A
   screening rule, so no Excel step. 33 new or changed tests; 525 tests pass. Checked on live data (Coca-Cola,
   Pfizer, First Solar, Apple, Microsoft, Nvidia, Exxon).
-- Next: roadmap #7, quality metrics, then #8, #6, #10 and #11, as below. Small items waiting for Haavard's
-  decision: Pfizer's negative tax rate, the adjusted beta, the empty-Yahoo-reply retry, and drawing the
+- Done (in the open pull request): roadmap #7, quality numbers. Haavard added the quality block to the
+  `history` sheet (rows 24-35). A last row of the Overview gives ROIC (debt + equity - cash as invested capital;
+  a tax benefit counts as no tax), cash conversion (reported free cash flow over net income), interest cover and
+  the share count change over the history; the History table gets a cash conversion row. `quality_numbers` and
+  its small functions in `valuation.py` match the sheet; `stockholders_equity` joins the data package (Yahoo; typed
+  into Adobe's snapshot). "Not available", "No interest" and "Not meaningful" where they apply. 35 new tests; 553
+  tests pass. Checked on live data (seven companies) and in the running app.
+- Next: roadmap #8, adjustments for one-off items, then #6, #10 and #11, as below. Small items waiting for
+  Haavard's decision: Pfizer's negative tax rate, the adjusted beta, the empty-Yahoo-reply retry, and drawing the
   overview and history even when the DCF cannot be built.
 - Open:
   - A negative tax rate flows into the forecast. Pfizer's last-year tax rate is -3.54% (a tax

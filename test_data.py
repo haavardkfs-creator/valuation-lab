@@ -31,6 +31,7 @@ EXPECTED_SNAPSHOT = {
     "cash_from_working_capital": 605,       # Projection G16 (sum of Inputs G34:G39)
     "debt": 6210,                           # WACC C22
     "cash_and_investments": 6595,           # valuation C22
+    "stockholders_equity": 11623,           # history C26 (Yahoo Finance, 19 Nov 2026)
     "shares": 413,                          # WACC C20
     "share_price": 251.47,                  # WACC C19
     "beta": 1.38,                           # WACC C9
@@ -1279,3 +1280,41 @@ def test_fetch_sector_candidates_gives_nothing_when_yahoo_has_no_sector(monkeypa
     monkeypatch.setattr("yfinance.Sector", FakeSector)
     assert data.fetch_sector_candidates("ODD", 30) == []
     assert data.fetch_sector_candidates("NOTHING", 30) == []
+
+
+# ---------------------------------------------------------------------------
+# Stockholders' equity in the data package (for the return on invested capital)
+# ---------------------------------------------------------------------------
+
+def balance_with_equity(**lines):
+    """Adobe's fake balance sheet with equity lines added: each is {line name: (latest, year before)}."""
+    return dict(ADOBE_YAHOO_BALANCE, **lines)
+
+
+def test_adobes_snapshot_carries_the_equity_from_the_history_sheet():
+    assert data.get_company_data("ADBE", source="snapshot")["stockholders_equity"] == 11623      # history C26
+
+
+def test_the_yahoo_package_has_the_equity_when_yahoo_has_it(monkeypatch):
+    balance = balance_with_equity(**{"Stockholders Equity": (11623e6, 11213e6)})
+    monkeypatch.setattr("yfinance.Ticker", fake_statements_ticker(balance=balance))
+    assert data.get_company_data("ADBE", source="yahoo")["stockholders_equity"] == pytest.approx(11623)
+
+
+def test_the_yahoo_package_falls_back_to_common_stock_equity(monkeypatch):
+    balance = balance_with_equity(**{"Common Stock Equity": (9000e6, 8000e6)})
+    monkeypatch.setattr("yfinance.Ticker", fake_statements_ticker(balance=balance))
+    assert data.get_company_data("ADBE", source="yahoo")["stockholders_equity"] == pytest.approx(9000)
+
+
+def test_the_yahoo_package_simply_lacks_the_equity_when_yahoo_does_not_have_it(monkeypatch):
+    monkeypatch.setattr("yfinance.Ticker", fake_statements_ticker())               # the fake balance sheet has no equity line
+    package = data.get_company_data("ADBE", source="yahoo")
+    assert "stockholders_equity" not in package                                    # optional: the page says "Not meaningful"
+
+
+def test_the_equity_of_a_company_in_another_currency_is_converted_to_dollars(monkeypatch):
+    balance = balance_with_equity(**{"Stockholders Equity": (10_000e6, 9_000e6)})
+    info = dict(ADOBE_YAHOO_INFO, financialCurrency="NOK", currency="NOK")
+    monkeypatch.setattr("yfinance.Ticker", fake_statements_ticker(balance=balance, info=info, fx_rates={"NOKUSD=X": 0.10}))
+    assert data.get_company_data("AKER.OL", source="yahoo")["stockholders_equity"] == pytest.approx(1000)

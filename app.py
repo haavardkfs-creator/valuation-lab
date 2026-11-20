@@ -316,6 +316,60 @@ def apply_ttm(overview, company, ttm, ttm_error=None):
     )
 
 
+def apply_quality(overview, company, history):
+    """Add the four quality numbers to the overview, for the last fiscal year: the return on invested
+    capital, cash conversion (reported free cash flow over net income, from the history), interest
+    cover, and the change in the share count over the history. A number that cannot be worked out is
+    None. The interest expense itself is kept too, because "no interest" and "not known" read
+    differently.
+    """
+    reported_free_cash_flow = None if history is None else history["free_cash_flow"][-1]
+    shares_by_year = [] if history is None else history["diluted_shares"]
+    quality = valuation.quality_numbers(
+        ebit=company["ebit"],
+        income_tax=company["income_tax"],
+        income_before_tax=company["income_before_tax"],
+        debt=company["debt"],
+        equity=company.get("stockholders_equity"),
+        cash_and_investments=company["cash_and_investments"],
+        free_cash_flow=reported_free_cash_flow,
+        net_income=company["net_income"],
+        interest_expense=company.get("interest_expense"),
+        shares_by_year=shares_by_year,
+    )
+    return dict(
+        overview,
+        roic=quality["roic"],
+        cash_conversion=quality["cash_conversion"],
+        interest_cover=quality["interest_cover"],
+        interest_expense=company.get("interest_expense"),
+        share_count_change=quality["share_count_change"],
+        share_count_years=quality["share_count_years"],
+    )
+
+
+def interest_cover_text(overview):
+    """Write the interest cover: a multiple such as 33.1x, "No interest" for a company that pays
+    none, or "Not available" when Yahoo has no interest figure.
+    """
+    if overview.get("interest_expense") is None:
+        return "Not available"
+    if overview["interest_expense"] == 0:
+        return "No interest"
+    return multiple_or_note(overview["interest_cover"], 1)
+
+
+def share_count_text(overview):
+    """Write the change in the share count as a value and a note under it: for example -9.3% and
+    "over 3 years". The value is "Not available", with no note, when the history has too few years of
+    share counts.
+    """
+    if overview.get("share_count_change") is None:
+        return "Not available", None
+    years = overview["share_count_years"]
+    return percent(overview["share_count_change"]), f"over {years} year{'' if years == 1 else 's'}"
+
+
 def percent_or_note(rate):
     """Write a rate as a percentage, or say it is not meaningful when it could not be worked out."""
     return NOT_MEANINGFUL if rate is None else percent(rate)
@@ -433,6 +487,24 @@ def draw_overview(overview):
     sales.metric("EV/Sales", multiple_or_note(overview["ev_sales"]), help="Enterprise value (what the whole business is worth at today's price) divided by revenue.")
     ebitda.metric("EV/EBITDA", multiple_or_note(overview["ev_ebitda"]), help="Enterprise value divided by operating profit before depreciation and amortisation.")
     pe.metric("P/E", multiple_or_note(overview["pe"]), help="What the market pays for each dollar of the last full year's net income.")
+    roic, conversion, cover, shares_changed = st.columns(4)
+    roic.metric(
+        "ROIC", percent_or_note(overview.get("roic")),
+        help="Return on invested capital: operating profit after tax divided by the money put into the business (debt plus equity, less cash), last fiscal year.",
+    )
+    conversion.metric(
+        "Cash conversion", multiple_or_note(overview.get("cash_conversion"), 2),
+        help="Free cash flow as the company reports it divided by net income, last fiscal year. Above 1.00x means more cash than profit.",
+    )
+    cover.metric(
+        "Interest cover", interest_cover_text(overview),
+        help="Operating profit (EBIT) divided by the interest expense, last fiscal year: how many times profit pays the interest.",
+    )
+    share_value, share_note = share_count_text(overview)
+    shares_changed.metric(
+        "Share count change", share_value, delta=share_note, delta_color="off", delta_arrow="off",
+        help="The change in the diluted average number of shares over the years in the history. A fall means buybacks.",
+    )
     if overview.get("ttm_period_end"):
         basis = (
             f"EV/Sales, EV/EBITDA, P/E and the operating margin are for the last twelve months (the four "
@@ -447,6 +519,11 @@ def draw_overview(overview):
     else:
         basis = "Worked out from the last fiscal year and today's share price."
     st.caption(f"{basis} A number that would mean nothing (no P/E for a company that lost money) says so.")
+    st.caption(
+        "The last row, about quality, is for the last fiscal year. Return on invested capital counts a tax "
+        "benefit as no tax, and is pushed up by buybacks that shrink equity; where equity is negative it is "
+        "not meaningful. Cash conversion uses the free cash flow the company reports."
+    )
 
 
 def assumptions_table(dcf_inputs, year_labels):
@@ -614,14 +691,24 @@ def rate_text(rate):
     return "–" if rate is None else percent(rate)
 
 
+def multiple_or_dash(multiple):
+    """Write a multiple with two decimals such as 1.38x, or a dash if it is missing."""
+    return "–" if multiple is None else f"{multiple:.2f}x"
+
+
 def history_ratios(history):
     """Work out the history's year-by-year ratios: revenue growth, operating margin, free cash
-    flow margin and the yearly change in diluted shares (a fall means buybacks).
+    flow margin, cash conversion (free cash flow over net income) and the yearly change in diluted
+    shares (a fall means buybacks).
     """
     return {
         "revenue_growth": valuation.yearly_growth(history["revenue"]),
         "operating_margin": valuation.ratios_by_year(history["operating_income"], history["revenue"]),
         "fcf_margin": valuation.ratios_by_year(history["free_cash_flow"], history["revenue"]),
+        "cash_conversion": [
+            valuation.cash_conversion(free_cash_flow, net_income)
+            for free_cash_flow, net_income in zip(history["free_cash_flow"], history["net_income"])
+        ],
         "share_change": valuation.yearly_growth(history["diluted_shares"]),
     }
 
@@ -639,6 +726,7 @@ def history_table(history):
         "Net income": [millions_text(amount) for amount in history["net_income"]],
         "Free cash flow (reported)": [millions_text(amount) for amount in history["free_cash_flow"]],
         "Free cash flow margin": [rate_text(rate) for rate in ratios["fcf_margin"]],
+        "Cash conversion (FCF ÷ net income)": [multiple_or_dash(value) for value in ratios["cash_conversion"]],
         "Diluted average shares": [
             "–" if shares is None else f"{shares:,.0f}m" for shares in history["diluted_shares"]
         ],
@@ -1381,6 +1469,7 @@ def draw_page():
         history, history_error = load_history(company["ticker"], company.get("usd_per_statement_unit", 1.0)), None
     except ValueError as error:
         history, history_error = None, str(error)
+    overview = apply_quality(overview, company, history)
     draw_dcf(company, dcf, wacc_override is not None)
     draw_reverse_dcf(company, dcf_inputs, terminal_growth_rate, wacc_override, history)
     draw_overview(overview)

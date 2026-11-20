@@ -797,3 +797,25 @@ the peer box's tooltip and a note for sector-sourced peers say what was done; th
 reader edits the box. A first load that needs the sector is slower (about 11 to 12 seconds on live data, 5
 to 8 otherwise). Known limits: growth is the latest quarter against a year earlier, so it is noisy; "closest
 in margin and growth" is not "most similar business". No new files.
+
+## 2026-11-20 — Quality numbers (roadmap #7)
+
+To help separate a good business from a cheap one, four numbers were added: return on invested capital, cash
+conversion, interest cover and the change in the share count. Tried first on seven real companies. Two
+decisions with Haavard. First, invested capital is debt + equity - cash, matching the net debt used everywhere
+else, and not Yahoo's own figure, which does not subtract cash (Adobe's ROIC is 63% against 40% on Yahoo's);
+buybacks that shrink equity push the ROIC up (Apple 97%, Nvidia 107%) and negative equity makes it "not
+meaningful". Second, the tax rate in ROIC is floored at zero, because Pfizer's -3.5% (a benefit) would inflate it;
+this is only for this number and does not settle the open question about the forecast's negative tax rate. Built
+Excel first: the `history` sheet, rows 24-35 (cash conversion by year, equity, invested capital, NOPAT, ROIC,
+interest cover, share count change). In Python, `cash_conversion`, `invested_capital`,
+`return_on_invested_capital`, `interest_cover`, `share_count_change` and `quality_numbers` in `valuation.py`
+match the sheet's cells. The data package gains the optional `stockholders_equity` (from Yahoo's balance sheet,
+converted like the other money figures; typed into Adobe's snapshot from the sheet). Cash conversion uses the
+reported free cash flow from the History, because that is the figure people compare. The page shows the four
+numbers as the last row of the Overview and cash conversion as a row of the History table; it says "Not
+available" where Yahoo has no figure, "No interest" for a company with no interest expense, and "Not
+meaningful" where the number would mean nothing. Checked in the running app, which showed two labels cut off
+("Return on invested capital", "-9.3% over 3 years"): the label is now "ROIC" with the full name in its tooltip,
+and the years sit in the small line under the share count change. In my plan I wrote FY2022's cash conversion as
+1.55x; the sheet says 1.56x (7,396 / 4,756 = 1.555). No new files.
