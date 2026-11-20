@@ -224,12 +224,42 @@ def test_a_ticker_yahoo_knows_nothing_about_shows_a_plain_error(monkeypatch):
     assert not page.metric
 
 
-def test_a_company_with_no_pre_tax_profit_shows_a_plain_error(monkeypatch):
+def test_a_company_with_no_pre_tax_profit_gets_the_reason_but_still_its_overview_and_history(monkeypatch):
     loss = dict(ADOBE_YAHOO_INCOME, **{"Pretax Income": (-100e6, 50e6)})
     page = run_page(monkeypatch, ticker="loss", yahoo=fake_statements_ticker(income=loss))
     assert_footer_and_no_crash(page)
-    assert "no pre-tax profit" in texts(page.error)[0]
-    assert not page.metric
+    [error] = texts(page.error)
+    assert error.startswith("Could not value LOSS.") and "no pre-tax profit" in error
+    assert "still shown" in error
+    subheaders = texts(page.subheader)
+    assert "Overview" in subheaders and "History" in subheaders
+    assert "EV/Sales" in metrics(page) and "Operating margin" in metrics(page)
+    # Nothing that needs a DCF is drawn: no DCF section, no implied price, no heatmap, no peer multiples.
+    assert "DCF implied price" not in metrics(page)
+    for section in ("Discounted cash flow (DCF)", "What the market price implies", "Peer multiples"):
+        assert section not in subheaders
+    assert not page.dataframe
+
+
+def test_a_loss_maker_with_a_negative_operating_margin_shows_its_overview_numbers_as_they_are(monkeypatch):
+    # Ford's shape: operating profit and pre-tax profit both negative, so no tax rate and no free cash flow.
+    loss = dict(ADOBE_YAHOO_INCOME, **{
+        "Pretax Income": (-600e6, 1e9), "Operating Income": (-400e6, 1e9), "Net Income": (-500e6, 1e9),
+    })
+    page = run_page(monkeypatch, ticker="loss", yahoo=fake_statements_ticker(income=loss))
+    assert_footer_and_no_crash(page)
+    assert "Could not value LOSS." in texts(page.error)[0]
+    shown = metrics(page)
+    assert shown["Operating margin"] == "-1.7%"                  # -400 / 23,769, shown as it is
+    assert shown["P/E"] == app.NOT_MEANINGFUL                    # no P/E for a company that lost money
+
+
+def test_a_discount_rate_that_is_too_low_also_keeps_the_overview_and_history(monkeypatch):
+    odd = fake_statements_ticker(info=dict(ADOBE_YAHOO_INFO, beta=-10))
+    page = run_page(monkeypatch, ticker="odd", yahoo=odd)
+    assert_footer_and_no_crash(page)
+    assert "must be lower than the discount rate" in texts(page.error)[0]
+    assert "Overview" in texts(page.subheader) and "History" in texts(page.subheader)
 
 
 def test_a_wacc_at_or_below_terminal_growth_shows_a_plain_error(monkeypatch):

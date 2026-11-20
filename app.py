@@ -1683,11 +1683,22 @@ def draw_error(ticker, error):
     st.caption(FOOTER_TEXT)
 
 
+def draw_dcf_unavailable(ticker, error):
+    """Say, in plain words, that no DCF could be built for a company whose figures did load, and that the
+    overview and history below still show what can be said about it.
+    """
+    st.error(
+        f"Could not value {ticker}. {error} The overview and the history below do not need a valuation, "
+        "so they are still shown."
+    )
+
+
 def draw_page():
     """Draw the whole page: ticker box, sliders, peer box (companies other than Adobe), title,
     DCF section, a note about any one-off adjustment, what the market price implies, overview, history, assumptions, how the WACC is
-    built, charts, the two sensitivity tables, multiples and footer. If the company cannot be valued, draw
-    the reason instead.
+    built, charts, the two sensitivity tables, multiples and footer. If the company cannot be found, draw
+    the reason instead. If it was found but a DCF cannot be built (it lost money), draw the reason, the
+    overview and the history only.
     """
     ticker = draw_ticker_box()
     growth_shift, margin_shift, terminal_growth_rate, wacc_override = draw_sliders()
@@ -1704,13 +1715,20 @@ def draw_page():
                 company = dict(company, **peers)
             adjustment = draw_adjustment_box(company)
             company = apply_adjustment(company, adjustment)
-        dcf_inputs = build_dcf_inputs(company, growth_shift, margin_shift)
-        dcf, multiples = run_valuation(company, dcf_inputs, terminal_growth_rate, wacc_override)
-        base_wacc = model_wacc(dcf_inputs)
-        overview = company_overview(company)
     except ValueError as error:
         draw_error(ticker, error)
         return
+    try:
+        dcf_inputs = build_dcf_inputs(company, growth_shift, margin_shift)
+        dcf, multiples = run_valuation(company, dcf_inputs, terminal_growth_rate, wacc_override)
+        base_wacc = model_wacc(dcf_inputs)
+        dcf_error = None
+    except ValueError as error:
+        # The company itself loaded, but a DCF cannot be built from its figures (a company that lost money
+        # has no tax rate to start from). The overview and the history do not need one, so they are still drawn.
+        dcf_inputs = dcf = multiples = base_wacc = None
+        dcf_error = error
+    overview = company_overview(company)
 
     st.title("Valuation Lab")
     st.write(f"{company['company_name']} ({company['ticker']})")
@@ -1728,6 +1746,13 @@ def draw_page():
     except ValueError as error:
         history, history_error = None, str(error)
     overview = apply_quality(overview, company, history)
+    if dcf_error is not None:
+        draw_dcf_unavailable(ticker, dcf_error)
+        draw_overview(overview)
+        draw_history(history, history_error, overview, company["company_name"])
+        st.divider()
+        st.caption(FOOTER_TEXT)
+        return
     draw_dcf(company, dcf, wacc_override is not None)
     draw_reverse_dcf(company, dcf_inputs, terminal_growth_rate, wacc_override, history)
     draw_scenarios(company, dcf_inputs, terminal_growth_rate, wacc_override, scenario_settings)

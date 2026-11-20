@@ -237,29 +237,36 @@
   `MARKET_BETA` are in `assumptions.py`. Applies to every company except Adobe (Adobe's base case stays $305.60). The page
   shows both betas and says when a tax rate was replaced. Pfizer's DCF goes from $96 to $65 against a market price of $28.
   17 new tests, 4 updated; 690 tests pass.
-- Done (in the open pull request): the cash flow check. Investigating Pfizer (DCF $65, market $28) found no bug:
+- Done: the cash flow check (merged, pull request 51). Investigating Pfizer (DCF $65, market $28) found no bug:
   about $7bn of costs sit between its operating profit and its pre-tax income and the model cannot see them.
   Haavard built the check in `history` rows 37-49; `free_cash_flow_check` in `valuation.py` matches it, the limit
   (1.25) is in `assumptions.py`, and the History section warns when the model's free cash flow for the last year
   is more than 25% above the reported one (Pfizer 1.83; nine other real companies are quiet). 13 new tests; 703
   tests pass.
-- Next: roadmap #10 (forward multiples) and #11 (thesis and export), as below. Small items waiting for Haavard's decision:
-  a one-time net income adjustment (for the P/E), and drawing the overview and history even when the DCF cannot be built.
+- Done (in the open pull request): a company whose DCF cannot be built still gets its overview and history. Ford
+  (operating profit -9.2bn, pre-tax profit -11.8bn) used to get only the error "no pre-tax profit"; now the page shows
+  the reason in red and then the Overview and History sections, and skips everything that needs a DCF (the DCF, what
+  the market price implies, scenarios, assumptions, WACC, charts, sensitivity tables and peer multiples). The same
+  goes for a discount rate at or below terminal growth. A bad ticker or missing data still gets only the error. No
+  new maths, so no Excel step. 705 tests pass (one test rewritten, two added).
+- Next: roadmap #10 (forward multiples) and #11 (thesis and export), as below. Small item waiting for Haavard's
+  decision: a one-time net income adjustment (for the P/E).
 - Open:
-  - A company that lost money last year gets only an error, so no overview and no history. For Ford
-    (18 Nov 2026) the page says "A tax rate can't be worked out because the company made no pre-tax
-    profit", because the starting point needs last year's tax rate, and nothing below it is drawn. The
-    overview and the history do not need a tax rate and would help most here. Needs a decision: draw them
-    even when the DCF cannot be built.
+  - Ideas from Haavard (20 Nov 2026), not started: show recent news and management changes for a company (Yahoo has
+    a list of officers and a news feed per ticker, probably free), and the important macro factors (interest rates,
+    inflation, oil; the Federal Reserve's free FRED service is the usual source and needs its own key; interest
+    rates feed straight into the WACC). They fit best with #11, the thesis page, as context next to the number.
+  - For a loss-maker the page still shows the "Starting point, not a forecast" warning and, if Yahoo has no interest
+    expense, the cost-of-debt warning, both about a forecast that is not drawn. Harmless, but could be hidden.
   - Pfizer's DCF price is still $65 against a market price of $28 (20 Nov 2026). Investigated: no bug, but the model
     cannot see about $7bn of costs between its operating profit and its pre-tax income, nor a possible patent cliff (the
     market implies about -13.6% revenue growth a year). The History section now warns about the cash flow gap; typing
     -7000 into the one-off box takes the DCF to $42. What the $7bn is can be read in the 10-K's "other (income)/deductions".
   - The live app has a backup for Yahoo now (Financial Modeling Prep), but only for US companies, and the free plan's 250
-    requests a day would run out after roughly twenty fresh companies. After the pull request is merged: add
-    `FMP_API_KEY` to Streamlit Cloud's Secrets (App settings, Secrets) and reboot the app. The key was shown in a
-    screenshot and in chat on 20 Nov 2026, so create a new one on the Financial Modeling Prep dashboard once its 12-hour lock
-    ends, and replace it in `.streamlit/secrets.toml` and in Streamlit Cloud.
+    requests a day would run out after roughly twenty fresh companies. The key is in Streamlit Cloud's Secrets. It was
+    shown in a screenshot and in chat on 20 Nov 2026; Haavard says he replaced it with a new one (in
+    `.streamlit/secrets.toml` and in Streamlit Cloud) on 20 Nov 2026. Still to do: run the live FMP check
+    (Yahoo switched off) to prove the backup works against the real service.
   - Even after the capex fade, Microsoft's DCF price is 48% below its market price ($278 vs
     $532, 6 Nov 2026). A starting point from one year is not a forecast, and a 17.8% grower
     fading to 2.5% over five years is a conservative path for it.
