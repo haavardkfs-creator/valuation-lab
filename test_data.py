@@ -1966,3 +1966,132 @@ def test_adobe_skips_yahoo_while_it_is_cooling_down(monkeypatch):
     monkeypatch.setattr("yfinance.Ticker", lambda ticker: pytest.fail("asked Yahoo"))
     with_fmp(monkeypatch)
     assert data.get_company_data_with_fallback("ADBE")[1] == "live_fmp"
+
+
+# ---------------------------------------------------------------------------
+# News and management: headlines and top officers from Yahoo (not Excel: text, no maths)
+# ---------------------------------------------------------------------------
+
+def news_item(title="Adobe launches something", provider="Zacks", published="2026-11-20T20:13:24Z",
+              link="https://finance.yahoo.com/news/a.html"):
+    """One headline as yfinance gives it: everything of interest sits under "content"."""
+    return {"id": "x", "content": {
+        "title": title, "pubDate": published, "provider": {"displayName": provider},
+        "canonicalUrl": {"url": link}, "clickThroughUrl": {"url": link},
+    }}
+
+
+class FakeNewsTicker:
+    """A stand-in for yfinance.Ticker that has news and officers (in .info, as Yahoo has them)."""
+    news_items = []
+    officers = []
+
+    def __init__(self, ticker):
+        self.news = list(self.news_items)
+        self.info = {"companyOfficers": list(self.officers), "currentPrice": 10.0, "beta": 1.0}
+
+
+@pytest.mark.parametrize("address, expected", [
+    ("https://finance.yahoo.com/news/a.html", "https://finance.yahoo.com/news/a.html"),
+    ("http://example.com/plain", None),                      # not https
+    ("javascript:alert(1)", None),
+    ("https://example.com/has a space", None),
+    ("", None), (None, None), (42, None),
+])
+def test_only_plain_https_links_are_kept(address, expected):
+    assert data.safe_link(address) == expected
+
+
+def test_tidy_text_squeezes_stray_spaces_and_ignores_anything_that_is_not_text():
+    assert data.tidy_text("  Mr. Shantanu   Narayen ") == "Mr. Shantanu Narayen"
+    assert data.tidy_text(None) == "" and data.tidy_text(5) == ""
+
+
+def test_headlines_come_back_tidy_in_yahoos_order(monkeypatch):
+    FakeNewsTicker.news_items = [
+        news_item("First   headline", "Zacks", "2026-11-20T20:13:24Z"),
+        news_item("Second headline", "Simply Wall St.", "2026-11-19T08:00:00Z"),
+    ]
+    monkeypatch.setattr("yfinance.Ticker", FakeNewsTicker)
+    got = data.fetch_yahoo_news("ADBE")
+    assert got == [
+        {"title": "First headline", "publisher": "Zacks", "published": "2026-11-20",
+         "url": "https://finance.yahoo.com/news/a.html"},
+        {"title": "Second headline", "publisher": "Simply Wall St.", "published": "2026-11-19",
+         "url": "https://finance.yahoo.com/news/a.html"},
+    ]
+
+
+def test_a_headline_with_an_unsafe_link_keeps_its_text_but_loses_the_link(monkeypatch):
+    FakeNewsTicker.news_items = [news_item(link="javascript:alert(1)")]
+    monkeypatch.setattr("yfinance.Ticker", FakeNewsTicker)
+    [item] = data.fetch_yahoo_news("ADBE")
+    assert item["title"] == "Adobe launches something" and item["url"] is None
+
+
+def test_a_headline_falls_back_to_the_click_through_link_and_copes_with_missing_parts(monkeypatch):
+    bare = {"content": {"title": "No extras", "clickThroughUrl": {"url": "https://example.com/x"}}}
+    FakeNewsTicker.news_items = [bare, {"content": {"title": ""}}, {"content": None}, {}]
+    monkeypatch.setattr("yfinance.Ticker", FakeNewsTicker)
+    got = data.fetch_yahoo_news("ADBE")
+    assert got == [{"title": "No extras", "publisher": None, "published": None, "url": "https://example.com/x"}]
+
+
+def test_no_news_gives_an_empty_list_not_an_error(monkeypatch):
+    FakeNewsTicker.news_items = []
+    monkeypatch.setattr("yfinance.Ticker", FakeNewsTicker)
+    assert data.fetch_yahoo_news("ADBE") == []
+
+
+def test_officers_come_back_with_tidy_names_and_titles(monkeypatch):
+    FakeNewsTicker.officers = [
+        {"name": "Mr. Shantanu  Narayen", "title": "Chairman & CEO", "age": 61, "totalPay": 5797825},
+        {"name": "Ms. Jane Doe", "title": None},
+        {"name": "", "title": "Nameless"},                     # no name: left out
+    ]
+    monkeypatch.setattr("yfinance.Ticker", FakeNewsTicker)
+    assert data.fetch_yahoo_officers("ADBE") == [
+        {"name": "Mr. Shantanu Narayen", "title": "Chairman & CEO"},
+        {"name": "Ms. Jane Doe", "title": None},
+    ]
+
+
+def test_a_company_without_an_officer_list_gives_an_empty_list(monkeypatch):
+    FakeNewsTicker.officers = []
+    monkeypatch.setattr("yfinance.Ticker", FakeNewsTicker)
+    assert data.fetch_yahoo_officers("ADBE") == []
+
+
+def test_the_context_has_both_parts():
+    got = data.get_company_context(
+        "ADBE", fetch_news=lambda ticker: [{"title": "x"}], fetch_officers=lambda ticker: [{"name": "y"}]
+    )
+    assert got == {"news": [{"title": "x"}], "officers": [{"name": "y"}]}
+
+
+def test_a_part_that_fails_is_none_and_the_other_part_is_still_given():
+    def broken(ticker):
+        raise ConnectionError("no internet")
+
+    got = data.get_company_context("ADBE", fetch_news=broken, fetch_officers=lambda ticker: [])
+    assert got == {"news": None, "officers": []}                # None: could not be fetched; []: there are none
+    got = data.get_company_context("ADBE", fetch_news=lambda ticker: [], fetch_officers=broken)
+    assert got == {"news": [], "officers": None}
+
+
+def test_when_neither_part_can_be_had_the_context_stops_with_a_plain_error():
+    def broken(ticker):
+        raise ConnectionError("no internet")
+
+    with pytest.raises(data.SourceUnavailable, match="news or the officers"):
+        data.get_company_context("ADBE", fetch_news=broken, fetch_officers=broken)
+
+
+def test_the_context_leaves_yahoo_alone_while_it_is_cooling_down(monkeypatch):
+    monkeypatch.setattr("data._yahoo_busy_until", 10**12)
+
+    def must_not_be_called(ticker):
+        pytest.fail("asked Yahoo")
+
+    with pytest.raises(data.SourceUnavailable, match="isn't answering"):
+        data.get_company_context("ADBE", fetch_news=must_not_be_called, fetch_officers=must_not_be_called)
