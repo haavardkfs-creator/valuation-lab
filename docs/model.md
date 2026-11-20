@@ -605,3 +605,14 @@ for a company, as context next to the valuation. Nothing in the valuation depend
   would cost requests of the free daily limit for something optional).
 - **Where.** At the end of the page, just above the footer, for every company that loads, including one whose DCF
   cannot be built (Ford); a ticker that cannot be found gets only the error.
+
+## The verdict badge
+
+Not a formula in the workbook: a rule that only names a number the page already shows, the DCF's upside against the market
+price. The badge at the top of the page says UNDERVALUED when the upside is more than 15% (`VERDICT_THRESHOLD`), OVERVALUED
+when it is more than 15% below zero, and FAIRLY VALUED in between, limits included (exactly +15% is still fair). With no DCF
+(a company that lost money) it says NO VERDICT. 15% is a common rule of thumb for a margin of safety, not a result of the
+model, and the page says the verdict is the model's output, not investment advice. Adobe's base case (+21.5%) is undervalued;
+on 20 Nov 2026's live data, with Adobe at $217.71 and a DCF of $307.59 (+41.3%), it is too. The header's four cards repeat
+numbers the page already works out (the market price, the DCF price, the upside, the middle of the multiples prices) and the
+verdict follows the sliders, because it is worked out from the same DCF.

@@ -15,6 +15,7 @@ from streamlit.testing.v1 import AppTest
 import app
 import assumptions
 import data
+import theme
 import valuation
 from test_data import (
     ADOBE_YAHOO_BALANCE,
@@ -79,6 +80,15 @@ def metrics(page):
     return {metric.label: metric.value for metric in page.metric}
 
 
+def header_of(page):
+    """The page's "answer first" header: the HTML the page writes at the top (company name, ticker badge, verdict
+    badge and the four headline cards). The first HTML block is the card styling, the second is the header.
+    """
+    blocks = [element.value for element in page.get("html")]
+    [header] = [block for block in blocks if 'class="vl-header"' in block]
+    return header
+
+
 def assert_footer_and_no_crash(page):
     assert not page.exception
     assert app.FOOTER_TEXT in texts(page.caption)
@@ -113,7 +123,8 @@ def test_adobe_falls_back_to_the_snapshot_when_yahoo_cannot_be_reached(monkeypat
 def test_an_empty_ticker_box_means_adobe(monkeypatch):
     page = run_page(monkeypatch, ticker="   ")
     assert_footer_and_no_crash(page)
-    assert "Adobe Inc. (ADBE)" in texts(page.markdown)
+    header = header_of(page)
+    assert "<h1>Adobe Inc.</h1>" in header and ">ADBE</span>" in header          # the name and its ticker badge
 
 
 # ---------------------------------------------------------------------------
@@ -128,7 +139,8 @@ def other_company():
 def test_another_company_gets_a_starting_point_with_a_warning_and_no_multiples_without_peers(monkeypatch):
     page = run_page(monkeypatch, ticker="exmp", yahoo=other_company())      # lower case on purpose
     assert_footer_and_no_crash(page)
-    assert "Example Corp (EXMP)" in texts(page.markdown)
+    header = header_of(page)
+    assert "<h1>Example Corp</h1>" in header and ">EXMP</span>" in header
     assert "All figures are from Yahoo Finance's latest annual statements." in texts(page.caption)
     [warning] = texts(page.warning)
     assert warning.startswith("Starting point, not a forecast")
@@ -2467,3 +2479,136 @@ def test_a_ticker_that_cannot_be_found_gets_no_news_section(monkeypatch):
     monkeypatch.setattr("data._start_yahoo_cooldown", lambda: None)
     page = run_page(monkeypatch, ticker="nope", yahoo=nothing)
     assert "News and management" not in texts(page.subheader)
+
+
+# ---------------------------------------------------------------------------
+# The "answer first" header: name, verdict, four cards and a price sparkline (redesign, Phase 2)
+# ---------------------------------------------------------------------------
+
+def yahoo_with_prices(info=None, income=None, closes=None):
+    """Yahoo's reply for an Adobe-like company that also has a year of closing prices (two days by default)."""
+    base = fake_statements_ticker(income=income, info=info)
+    prices = {"2026-11-19": 200.0, "2026-11-20": 210.0} if closes is None else closes
+
+    class WithHistory(base):
+        def history(self, period):
+            return pd.DataFrame({"Close": list(prices.values())}, index=pd.to_datetime(list(prices)))
+
+    return WithHistory
+
+
+def card_values(header):
+    """The headline cards of a header as {label: value}, read back out of the HTML."""
+    import re
+    return dict(re.findall(r'class="vl-kpi-label">([^<]+)</div><div class="vl-kpi-value[^"]*">([^<]+)</div>', header))
+
+
+def test_the_header_cards_show_the_same_numbers_as_the_dcf_section_below(monkeypatch):
+    page = run_page(monkeypatch)
+    cards = card_values(header_of(page))
+    shown = metrics(page)
+    assert cards["Current price"] == shown["Market price"]
+    assert cards["DCF value per share"] == shown["DCF implied price"]
+    assert cards["Upside / downside"] == "▲ +" + shown["Upside vs market"]            # an up arrow and a plus sign
+    assert list(cards) == ["Current price", "DCF value per share", "Upside / downside", "Multiples value"]
+
+
+def test_the_header_multiples_value_is_the_middle_of_the_multiples_prices(monkeypatch):
+    page = run_page(monkeypatch)
+    middle_label = next(label for label in metrics(page) if label.startswith("Middle of the"))
+    assert card_values(header_of(page))["Multiples value"] == metrics(page)[middle_label]
+
+
+def test_a_big_upside_is_undervalued_in_the_up_colour(monkeypatch):
+    header = header_of(run_page(monkeypatch))
+    assert "▲ UNDERVALUED" in header and "vl-badge vl-badge-up" in header
+    assert 'class="vl-kpi-value vl-up">▲ +' in header
+
+
+def test_a_price_far_above_the_dcf_value_is_overvalued_in_the_down_colour(monkeypatch):
+    page = run_page(monkeypatch, yahoo=fake_statements_ticker(info=dict(ADOBE_YAHOO_INFO, currentPrice=900.0)))
+    header = header_of(page)
+    assert "▼ OVERVALUED" in header and "vl-badge vl-badge-down" in header
+    assert 'class="vl-kpi-value vl-down">▼ -' in header
+
+
+def test_a_price_close_to_the_dcf_value_is_fairly_valued_with_no_colour_on_the_upside(monkeypatch):
+    page = run_page(monkeypatch, yahoo=fake_statements_ticker(info=dict(ADOBE_YAHOO_INFO, currentPrice=290.0)))
+    header = header_of(page)
+    assert "● FAIRLY VALUED" in header
+    assert 'class="vl-badge"' in header                           # grey: neither the up nor the down class
+
+
+def test_the_header_says_what_the_verdict_rests_on_and_that_it_is_not_advice(monkeypatch):
+    header = header_of(run_page(monkeypatch))
+    assert "more than 15% above is undervalued" in header and "not investment advice" in header
+
+
+def test_without_a_dcf_the_header_has_no_verdict_and_the_cards_that_need_one_say_so(monkeypatch):
+    loss = dict(ADOBE_YAHOO_INCOME, **{"Pretax Income": (-100e6, 50e6)})
+    page = run_page(monkeypatch, ticker="loss", yahoo=fake_statements_ticker(income=loss))
+    assert_footer_and_no_crash(page)
+    header = header_of(page)
+    cards = card_values(header)
+    assert "NO VERDICT" in header and "No DCF could be built for this company" in header
+    assert cards["Current price"].startswith("$")                 # the price is still there
+    assert cards["DCF value per share"] == cards["Upside / downside"] == cards["Multiples value"] == "Not available"
+    assert header.count("vl-muted") == 3                          # the three empty cards are muted
+
+
+def test_a_company_without_peers_has_no_multiples_value_but_a_dcf_value(monkeypatch):
+    page = run_page(monkeypatch, ticker="exmp", yahoo=other_company())
+    header = header_of(page)
+    cards = card_values(header)
+    assert cards["Multiples value"] == "Not available" and "No peer figures" in header
+    assert cards["DCF value per share"].startswith("$")
+
+
+def test_the_company_name_from_yahoo_is_shown_as_text_and_can_never_become_page_code(monkeypatch):
+    nasty = dict(ADOBE_YAHOO_INFO, longName='<script>alert("x")</script> & Co')
+    page = run_page(monkeypatch, ticker="evil", yahoo=fake_statements_ticker(info=nasty))
+    header = header_of(page)
+    assert "<script>" not in header
+    assert "&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt; &amp; Co" in header
+
+
+def test_the_header_follows_the_sliders(monkeypatch):
+    page = run_page(monkeypatch)
+    before = card_values(header_of(page))["DCF value per share"]
+    page.sidebar.slider[1].set_value(-2.0).run()                  # an operating margin 2 points lower, every year
+    after = card_values(header_of(page))["DCF value per share"]
+    assert after != before
+    assert after == metrics(page)["DCF implied price"]
+
+
+def test_the_price_sparkline_is_drawn_when_yahoo_has_the_prices(monkeypatch):
+    page = run_page(monkeypatch, yahoo=yahoo_with_prices())
+    assert_footer_and_no_crash(page)
+    assert "Share price, last 12 months" in texts(page.caption)
+    assert len(page.get("plotly_chart")) == 1
+
+
+def test_without_price_history_the_header_still_draws_and_just_leaves_the_chart_out(monkeypatch):
+    page = run_page(monkeypatch)                                  # the usual fake has no history() at all
+    assert_footer_and_no_crash(page)
+    assert "Share price, last 12 months" not in texts(page.caption)
+    assert not page.get("plotly_chart")
+    assert "▲ UNDERVALUED" in header_of(page)
+
+
+def test_the_sparkline_has_no_axes_and_shows_the_date_and_price_on_hover():
+    figure = app.price_sparkline([
+        {"date": "2026-11-18", "close": 100.0}, {"date": "2026-11-19", "close": 120.0}, {"date": "2026-11-20", "close": 110.0},
+    ])
+    assert figure.layout.xaxis.visible is False and figure.layout.yaxis.visible is False
+    assert list(figure.data[0].y) == [100.0, 120.0, 110.0]
+    assert figure.data[0].line.color == theme.ACCENT
+    assert "%{x|%d %b %Y}" in figure.data[0].hovertemplate and "$%{y:,.2f}" in figure.data[0].hovertemplate
+    low, high = figure.layout.yaxis.range
+    assert low < 100.0 and high > 120.0                           # a little air above and below the line
+
+
+def test_a_flat_price_line_still_gets_a_sensible_range():
+    figure = app.price_sparkline([{"date": "2026-11-19", "close": 50.0}, {"date": "2026-11-20", "close": 50.0}])
+    low, high = figure.layout.yaxis.range
+    assert low < 50.0 < high

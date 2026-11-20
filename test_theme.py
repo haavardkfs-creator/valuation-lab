@@ -208,3 +208,101 @@ def test_the_contrast_formula_in_theme_py_agrees_with_this_files_own_copy():
 ])
 def test_money_short_writes_millions_the_way_a_dashboard_does(millions, expected):
     assert theme.money_short(millions) == expected
+
+
+# ---------------------------------------------------------------------------
+# The "answer first" header: signed changes, cards, badges (all text from outside is escaped)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("change, expected", [
+    (0.413, "▲ +41.3%"),
+    (-0.12, "▼ -12.0%"),
+    (0.0, "0.0%"),
+    (0.0004, "0.0%"),                     # too small to show a direction
+    (-0.0004, "0.0%"),
+    (0.0005, "▲ +0.1%"),
+])
+def test_a_change_is_written_with_a_sign_and_an_arrow_so_it_reads_without_colour(change, expected):
+    assert theme.change_text(change) == expected
+
+
+@pytest.mark.parametrize("change, expected", [(0.2, "up"), (-0.2, "down"), (0.0, None), (0.0004, None), (-0.0004, None)])
+def test_a_change_gets_the_up_or_down_colour_only_when_it_shows_a_direction(change, expected):
+    assert theme.tone_of(change) == expected
+
+
+def test_the_arrow_and_the_colour_always_agree():
+    for change in (-0.9, -0.01, -0.001, 0.001, 0.01, 0.9):
+        text, tone = theme.change_text(change), theme.tone_of(change)
+        assert (tone == "up") == text.startswith("▲") and (tone == "down") == text.startswith("▼")
+
+
+def test_a_card_has_a_label_a_value_and_an_optional_note():
+    card = theme.kpi_card_html("Current price", "$217.71", "Market price today")
+    assert 'class="vl-kpi-label">Current price</div>' in card
+    assert 'class="vl-kpi-value">$217.71</div>' in card
+    assert 'class="vl-kpi-note">Market price today</div>' in card
+    assert "vl-kpi-note" not in theme.kpi_card_html("Current price", "$217.71")
+
+
+def test_a_card_value_is_coloured_only_for_up_or_down_and_grey_when_muted():
+    assert 'vl-kpi-value vl-up"' in theme.kpi_card_html("a", "b", tone="up")
+    assert 'vl-kpi-value vl-down"' in theme.kpi_card_html("a", "b", tone="down")
+    assert 'class="vl-kpi-value">' in theme.kpi_card_html("a", "b", tone="sideways")      # unknown tone: no colour
+    muted = theme.kpi_card_html("a", "Not available", tone="up", muted=True)
+    assert "vl-muted" in muted and "vl-up" not in muted                                 # a gap is never coloured as a result
+
+
+def test_text_that_came_from_outside_is_escaped_in_every_card_and_badge():
+    nasty = '<img src=x onerror="alert(1)"> & "quotes"'
+    card = theme.kpi_card_html(nasty, nasty, nasty)
+    assert "<img" not in card and card.count("&lt;img") == 3
+    header = theme.header_html(nasty, nasty, "fair", [card], nasty)
+    assert "<img" not in header.replace("&lt;img", "")
+
+
+@pytest.mark.parametrize("verdict, words, colour_class", [
+    ("undervalued", "▲ UNDERVALUED", "vl-badge-up"),
+    ("fair", "● FAIRLY VALUED", None),
+    ("overvalued", "▼ OVERVALUED", "vl-badge-down"),
+    (None, "NO VERDICT", None),
+])
+def test_each_verdict_badge_says_it_in_words_and_only_up_and_down_carry_a_colour(verdict, words, colour_class):
+    badge = theme.verdict_badge_html(verdict)
+    assert words in badge
+    for other in ("vl-badge-up", "vl-badge-down"):
+        assert (other in badge) == (other == colour_class)
+
+
+def test_the_header_holds_the_name_the_ticker_the_verdict_the_basis_and_every_card():
+    header = theme.header_html("Adobe Inc.", "ADBE", "undervalued", ["<CARD1>", "<CARD2>"], "Because reasons.")
+    assert "<h1>Adobe Inc.</h1>" in header
+    assert ">ADBE</span>" in header and "vl-badge-ticker" in header
+    assert "▲ UNDERVALUED" in header and "Because reasons." in header
+    assert '<div class="vl-kpis"><CARD1><CARD2></div>' in header
+    assert "Valuation Lab" in header                                  # the small app name above the company
+
+
+def test_the_header_css_is_responsive_and_stays_inside_the_palette():
+    assert "repeat(auto-fit, minmax(" in theme.CARD_CSS               # the cards wrap on a phone
+    assert "white-space: nowrap" in theme.CARD_CSS                    # a signed percentage never breaks in two
+
+
+# ---------------------------------------------------------------------------
+# Plotly charts share one look
+# ---------------------------------------------------------------------------
+
+def test_a_colour_can_be_made_see_through():
+    assert theme.with_opacity("#4C9AFF", 0.12) == "rgba(76, 154, 255, 0.12)"
+
+
+def test_every_chart_gets_a_transparent_page_coloured_background_and_the_off_white_text():
+    import plotly.graph_objects as go
+
+    figure = theme.style_figure(go.Figure(go.Scatter(x=[1, 2], y=[1, 2])), height=120)
+    assert figure.layout.height == 120
+    assert figure.layout.paper_bgcolor == "rgba(0, 0, 0, 0)" and figure.layout.plot_bgcolor == "rgba(0, 0, 0, 0)"
+    assert figure.layout.font.color == theme.TEXT and "Inter" in figure.layout.font.family
+    assert figure.layout.hoverlabel.bgcolor == theme.SURFACE and figure.layout.hoverlabel.bordercolor == theme.BORDER
+    assert figure.layout.showlegend is False
+    assert figure.layout.margin.l == figure.layout.margin.r == figure.layout.margin.t == figure.layout.margin.b == 0
