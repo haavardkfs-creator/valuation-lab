@@ -2061,6 +2061,64 @@ def test_the_adjusted_beta_lifts_a_low_beta_companys_wacc_and_lowers_a_high_beta
 
 
 # ---------------------------------------------------------------------------
+# The cash flow check: the model's free cash flow against the reported one
+# ---------------------------------------------------------------------------
+
+def adobe_with_reported_free_cash_flow(latest):
+    """Yahoo's reply for Adobe with four years, but with this reported free cash flow ($) for the latest year."""
+    base = adobe_with_four_years()
+
+    class Fake(base):
+        def __init__(self, ticker):
+            super().__init__(ticker)
+            if hasattr(self, "cashflow") and "Free Cash Flow" in self.cashflow.index:
+                self.cashflow = self.cashflow.copy()
+                self.cashflow.loc["Free Cash Flow", self.cashflow.columns[0]] = latest
+
+    return Fake
+
+
+def cash_flow_warnings(page):
+    return [warning for warning in texts(page.warning) if "free cash flow" in warning and "above what the company reports" in warning]
+
+
+def test_the_page_warns_when_the_models_cash_flow_is_far_above_the_reported_one(monkeypatch):
+    page = run_page(monkeypatch, yahoo=adobe_with_reported_free_cash_flow(3000e6))
+    assert_footer_and_no_crash(page)
+    [warning] = cash_flow_warnings(page)
+    assert "Adobe Inc.'s last year" in warning and "$3,000m" in warning
+    assert "adjust operating income in the sidebar" in warning
+
+
+def test_the_warning_says_how_far_above_it_is(monkeypatch):
+    page = run_page(monkeypatch, yahoo=adobe_with_reported_free_cash_flow(3000e6))
+    model_figure = app.company_overview(data.get_company_data("ADBE"))["free_cash_flow"]
+    expected = f"{(model_figure / 3000 - 1) * 100:.0f}% above"
+    assert expected in cash_flow_warnings(page)[0]
+
+
+def test_the_page_is_quiet_when_the_two_cash_flows_agree(monkeypatch):
+    page = run_page(monkeypatch, yahoo=adobe_with_reported_free_cash_flow(9852e6))
+    assert not cash_flow_warnings(page)
+
+
+def test_the_limit_is_the_one_in_assumptions_and_is_not_below_one():
+    assert assumptions.FREE_CASH_FLOW_RATIO_WARNING == 1.25
+    assert assumptions.FREE_CASH_FLOW_RATIO_WARNING >= 1
+
+
+def test_the_warning_function_gives_nothing_when_the_overview_has_no_model_cash_flow():
+    history = {"free_cash_flow": [None, 9000.0]}
+    assert app.free_cash_flow_warning(history, {"free_cash_flow": None}, "Example Corp") is None
+
+
+def test_the_warning_function_names_both_figures_and_the_gap():
+    history = {"free_cash_flow": [None, 9075.0]}
+    text = app.free_cash_flow_warning(history, {"free_cash_flow": 16632.0}, "Pfizer")
+    assert "Pfizer's last year ($16,632m) is 83% above what the company reports ($9,075m)" in text
+
+
+# ---------------------------------------------------------------------------
 # One-off adjustment to operating income
 # ---------------------------------------------------------------------------
 

@@ -920,3 +920,18 @@ for other companies were updated, and the very-low-WACC tests now use an observe
 turns into the -0.30 they need. `NORMAL_TAX_RATE`, `BETA_WEIGHT_ON_OBSERVED` and `MARKET_BETA` are in `assumptions.py`
 with their Excel cells. No new files.
 
+## 2026-11-20 — A cash flow check: warn when the model's cash flow is far above the reported one
+
+Looking into why Pfizer's DCF price ($65) was more than twice its market price ($28) found no bug: the model starts from
+operating profit, and about $7bn of costs sit between Pfizer's operating profit and its pre-tax income. The page already
+quoted the model's and the reported free cash flow side by side but did not warn. Decisions with Haavard, after trying nine
+real companies. (1) Compare the figures the page already has (the model's free cash flow for the last year against the
+reported one), not the forecast's first year, which adds growth and a working capital fade to the comparison. (2) Warn only when
+the model is above the reported figure, by more than 25% (`FREE_CASH_FLOW_RATIO_WARNING = 1.25`): below is normal because
+reported free cash flow adds back share-based pay. Only Pfizer (1.83) warns today; Merck (1.13) does not. (3) Reported
+free cash flow is not adjusted for interest, which it pays and the model does not; that is part of every ratio but too small
+to matter for a 25% limit, and keeps the Excel check to one division. (4) The warning says what to do (check the annual report, or
+use the one-off adjustment box) and is placed in the History section next to the numbers, above the table. Built Excel first
+(`history` rows 37-49); `free_cash_flow_check` in `valuation.py` reproduces its ratio and its Warn/OK result. When the reader
+adjusts operating income, the model's figure changes and the warning can go away, which is the point. No new files.
+

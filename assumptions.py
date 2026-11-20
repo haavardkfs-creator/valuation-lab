@@ -118,6 +118,13 @@ NORMAL_TAX_RATE = 0.21
 BETA_WEIGHT_ON_OBSERVED = 2 / 3
 MARKET_BETA = 1.0
 
+# When the page warns that the model's free cash flow for the last year is far above the one the company
+# reports (see docs/model.md, "Cash flow check"). Warn when the model's figure is more than this many times the
+# reported one. Pfizer's is 1.83 times (about $7bn of costs sit between its operating profit and its pre-tax
+# income, and the model ignores them); Merck 1.13, Nvidia 0.95, Apple 0.89, Coca-Cola 0.75, Microsoft 0.64. A
+# ratio below 1 is normal and never warns. Chosen with Haavard on 20 Nov 2026; Excel: history C48.
+FREE_CASH_FLOW_RATIO_WARNING = 1.25
+
 # The company the hand-chosen forecast assumptions above were made for. The page uses them
 # only for this company; any other ticker gets a starting point from its own last year.
 BASE_CASE_TICKER = "ADBE"

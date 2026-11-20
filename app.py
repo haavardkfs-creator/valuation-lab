@@ -929,6 +929,25 @@ def free_cash_flow_note(history, overview, company_name):
     return note
 
 
+def free_cash_flow_warning(history, overview, company_name):
+    """Warn, in plain words, when the model's free cash flow for the last year is much higher than the
+    one the company reports, which means something between operating profit and cash (interest, one-off
+    costs) is left out of the model. Returns the sentence, or None when there is nothing to warn about.
+    """
+    check = valuation.free_cash_flow_check(
+        overview["free_cash_flow"], history["free_cash_flow"][-1], assumptions.FREE_CASH_FLOW_RATIO_WARNING
+    )
+    if check is None or not check["warn"]:
+        return None
+    return (
+        f"The model's free cash flow for {company_name}'s last year ({millions_text(overview['free_cash_flow'])}) "
+        f"is {(check['ratio'] - 1) * 100:.0f}% above what the company reports "
+        f"({millions_text(history['free_cash_flow'][-1])}). The model starts from operating profit, so costs "
+        "between operating profit and cash (interest, one-off charges) may be missing from it: check them in the "
+        "company's annual report before trusting the price, or adjust operating income in the sidebar."
+    )
+
+
 def margin_history_warnings(history, company_name):
     """Warn, in plain words, when the latest year's operating margin may not be typical: when it
     is far above or below the average of the earlier years (it may be a peak or a bottom), and when
@@ -970,6 +989,11 @@ def draw_history(history, error, overview, company_name):
         return
     for warning in margin_history_warnings(history, company_name):
         st.warning(warning)
+    cash_flow_warning = free_cash_flow_warning(history, overview, company_name)
+    if cash_flow_warning:
+        # Each dollar sign is escaped with a backslash, because Streamlit reads text between two
+        # unescaped dollar signs as a maths formula.
+        st.warning(cash_flow_warning.replace("$", "\\$"))
     st.table(history_table(history))
     amounts, margins = history_chart_data(history)
     amounts_column, margins_column = st.columns(2)
