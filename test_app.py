@@ -1607,3 +1607,100 @@ def test_a_company_with_no_peers_anywhere_still_gets_the_empty_box_and_its_note(
     assert not page.exception
     assert page.sidebar.text_input(key="peers_EXMP").value == ""
     assert any("No suitable peers were found" in c for c in texts(page.caption))
+
+
+# ---------------------------------------------------------------------------
+# Quality: return on invested capital, cash conversion, interest cover, share count change
+# ---------------------------------------------------------------------------
+
+def test_the_quality_row_matches_the_history_sheets_quality_block(monkeypatch):
+    page = run_page(monkeypatch, yahoo=adobe_with_four_years())
+    shown = metrics(page)
+    assert shown["ROIC"] == "63.2%"                                             # history C32
+    assert shown["Cash conversion"] == "1.38x"                                  # F25
+    assert shown["Interest cover"] == "33.1x"                                   # C34
+    assert shown["Share count change"] == "-9.3%"                               # C35, with "over 3 years" beneath it
+    [share_metric] = [metric for metric in page.metric if metric.label == "Share count change"]
+    assert share_metric.delta == "over 3 years"
+
+
+def test_the_history_table_has_cash_conversion_for_each_year(monkeypatch):
+    page = run_page(monkeypatch, yahoo=adobe_with_four_years())
+    table = history_table_of(page)
+    assert table.loc["Cash conversion (FCF ÷ net income)"].tolist() == ["1.56x", "1.28x", "1.42x", "1.38x"]     # history C25:F25
+
+
+def test_the_page_says_what_the_quality_row_is_for(monkeypatch):
+    page = run_page(monkeypatch, yahoo=adobe_with_four_years())
+    [caption] = [c for c in texts(page.caption) if c.startswith("The last row, about quality")]
+    assert "last fiscal year" in caption and "tax benefit as no tax" in caption and "buybacks" in caption
+
+
+def test_without_a_history_the_quality_row_still_shows_what_it_can(monkeypatch):
+    page = run_page(monkeypatch)                                                # two years, no shares or cash flow line
+    shown = metrics(page)
+    assert shown["ROIC"] == "63.2%"                                             # the snapshot's equity and the 10-K figures
+    assert shown["Share count change"] == "Not available"
+    assert shown["Cash conversion"] == "Not meaningful"                         # no reported free cash flow
+
+
+def company_for_quality(**changes):
+    """A company's figures as the data package holds them, for the quality numbers."""
+    company = {
+        "ebit": 8706, "income_tax": 1604, "income_before_tax": 8734, "debt": 6210, "cash_and_investments": 6595,
+        "net_income": 7130, "stockholders_equity": 11623, "interest_expense": 263,
+    }
+    company.update(changes)
+    return company
+
+
+HISTORY_FOR_QUALITY = {"free_cash_flow": [7396.0, 9852.0], "diluted_shares": [471.0, 427.0]}
+
+
+def test_apply_quality_adds_the_four_numbers_and_keeps_the_rest():
+    got = app.apply_quality({"ev_sales": 4.0}, company_for_quality(), HISTORY_FOR_QUALITY)
+    assert got["ev_sales"] == 4.0
+    assert got["roic"] == pytest.approx(0.63242055551568566)                    # history C32
+    assert got["cash_conversion"] == pytest.approx(1.3817671809256662)          # F25
+    assert got["interest_cover"] == pytest.approx(33.102661596958178)           # C34
+    assert got["share_count_change"] == pytest.approx(427 / 471 - 1) and got["share_count_years"] == 1
+
+
+def test_a_company_without_an_equity_figure_has_no_roic():
+    company = company_for_quality()
+    del company["stockholders_equity"]
+    assert app.apply_quality({}, company, HISTORY_FOR_QUALITY)["roic"] is None
+
+
+def test_negative_equity_after_buybacks_gives_no_roic():
+    got = app.apply_quality({}, company_for_quality(stockholders_equity=-20000), HISTORY_FOR_QUALITY)
+    assert got["roic"] is None                                                  # invested capital is below zero
+
+
+def test_a_tax_benefit_does_not_inflate_roic():
+    # Pfizer-like: income tax of -35 on a pre-tax profit of 1,000 is a rate of -3.5%.
+    got = app.apply_quality({}, company_for_quality(ebit=1000, income_tax=-35, income_before_tax=1000, debt=0, cash_and_investments=0, stockholders_equity=5000), HISTORY_FOR_QUALITY)
+    assert got["roic"] == pytest.approx(0.20)                                   # 1,000 / 5,000, not 1,035 / 5,000
+
+
+def test_without_a_history_there_is_no_cash_conversion_or_share_change_but_roic_remains():
+    got = app.apply_quality({}, company_for_quality(), None)
+    assert got["cash_conversion"] is None and got["share_count_change"] is None and got["roic"] is not None
+
+
+def test_the_interest_cover_text_tells_no_interest_from_not_known():
+    assert app.interest_cover_text({"interest_expense": 263, "interest_cover": 33.102661596958178}) == "33.1x"
+    assert app.interest_cover_text({"interest_expense": 0, "interest_cover": None}) == "No interest"
+    assert app.interest_cover_text({"interest_expense": None, "interest_cover": None}) == "Not available"      # like Apple on Yahoo
+    assert app.interest_cover_text({"interest_expense": 10, "interest_cover": -9.0}) == "-9.0x"                # a loss does not cover it
+
+
+def test_the_share_count_text_gives_the_years_it_covers():
+    assert app.share_count_text({"share_count_change": -0.0934, "share_count_years": 3}) == ("-9.3%", "over 3 years")
+    assert app.share_count_text({"share_count_change": 0.05, "share_count_years": 1}) == ("5.0%", "over 1 year")
+    assert app.share_count_text({"share_count_change": None, "share_count_years": None}) == ("Not available", None)
+    assert app.share_count_text({}) == ("Not available", None)
+
+
+def test_the_multiple_with_two_decimals_or_a_dash():
+    assert app.multiple_or_dash(1.3817671809256662) == "1.38x" and app.multiple_or_dash(None) == "–"

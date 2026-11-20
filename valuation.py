@@ -449,6 +449,87 @@ def ttm_overview(
     }
 
 
+def cash_conversion(free_cash_flow, net_income):
+    """Work out how much of its profit a company turns into cash: free cash flow divided by net
+    income. Above 1 means more cash than profit. Gives None if there is no free cash flow figure, or
+    net income is not above zero (the ratio would mean nothing).
+    """
+    if free_cash_flow is None:
+        return None
+    return ratio_or_none(free_cash_flow, net_income)
+
+
+def invested_capital(debt, equity, cash_and_investments):
+    """Work out the money put into the operating business: debt plus equity, less cash and
+    investments (the same net debt idea used elsewhere). Gives None if equity is missing.
+    """
+    if equity is None:
+        return None
+    return debt + equity - cash_and_investments
+
+
+def return_on_invested_capital(ebit, tax_rate, invested_capital_amount):
+    """Work out how much the business earns on the money put into it: operating profit after tax
+    (EBIT times one minus the tax rate) divided by invested capital. A tax rate below zero (a tax
+    benefit, which does not last) is counted as zero. Gives None if the tax rate or the invested
+    capital is missing, or the invested capital is not above zero (negative equity after buybacks).
+    """
+    if tax_rate is None or invested_capital_amount is None:
+        return None
+    return ratio_or_none(ebit * (1 - max(tax_rate, 0)), invested_capital_amount)
+
+
+def interest_cover(ebit, interest_expense):
+    """Work out how many times operating profit covers the interest bill: EBIT divided by interest
+    expense. Gives None if the interest expense is missing or not above zero (no interest to cover).
+    """
+    if interest_expense is None:
+        return None
+    return ratio_or_none(ebit, interest_expense)
+
+
+def share_count_change(shares_by_year):
+    """Work out how much a company's share count changed over the years given (oldest first): the
+    latest year's count divided by the first, minus 1. A fall (negative) means buybacks. Returns the
+    change and the number of years it covers, or None if fewer than two years have a count.
+    """
+    known = [(position, shares) for position, shares in enumerate(shares_by_year) if shares is not None]
+    if len(known) < 2:
+        return None
+    (first_position, first), (last_position, last) = known[0], known[-1]
+    change = ratio_or_none(last, first)
+    return None if change is None else (change - 1, last_position - first_position)
+
+
+def quality_numbers(
+    ebit,
+    income_tax,
+    income_before_tax,
+    debt,
+    equity,
+    cash_and_investments,
+    free_cash_flow,
+    net_income,
+    interest_expense,
+    shares_by_year,
+):
+    """Work out four numbers that help tell a good business from a cheap one, for the last fiscal
+    year (workbook: `history` sheet, rows 24-35): the return on invested capital, cash conversion,
+    interest cover, and the change in the share count over the history. A number that would mean
+    nothing comes back as None.
+    """
+    tax_rate = ratio_or_none(income_tax, income_before_tax)           # none if no pre-tax profit
+    shares = share_count_change(shares_by_year)
+    return {
+        "invested_capital": invested_capital(debt, equity, cash_and_investments),
+        "roic": return_on_invested_capital(ebit, tax_rate, invested_capital(debt, equity, cash_and_investments)),
+        "cash_conversion": cash_conversion(free_cash_flow, net_income),
+        "interest_cover": interest_cover(ebit, interest_expense),
+        "share_count_change": None if shares is None else shares[0],
+        "share_count_years": None if shares is None else shares[1],
+    }
+
+
 def median_of_available(values, minimum_peers):
     """Find the middle value of the figures that exist, ignoring blanks. Unlike a multiple,
     a negative figure counts (a peer that loses money on its sales is real information).

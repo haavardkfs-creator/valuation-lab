@@ -46,6 +46,7 @@ PACKAGE_FIELDS = {
 # Statistics tab); a company read from Yahoo's statements has neither, so for it the page shows
 # the DCF only (see docs/decisions.md).
 OPTIONAL_FIELDS = {
+    "stockholders_equity": "Stockholders' equity (book value) at the end of the latest full year, $ millions; used for the return on invested capital",
     "pre_tax_cost_of_debt": "Weighted average effective interest rate on the company's debt, decimal",
     "cost_of_debt_is_fallback": "True when pre_tax_cost_of_debt is the risk-free rate plus a credit spread, because the company's interest expense was not available",
     "peer_tickers": "Tickers of the peer companies, in the same order as the three lists below",
@@ -100,6 +101,7 @@ ADOBE_SNAPSHOT = {
     "cash_from_working_capital": 605,
     "debt": 6210,                           # Balance sheet, p. 47: current portion 0 + long-term debt 6,210
     "cash_and_investments": 6595,           # Balance sheet, p. 47: cash 5,431 + short-term investments 1,164
+    "stockholders_equity": 11623,           # Yahoo Finance, FY2025 stockholders' equity, 19 Nov 2026 (workbook: history C26)
     "shares": 413,                          # FY2025 10-K cover page: year-end count after buybacks
     # Market data
     "share_price": 251.47,                  # Yahoo Finance, closing price, 2 Nov 2026
@@ -259,6 +261,7 @@ def fetch_yahoo_statements(ticker):
         "long_term_debt": millions(balance, ["Long Term Debt"]),
         "current_debt": millions(balance, ["Current Debt"]),
         "cash_and_investments": millions(balance, ["Cash Cash Equivalents And Short Term Investments"]),
+        "stockholders_equity": millions(balance, ["Stockholders Equity", "Common Stock Equity"]),
         "shares": None if shares is None else shares / MILLION,
         "share_price": info.get("currentPrice"),
         "beta": info.get("beta"),
@@ -282,7 +285,7 @@ YAHOO_REQUIRED = [
 YAHOO_MONEY_FIELDS = [
     "revenue", "prior_year_revenue", "ebit", "net_income", "income_tax", "income_before_tax",
     "interest_expense", "depreciation_and_amortisation", "capex", "cash_from_working_capital",
-    "cash_and_investments",
+    "cash_and_investments", "stockholders_equity",
 ]
 
 

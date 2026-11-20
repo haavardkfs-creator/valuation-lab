@@ -1530,3 +1530,87 @@ def test_without_the_companys_own_margin_or_growth_the_ranking_is_by_size_as_bef
 def test_the_first_how_many_by_profile_are_returned():
     chosen = v.closest_peers(94_000, ADOBE_LIKE_CANDIDATES, 10, 2, company_margin=0.36, company_growth=0.13)
     assert [peer["ticker"] for peer in chosen] == ["INTU", "ADSK"]
+
+
+# ---------------------------------------------------------------------------
+# Quality numbers (workbook: `history` sheet, rows 24-35, Adobe, last fiscal year)
+# ---------------------------------------------------------------------------
+
+ADOBE_EQUITY = 11623                  # history C26 (Yahoo Finance, 19 Nov 2026)
+ADOBE_INTEREST_EXPENSE = 263          # history C33 (starting point C25)
+
+
+def adobe_quality():
+    return v.quality_numbers(
+        ebit=ADOBE_EBIT, income_tax=INCOME_TAX, income_before_tax=INCOME_BEFORE_TAX, debt=DEBT, equity=ADOBE_EQUITY,
+        cash_and_investments=CASH_AND_INVESTMENTS, free_cash_flow=9852, net_income=ADOBE_NET_INCOME,
+        interest_expense=ADOBE_INTEREST_EXPENSE, shares_by_year=HISTORY_SHARES,
+    )
+
+
+def test_the_quality_numbers_match_the_history_sheet():
+    got = adobe_quality()
+    assert got["invested_capital"] == 11238                                          # C29
+    assert got["roic"] == close(0.63242055551568566)                                 # C32
+    assert got["cash_conversion"] == close(1.3817671809256662)                       # F25
+    assert got["interest_cover"] == close(33.102661596958178)                        # C34
+    assert got["share_count_change"] == close(-0.093418259023354544)                 # C35
+    assert got["share_count_years"] == 3
+
+
+def test_cash_conversion_by_year_matches_the_history_sheet():
+    net_income = [4756, 5428, 5560, 7130]                                            # history C10:F10
+    assert [v.cash_conversion(f, n) for f, n in zip(HISTORY_FREE_CASH_FLOW, net_income)] == [
+        close(1.5550883095037846), close(1.2789240972733973), close(1.4160071942446044), close(1.3817671809256662),
+    ]                                                                                # C25:F25
+
+
+def test_the_nopat_behind_roic_matches_the_history_sheet():
+    assert ADOBE_EBIT * (1 - INCOME_TAX / INCOME_BEFORE_TAX) == close(7107.1422028852758)     # C31
+
+
+def test_a_tax_benefit_is_counted_as_no_tax_in_roic():
+    # Pfizer's last-year tax rate was -3.5%: a benefit that does not last, so NOPAT is the full EBIT.
+    assert v.return_on_invested_capital(100, -0.035, 500) == close(0.20)
+    assert v.return_on_invested_capital(100, 0.0, 500) == close(0.20)
+    assert v.return_on_invested_capital(100, 0.25, 500) == close(0.15)
+
+
+def test_roic_is_none_without_positive_invested_capital_or_a_tax_rate():
+    assert v.return_on_invested_capital(100, 0.2, 0) is None
+    assert v.return_on_invested_capital(100, 0.2, -50) is None                       # negative equity after buybacks
+    assert v.return_on_invested_capital(100, 0.2, None) is None
+    assert v.return_on_invested_capital(100, None, 500) is None
+    assert v.invested_capital(200, None, 50) is None                                 # no equity figure
+
+
+def test_a_loss_makers_roic_and_cash_conversion_are_not_meaningful_and_its_cover_is_negative():
+    got = v.quality_numbers(
+        ebit=-90, income_tax=0, income_before_tax=-130, debt=200, equity=300, cash_and_investments=50,
+        free_cash_flow=-40, net_income=-120, interest_expense=10, shares_by_year=[10.0, 10.0],
+    )
+    assert got["roic"] is None                                                       # no pre-tax profit, so no tax rate
+    assert got["cash_conversion"] is None                                            # net income below zero
+    assert got["interest_cover"] == close(-9.0)                                      # a loss does not cover the interest: a negative cover
+
+
+def test_interest_cover_follows_the_sheet_and_is_none_without_interest():
+    assert v.interest_cover(8706, 263) == close(33.102661596958178)                  # C34
+    assert v.interest_cover(8706, 0) is None and v.interest_cover(8706, None) is None
+    assert v.interest_cover(-90, 10) == close(-9.0)                                  # a loss shows as a negative cover
+
+
+def test_cash_conversion_without_a_cash_flow_figure_is_none():
+    assert v.cash_conversion(None, 100) is None
+    assert v.cash_conversion(50, 100) == close(0.5) and v.cash_conversion(150, 100) == close(1.5)
+
+
+def test_the_share_count_change_covers_the_first_to_the_last_known_year():
+    assert v.share_count_change([471, 459, 450, 427]) == (close(-0.093418259023354544), 3)
+    assert v.share_count_change([None, 459, None, 427]) == (close(427 / 459 - 1), 2)          # between the known years
+    assert v.share_count_change([100, 110]) == (close(0.10), 1)                      # new shares: a rise
+
+
+def test_the_share_count_change_needs_two_years_with_a_count():
+    assert v.share_count_change([None, 450, None]) is None and v.share_count_change([]) is None
+    assert v.share_count_change([0, 100]) is None                                    # nothing to divide by
