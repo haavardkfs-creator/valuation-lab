@@ -333,6 +333,29 @@ FY2025), so the table shows as many as exist, oldest first, with a dash where a 
   elsewhere; the shares are not converted. Two charts show revenue and free cash flow, and the
   operating and free cash flow margins.
 
+## One-off adjustments to operating income
+
+Reported operating income can include things that will not recur, or that flatter it: First Solar's 45X tax
+credits sit inside its operating income. A box in the sidebar ("One-off items", for every company except Adobe,
+whose DCF uses hand-chosen assumptions) takes one yearly amount in US dollars millions, default 0: negative to
+take a gain out, positive to add a one-off cost back (workbook: `starting point` rows 60-66 and `ttm` rows 27-33).
+- Adjusted EBIT = reported EBIT + the adjustment. Adobe's last year: 8,706 − 1,000 = 7,706, so the operating
+  margin is 7,706 ÷ 23,769 = 32.42% instead of 36.63% (`starting point` C64, C65).
+- The same yearly amount is applied to the last twelve months: adjusted TTM operating income 9,271 − 1,000 =
+  8,271, a margin of 31.85%, an adjusted EBITDA of 9,037 and an EV/EBITDA of 11.57x instead of 10.42x (`ttm` C29 to
+  C32). A recurring distortion such as a tax credit is in both periods, so the two agree.
+- What uses the adjusted figure: the DCF's starting margin (and so the DCF price, the reverse DCF and both
+  sensitivity tables), the Overview's margin, EV/EBITDA, net debt ÷ EBITDA and free cash flow yield, and the
+  quality row's ROIC and interest cover, and the margin warning against peers.
+- What stays as reported: net income and so the P/E and the cash conversion (a one-time gain in net income, like
+  the one behind Sunrun's 3.6x P/E, is a different adjustment, not built), revenue and its growth, the History,
+  and the peers' figures. The tax rate also stays as reported (income tax ÷ pre-tax income). A yellow note says
+  so whenever an adjustment is active.
+- First Solar on 20 Nov 2026 (price $152): an adjustment of −$500m takes the DCF from $221 to $156, the starting
+  margin from 30.6% to 21.0%, the twelve-month margin from 37.7% to 27.7% and the ROIC from 21.5% to 14.8%; −$1,000m
+  gives $91. The reverse DCF then says the market prices in a 20.4% margin against the adjusted model's 21.0%.
+  The amounts are the reader's own judgement: the page does not know what is one-off.
+
 ## Quality numbers
 
 Four numbers help separate a good business from a cheap one (workbook: `history` sheet, rows 24-35, Adobe,

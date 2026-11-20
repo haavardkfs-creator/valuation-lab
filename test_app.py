@@ -1772,3 +1772,135 @@ def test_adobe_still_works_from_the_snapshot_with_a_warning_when_yahoo_is_limiti
     assert_footer_and_no_crash(page)
     assert any("could not be reached" in warning for warning in texts(page.warning))
     assert metrics(page)["Market price"] == "$251.47"                                # the frozen snapshot's price
+
+
+# ---------------------------------------------------------------------------
+# One-off adjustment to operating income
+# ---------------------------------------------------------------------------
+
+def oneoff_box(page):
+    return page.sidebar.number_input(key="oneoff_EXMP")
+
+
+def run_exmp_with_quarters(monkeypatch, adjustment=None):
+    """Run a company that is not Adobe (it has Adobe's figures, four years and four quarters), optionally
+    after typing a one-off adjustment into the box.
+    """
+    page = run_page(monkeypatch, ticker="exmp", yahoo=adobe_with_quarters())
+    if adjustment is not None:
+        oneoff_box(page).set_value(adjustment).run()
+    return page
+
+
+def test_the_adjustment_box_is_in_the_sidebar_for_other_companies_and_starts_at_zero(monkeypatch):
+    page = run_exmp_with_quarters(monkeypatch)
+    box = oneoff_box(page)
+    assert box.label == "Adjust operating income by ($ millions a year)" and box.value == 0.0
+    assert "One-off items" in [header.value for header in page.sidebar.header]
+
+
+def test_adobe_has_no_adjustment_box(monkeypatch):
+    page = run_page(monkeypatch, yahoo=adobe_with_quarters())
+    assert len(page.sidebar.number_input) == 0
+    assert "One-off items" not in [header.value for header in page.sidebar.header]
+
+
+def test_with_no_adjustment_there_is_no_note_and_nothing_changes(monkeypatch):
+    plain = run_exmp_with_quarters(monkeypatch)
+    zero = run_exmp_with_quarters(monkeypatch, 0)
+    assert not any("You have adjusted operating income" in w for w in texts(zero.warning))
+    assert metrics(zero) == metrics(plain)
+
+
+def test_the_adjustment_lowers_the_dcf_price_by_what_the_model_says(monkeypatch):
+    page = run_exmp_with_quarters(monkeypatch, -1000)
+    assert not page.exception
+    company = app.apply_adjustment(data.get_company_data("EXMP", source="yahoo"), -1000)
+    inputs = app.build_dcf_inputs(company, 0, 0)
+    expected, _ = app.run_valuation(company, inputs, assumptions.TERMINAL_GROWTH_RATE)
+    assert metrics(page)["DCF implied price"] == app.dollars(expected["implied_share_price"])
+    assert metrics(page)["DCF implied price"] != metrics(run_exmp_with_quarters(monkeypatch))["DCF implied price"]
+
+
+def test_the_starting_points_margin_is_the_adjusted_one(monkeypatch):
+    page = run_exmp_with_quarters(monkeypatch, -1000)
+    table = assumptions_on(page)
+    assert table["Operating margin"].iloc[0] == "32.42%"                          # starting point C65: (8,706 - 1,000) / 23,769
+
+
+def test_the_twelve_month_margin_and_ev_ebitda_use_the_adjustment_too(monkeypatch):
+    plain = run_exmp_with_quarters(monkeypatch)
+    adjusted = run_exmp_with_quarters(monkeypatch, -1000)
+    assert metrics(plain)["Operating margin"] == "35.7%"                          # ttm C25
+    assert metrics(adjusted)["Operating margin"] == "31.8%"                       # ttm C30: (9,271 - 1,000) / 25,970
+    assert float(metrics(adjusted)["EV/EBITDA"].rstrip("x")) > float(metrics(plain)["EV/EBITDA"].rstrip("x"))
+
+
+def test_the_fiscal_year_numbers_worked_from_ebit_use_the_adjustment(monkeypatch):
+    plain = run_exmp_with_quarters(monkeypatch)
+    adjusted = run_exmp_with_quarters(monkeypatch, -1000)
+    assert metrics(plain)["Interest cover"] == "33.1x" and metrics(adjusted)["Interest cover"] == "29.3x"   # (8,706 - 1,000) / 263
+    assert metrics(adjusted)["Net debt ÷ EBITDA"] != metrics(plain)["Net debt ÷ EBITDA"]
+    assert metrics(adjusted)["Free cash flow yield"] != metrics(plain)["Free cash flow yield"]
+
+
+def test_what_is_reported_stays_as_reported(monkeypatch):
+    plain = run_exmp_with_quarters(monkeypatch)
+    adjusted = run_exmp_with_quarters(monkeypatch, -1000)
+    for label in ("P/E", "Cash conversion", "Revenue growth", "EV/Sales", "Market price", "WACC"):
+        assert metrics(adjusted)[label] == metrics(plain)[label], label
+    assert history_table_of(adjusted).equals(history_table_of(plain))             # the History is as the company reported
+
+
+def test_the_yellow_note_says_what_changed_and_what_did_not(monkeypatch):
+    page = run_exmp_with_quarters(monkeypatch, -1000)
+    [note] = [w for w in texts(page.warning) if w.startswith("You have adjusted operating income by")]
+    assert "by -$1,000m a year" in note
+    assert "The DCF, the margins, EV/EBITDA" in note
+    assert "The History, the P/E, cash conversion and revenue growth are as reported" in note
+
+
+def test_a_positive_amount_adds_back_a_one_off_cost(monkeypatch):
+    plain = run_exmp_with_quarters(monkeypatch)
+    page = run_exmp_with_quarters(monkeypatch, 500)
+    assert "by $500m a year" in [w for w in texts(page.warning) if "You have adjusted" in w][0]
+    assert float(metrics(page)["Operating margin"].rstrip("%")) > float(metrics(plain)["Operating margin"].rstrip("%"))
+
+
+def test_the_reverse_dcf_and_the_tables_follow_the_adjusted_model(monkeypatch):
+    plain = run_exmp_with_quarters(monkeypatch)
+    adjusted = run_exmp_with_quarters(monkeypatch, -1000)
+    # What the price needs does not depend on the model's margin, so the implied margin is unchanged...
+    assert metrics(adjusted)["Operating margin it implies"] == metrics(plain)["Operating margin it implies"]
+    # ...but the model's own margin in the sentence is the adjusted one (32.42% held flat), and the growth
+    # the price implies, which holds the margin as modelled, moves.
+    sentence = [c for c in texts(adjusted.caption) if c.startswith("To justify the market price of")][0]
+    assert "against 32.4% in the model" in sentence
+    assert metrics(adjusted)["Revenue growth it implies"] != metrics(plain)["Revenue growth it implies"]
+    assert app.dollars(margin_growth_table_of(adjusted).iloc[2, 2]) == metrics(adjusted)["DCF implied price"]    # the middle is still the DCF price
+
+
+def test_each_company_has_its_own_adjustment_box(monkeypatch):
+    page = run_exmp_with_quarters(monkeypatch)
+    assert page.sidebar.number_input(key="oneoff_EXMP") is not None
+
+
+def test_apply_adjustment_changes_only_ebit_and_leaves_the_original_alone():
+    company = {"ebit": 8706.0, "net_income": 7130.0, "income_tax": 1604.0, "income_before_tax": 8734.0}
+    adjusted = app.apply_adjustment(company, -1000)
+    assert adjusted == {"ebit": 7706.0, "net_income": 7130.0, "income_tax": 1604.0, "income_before_tax": 8734.0}
+    assert company["ebit"] == 8706.0
+
+
+def test_apply_adjustment_to_ttm_changes_only_operating_income_and_copes_without_the_quarters():
+    ttm = {"period_end": "31 Aug 2026", "revenue": 25970.0, "operating_income": 9271.0, "net_income": 7284.0}
+    adjusted = app.apply_adjustment_to_ttm(ttm, -1000)
+    assert adjusted["operating_income"] == 8271.0 and adjusted["revenue"] == 25970.0 and adjusted["net_income"] == 7284.0
+    assert ttm["operating_income"] == 9271.0
+    assert app.apply_adjustment_to_ttm(None, -1000) is None
+
+
+def test_the_note_is_none_without_an_adjustment_and_names_the_amount_with_one():
+    assert app.adjustment_note(0) is None and app.adjustment_note(0.0) is None
+    assert "by -$1,000m a year" in app.adjustment_note(-1000)
+    assert "by $250m a year" in app.adjustment_note(250)

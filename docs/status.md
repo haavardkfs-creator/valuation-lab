@@ -205,16 +205,24 @@
   its small functions in `valuation.py` match the sheet; `stockholders_equity` joins the data package (Yahoo; typed
   into Adobe's snapshot). "Not available", "No interest" and "Not meaningful" where they apply. 35 new tests; 553
   tests pass. Checked on live data (seven companies) and in the running app.
-- Done (in the open pull request): hardening against Yahoo limiting the live app (it refused the server on 18
+- Done: hardening against Yahoo (merged, PR #46) limiting the live app (it refused the server on 18
   and 20 Nov 2026, though Yahoo answered from the developer's machine). A plain "Yahoo Finance isn't answering
   the app right now ... try again in a few minutes. Adobe still works from a frozen snapshot." replaces the
   list of missing fields; an empty quote is asked for once more after 2 seconds; and the history, the last
   twelve months and the suggested peers are remembered for 6 hours instead of 15 minutes, to cut the number of
   requests. No Excel step. 18 new tests; 571 tests pass. Not a full fix: see Open.
-- Next: roadmap #8, adjustments for one-off items (Haavard's three answers are still needed: one yearly amount
-  for both the fiscal year and the twelve months, P/E as reported, and a sidebar box for companies other than
-  Adobe), then #6, #10 and #11, as below. Small items waiting for Haavard's decision: Pfizer's negative tax
-  rate, the adjusted beta, and drawing the overview and history even when the DCF cannot be built.
+- Done (in the open pull request): roadmap #8, adjustments for one-off items. Haavard added the adjusted
+  margin to `starting point` (rows 60-66) and the adjusted TTM figures to `ttm` (rows 27-33). A sidebar box,
+  "One-off items" (not for Adobe), takes one yearly amount in $ millions, applied to the last fiscal year's EBIT
+  and the last twelve months' operating income; the DCF, margins, EV/EBITDA, ROIC, interest cover, the reverse DCF
+  and both sensitivity tables use it, while net income, the P/E, cash conversion, revenue growth and the History
+  stay as reported, and a yellow note says so. `apply_adjustment`, `apply_adjustment_to_ttm` and `adjustment_note` in
+  `app.py`; no new maths in `valuation.py`. 18 new tests; 589 tests pass. Checked on live First Solar (-$500m: DCF
+  $156 against a price of $152) and in the running app.
+- Next: roadmap #6, scenarios (bear, base, bull and a probability-weighted price; Haavard decides the inputs and
+  probabilities), then #10 and #11, as below. Small items waiting for Haavard's decision: Pfizer's negative tax rate,
+  the adjusted beta, a one-time net income adjustment (for the P/E), a second data source that does not depend on
+  Yahoo, and drawing the overview and history even when the DCF cannot be built.
 - Open:
   - A negative tax rate flows into the forecast. Pfizer's last-year tax rate is -3.54% (a tax
     benefit; seen on 18 Nov 2026 in the new WACC table), and the starting point holds the tax rate
