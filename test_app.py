@@ -24,10 +24,24 @@ from test_data import (
     ADOBE_YEAR_ENDS,
     QUARTER_ENDS,
     fake_statements_ticker,
+    FMP_PROFILE,
     no_interest_expense_company,
+    with_fmp,
 )
 
 APP_FILE = str(Path(__file__).parent / "app.py")
+
+
+@pytest.fixture(autouse=True)
+def fresh_provider_state(monkeypatch):
+    """Start every test with Yahoo not cooling down, nothing remembered from Financial Modeling Prep,
+    and no Financial Modeling Prep key (so a test never reaches the real service by accident).
+    """
+    monkeypatch.setattr("data._yahoo_busy_until", 0.0)
+    monkeypatch.setattr("data._fmp_cache", {})
+    # An empty key, not a missing one: the page copies a key from the real secrets file if the setting is
+    # missing, and an empty one is left alone and counts as no key.
+    monkeypatch.setenv("FMP_API_KEY", "")
 
 
 @pytest.fixture(autouse=True)
@@ -197,6 +211,9 @@ def test_another_companys_price_is_the_starting_point_dcf(monkeypatch):
 
 def test_a_ticker_yahoo_knows_nothing_about_shows_a_plain_error(monkeypatch):
     nothing = fake_statements_ticker(income={}, cash_flow={}, balance={}, info={})
+    # The page opens on Adobe first, and Yahoo giving nothing there would start the cool-down; switch it
+    # off so this test is only about the typed ticker.
+    monkeypatch.setattr("data._start_yahoo_cooldown", lambda: None)
     page = run_page(monkeypatch, ticker="nope", yahoo=nothing)
     assert_footer_and_no_crash(page)
     [error] = texts(page.error)
@@ -1772,6 +1789,112 @@ def test_adobe_still_works_from_the_snapshot_with_a_warning_when_yahoo_is_limiti
     assert_footer_and_no_crash(page)
     assert any("could not be reached" in warning for warning in texts(page.warning))
     assert metrics(page)["Market price"] == "$251.47"                                # the frozen snapshot's price
+
+
+# ---------------------------------------------------------------------------
+# Financial Modeling Prep: the backup when Yahoo is limiting the server
+# ---------------------------------------------------------------------------
+
+def run_page_with_yahoo_down(monkeypatch, ticker=None, **fmp_replacements):
+    """Run the page with Yahoo giving nothing (as when it limits the server) and a working fake of
+    Financial Modeling Prep, whose answers can be replaced.
+    """
+    with_fmp(monkeypatch, **fmp_replacements)
+    return run_page(monkeypatch, ticker=ticker, yahoo=fake_statements_ticker(info={}))
+
+
+def test_adobe_takes_its_live_price_from_fmp_when_yahoo_is_not_answering(monkeypatch):
+    page = run_page_with_yahoo_down(monkeypatch)
+    assert_footer_and_no_crash(page)
+    assert (
+        "Share price and beta are live from Financial Modeling Prep, because Yahoo Finance could not be reached."
+        in texts(page.caption)
+    )
+    assert not page.warning
+    assert metrics(page)["Market price"] == "$250.00"                                # FMP's price, not the snapshot's
+
+
+def test_adobe_warns_that_neither_provider_answered_when_it_falls_to_the_snapshot(monkeypatch):
+    page = run_page_with_yahoo_down(monkeypatch, profile=[dict(FMP_PROFILE[0], price=None)])
+    assert_footer_and_no_crash(page)
+    assert any("Neither Yahoo Finance nor Financial Modeling Prep could be reached" in w for w in texts(page.warning))
+    assert metrics(page)["Market price"] == "$251.47"
+
+
+def test_another_company_is_valued_from_fmp_when_yahoo_is_not_answering(monkeypatch):
+    page = run_page_with_yahoo_down(monkeypatch, ticker="exmp")
+    assert_footer_and_no_crash(page)
+    assert not page.error
+    assert "All figures are from Financial Modeling Prep's latest annual statements." in texts(page.caption)
+    assert "Share price and beta are live from Yahoo Finance." not in texts(page.caption)
+
+
+def test_the_wacc_table_and_history_name_fmp_when_it_supplied_them(monkeypatch):
+    page = run_page_with_yahoo_down(monkeypatch, ticker="exmp")
+    [wacc_table] = [table.value for table in page.table if "Beta" in table.value.index]
+    assert wacc_table.loc["Beta", "Value"] == "1.50"
+    assert wacc_table.loc["Beta", "Where it comes from"] == "Financial Modeling Prep, 5-year monthly"
+    assert any(text.startswith("Financial Modeling Prep gives 3 years of figures") for text in texts(page.caption))
+
+
+def test_the_peers_come_from_fmps_peer_list_and_the_page_says_so(monkeypatch):
+    peers = [
+        {"symbol": "EXMP", "mktCap": 100_000_000_000},         # the company itself: left out
+        {"symbol": "AAA", "mktCap": 90_000_000_000},
+        {"symbol": "BBB", "mktCap": 120_000_000_000},
+        {"symbol": "HUGE", "mktCap": 3_000_000_000_000},       # thirty times the size: too big
+    ]
+    page = run_page_with_yahoo_down(monkeypatch, ticker="exmp", **{"stock-peers": peers})
+    assert page.sidebar.text_input(key="peers_EXMP").value == "AAA, BBB"
+    assert any("Peers suggested from Financial Modeling Prep's peer list" in text for text in texts(page.caption))
+    assert any("peers' figures from Financial Modeling Prep" in text for text in texts(page.caption))
+    assert metrics(page)["EV/Sales price"] != "Not available"
+
+
+def test_a_company_fmp_does_not_know_gets_a_plain_error_naming_fmp(monkeypatch):
+    page = run_page_with_yahoo_down(monkeypatch, ticker="nope", profile=[])
+    [error] = texts(page.error)
+    assert error.startswith("Could not value NOPE.")
+    assert "Financial Modeling Prep has no figures for NOPE" in error
+
+
+def test_when_both_providers_are_down_the_error_says_so_plainly(monkeypatch):
+    def refuse(path, **parameters):
+        raise data.SourceUnavailable("Financial Modeling Prep's free daily limit of 250 requests has been used up.")
+
+    with_fmp(monkeypatch)
+    monkeypatch.setattr("data._fmp_get", refuse)
+    page = run_page(monkeypatch, ticker="nvda", yahoo=fake_statements_ticker(info={}))
+    [error] = texts(page.error)
+    assert "Yahoo Finance isn't answering the app right now" in error
+    assert "daily limit of 250 requests" in error
+
+
+def test_the_key_is_copied_from_streamlits_private_settings_into_the_environment(monkeypatch):
+    import os
+
+    monkeypatch.delenv("FMP_API_KEY", raising=False)
+    monkeypatch.setattr(st, "secrets", {"FMP_API_KEY": "from-secrets"})
+    app.bridge_fmp_key()
+    assert os.environ["FMP_API_KEY"] == "from-secrets"
+    assert data.fmp_available()
+
+
+def test_with_no_secrets_at_all_the_page_starts_without_the_backup(monkeypatch):
+    class NoSecrets:
+        def __getitem__(self, name):
+            raise FileNotFoundError("no secrets file")
+
+    monkeypatch.delenv("FMP_API_KEY", raising=False)
+    monkeypatch.setattr(st, "secrets", NoSecrets())
+    app.bridge_fmp_key()
+    assert not data.fmp_available()
+
+
+def test_the_provider_is_named_from_the_source_used():
+    assert app.provider_name("yahoo") == app.provider_name("live") == "Yahoo Finance"
+    assert app.provider_name("fmp") == app.provider_name("live_fmp") == "Financial Modeling Prep"
+    assert app.provider_name("snapshot") == "Yahoo Finance"      # the snapshot's figures were copied from Yahoo
 
 
 # ---------------------------------------------------------------------------

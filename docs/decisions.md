@@ -861,3 +861,28 @@ testing: the implied margin in the reverse DCF does not change with the adjustme
 absolute; it is the model's own margin in the sentence and the implied growth that move), and the tax rate is left
 as reported (income tax over pre-tax income) rather than recomputed. Known limit: the same amount is applied to both
 periods, which suits a recurring item but only approximates a one-off in a single period. No new files.
+
+## 2026-11-20 — A second data source: Financial Modeling Prep, behind Yahoo
+
+Yahoo kept refusing the Streamlit server, so every company but Adobe showed an error. Haavard asked for a backup so
+the app does not depend on one provider; Claude declined to log in to his Nordnet account (a password is not
+something Claude handles, and Nordnet is not a data feed), so the backup is Financial Modeling Prep (FMP), a data
+provider with a keyed interface. Decisions made with Haavard. (1) Yahoo first, FMP second, the frozen Adobe snapshot
+last: `_yahoo_then_fmp` in `data.py` tries Yahoo, and only a `SourceUnavailable` error (Yahoo not answering, the
+network, a daily limit) makes it try FMP; a real answer about the company (unknown ticker, no pre-tax profit, a company
+FMP's free plan does not cover) is passed on as it is (`UnknownCompany`), because asking another provider would only
+repeat it. (2) A five-minute cool-down (`YAHOO_COOLDOWN_SECONDS`): once Yahoo has refused, the page does not ask it
+again for five minutes, so each page load does not spend ten seconds waiting on a provider that is refusing us.
+(3) One pull request for the whole backup, because it is one idea; Adobe's chain is live Yahoo, then live FMP
+(`live_fmp`), then the snapshot. (4) FMP's free plan allows 250 requests a day and five rows per request, so every
+answer is remembered for six hours (`FMP_CACHE_SECONDS`), one company costs about 12 requests, and peers cost two
+requests each. To save requests FMP's suggested peers are the ones from its own peer list closest in size, without the
+margin-and-growth ranking or the sector top-up Yahoo's get, and the peers' revenue growth is left out. The page says
+which list was used. (5) The key lives only in Streamlit's private settings (`.streamlit/secrets.toml`, git-ignored, or
+the Secrets box on Streamlit Cloud); `app.py` copies it into the environment, `data.py` reads it there, and it is never
+printed, put in a message or committed. Without a key the backup is simply off. (6) One new dependency,
+`requests==2.34.2`: it was already installed because `yfinance` needs it, and it is now pinned because `data.py` uses it
+directly. Known limits: US companies only on the free plan; FMP's share count is market value over price, so it is only
+as good as those two; its beta may be measured differently from Yahoo's; the 250 requests a day would run out after
+roughly twenty fresh companies. No new files.
+

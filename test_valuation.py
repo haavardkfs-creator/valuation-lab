@@ -1657,3 +1657,7 @@ def test_the_adjusted_ttm_figures_match_the_ttm_sheet():
     assert ttm_with(9271)["ev_ebitda"] == close(10.419558633057687)                # C33, reported
     assert adjusted["pe"] == ttm_with(9271)["pe"]                                  # net income, and so the P/E, are as reported
     assert adjusted["ev_sales"] == ttm_with(9271)["ev_sales"]                      # revenue is not touched
+
+
+def test_shares_from_market_value_is_market_value_over_price():
+    assert v.shares_from_market_value(100_000, 250) == pytest.approx(400)       # $100bn at $250 a share: 400 million shares

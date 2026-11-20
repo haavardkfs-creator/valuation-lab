@@ -13,6 +13,16 @@ import valuation as v
 
 
 @pytest.fixture(autouse=True)
+def fresh_provider_state(monkeypatch):
+    """Start every test with Yahoo not cooling down, nothing remembered from Financial Modeling Prep,
+    and no Financial Modeling Prep key (so a test never reaches the real service by accident).
+    """
+    monkeypatch.setattr("data._yahoo_busy_until", 0.0)
+    monkeypatch.setattr("data._fmp_cache", {})
+    monkeypatch.delenv("FMP_API_KEY", raising=False)
+
+
+@pytest.fixture(autouse=True)
 def no_waiting(monkeypatch):
     """Never really wait in a test: record the pauses the code asks for instead (see YAHOO_RETRY_PAUSE_SECONDS)."""
     pauses = []
@@ -1427,3 +1437,499 @@ def test_adobe_falls_back_to_the_snapshot_when_yahoo_gives_nothing(monkeypatch):
     package, source = data.get_company_data_with_fallback("ADBE")
     assert source == data.FALLBACK_SOURCE == "snapshot"
     assert package["share_price"] == 251.47                                          # the snapshot's price, not a live one
+
+
+# ---------------------------------------------------------------------------
+# Financial Modeling Prep (FMP): the backup when Yahoo is limiting the server
+# ---------------------------------------------------------------------------
+# The rows below are trimmed to the lines the code reads, with the line names and the dollar (not
+# million) units Financial Modeling Prep's "stable" interface used when Haavard and Claude tried
+# Adobe on 20 Nov 2026. The values are round made-up numbers in Adobe's size, so the sums are easy
+# to check by hand.
+
+FMP_PROFILE = [{
+    "symbol": "ADBE", "companyName": "Adobe Inc.", "price": 250.0, "marketCap": 100_000_000_000,
+    "beta": 1.5, "currency": "USD",
+}]
+FMP_ANNUAL_INCOME = [      # the latest year first, as FMP sends them
+    {"date": "2025-11-28", "fiscalYear": "2025", "reportedCurrency": "USD", "revenue": 24_000_000_000,
+     "operatingIncome": 9_000_000_000, "netIncome": 7_000_000_000, "incomeTaxExpense": 1_500_000_000,
+     "incomeBeforeTax": 8_500_000_000, "interestExpense": 250_000_000, "weightedAverageShsOutDil": 400_000_000},
+    {"date": "2024-11-29", "fiscalYear": "2024", "reportedCurrency": "USD", "revenue": 21_500_000_000,
+     "operatingIncome": 7_800_000_000, "netIncome": 5_600_000_000, "incomeTaxExpense": 1_200_000_000,
+     "incomeBeforeTax": 6_800_000_000, "interestExpense": 200_000_000, "weightedAverageShsOutDil": 430_000_000},
+    {"date": "2023-12-01", "fiscalYear": "2023", "reportedCurrency": "USD", "revenue": 19_000_000_000,
+     "operatingIncome": 7_000_000_000, "netIncome": 5_400_000_000, "incomeTaxExpense": 1_000_000_000,
+     "incomeBeforeTax": 6_400_000_000, "interestExpense": 150_000_000, "weightedAverageShsOutDil": 460_000_000},
+]
+FMP_ANNUAL_CASH = [
+    {"date": "2025-11-28", "depreciationAndAmortization": 800_000_000, "capitalExpenditure": -180_000_000,
+     "changeInWorkingCapital": 600_000_000, "freeCashFlow": 9_000_000_000},
+    {"date": "2024-11-29", "depreciationAndAmortization": 700_000_000, "capitalExpenditure": -150_000_000,
+     "changeInWorkingCapital": 500_000_000, "freeCashFlow": 7_500_000_000},
+    {"date": "2023-12-01", "depreciationAndAmortization": 600_000_000, "capitalExpenditure": -120_000_000,
+     "changeInWorkingCapital": 400_000_000, "freeCashFlow": 6_900_000_000},
+]
+FMP_ANNUAL_BALANCE = [{
+    "date": "2025-11-28", "longTermDebt": 6_000_000_000, "shortTermDebt": 500_000_000,
+    "cashAndShortTermInvestments": 6_500_000_000, "totalStockholdersEquity": 11_000_000_000,
+}]
+FMP_QUARTER_INCOME = [      # five quarters, the latest first; only the latest four are summed
+    {"date": "2026-08-28", "revenue": 6_000_000_000, "operatingIncome": 2_400_000_000, "netIncome": 1_800_000_000},
+    {"date": "2026-05-29", "revenue": 5_900_000_000, "operatingIncome": 2_300_000_000, "netIncome": 1_700_000_000},
+    {"date": "2026-02-27", "revenue": 5_800_000_000, "operatingIncome": 2_200_000_000, "netIncome": 1_600_000_000},
+    {"date": "2025-11-28", "revenue": 5_700_000_000, "operatingIncome": 2_100_000_000, "netIncome": 1_500_000_000},
+    {"date": "2025-08-29", "revenue": 5_000_000_000, "operatingIncome": 1_000_000_000, "netIncome": 1_000_000_000},
+]
+FMP_QUARTER_CASH = [
+    {"date": row["date"], "depreciationAndAmortization": 200_000_000} for row in FMP_QUARTER_INCOME
+]
+FMP_QUARTER_BALANCE = [{
+    "date": "2026-08-28", "longTermDebt": 6_000_000_000, "shortTermDebt": 400_000_000,
+    "cashAndShortTermInvestments": 7_000_000_000,
+}]
+
+
+def fake_fmp(**replacements):
+    """Return a stand-in for data._fmp_get that serves Adobe-like rows, and records the questions.
+
+    `replacements` swaps the answer for one request, by the name "path" or "path_quarter".
+    """
+    answers = {
+        "profile": FMP_PROFILE,
+        "income-statement": FMP_ANNUAL_INCOME,
+        "income-statement_quarter": FMP_QUARTER_INCOME,
+        "cash-flow-statement": FMP_ANNUAL_CASH,
+        "cash-flow-statement_quarter": FMP_QUARTER_CASH,
+        "balance-sheet-statement": FMP_ANNUAL_BALANCE,
+        "balance-sheet-statement_quarter": FMP_QUARTER_BALANCE,
+        "stock-peers": [
+            {"symbol": "ADBE", "mktCap": 100_000_000_000},         # the company itself: left out
+            {"symbol": "AAA", "mktCap": 90_000_000_000},
+            {"symbol": "BBB", "mktCap": 120_000_000_000},
+            {"symbol": "HUGE", "mktCap": 3_000_000_000_000},       # thirty times bigger: too big
+        ],
+        "key-metrics-ttm": [{"evToSalesTTM": 6.0, "evToEBITDATTM": 15.0}],
+        "ratios-ttm": [{"priceToEarningsRatioTTM": 25.0, "operatingProfitMarginTTM": 0.3}],
+    }
+    answers.update(replacements)
+    asked = []
+
+    def get(path, **parameters):
+        asked.append((path, parameters))
+        name = path + ("_quarter" if parameters.get("period") == "quarter" else "")
+        return answers[name]
+
+    get.asked = asked
+    return get
+
+
+def with_fmp(monkeypatch, **replacements):
+    """Switch on the backup for a test: a key in the environment and the fake answers."""
+    monkeypatch.setenv("FMP_API_KEY", "test-key-not-real")
+    fake = fake_fmp(**replacements)
+    monkeypatch.setattr("data._fmp_get", fake)
+    return fake
+
+
+class FakeResponse:
+    """A stand-in for what the requests library hands back."""
+
+    def __init__(self, status_code=200, body=None):
+        self.status_code, self._body = status_code, body if body is not None else [{"ok": True}]
+
+    def json(self):
+        return self._body
+
+
+def test_the_fmp_sources_are_registered():
+    assert "fmp" in data.SOURCES and "live_fmp" in data.SOURCES
+
+
+def test_there_is_no_key_unless_one_is_set(monkeypatch):
+    assert not data.fmp_available()
+    monkeypatch.setenv("FMP_API_KEY", "abc")
+    assert data.fmp_available()
+    monkeypatch.setenv("FMP_API_KEY", "")
+    assert not data.fmp_available()
+
+
+def test_asking_fmp_without_a_key_stops_with_a_plain_error():
+    with pytest.raises(data.SourceUnavailable, match="No Financial Modeling Prep key"):
+        data._fmp_get("profile", symbol="ADBE")
+
+
+def test_fmp_get_sends_the_key_and_the_question_and_returns_the_rows(monkeypatch):
+    monkeypatch.setenv("FMP_API_KEY", "secret-123")
+    sent = {}
+
+    def fake_get(url, params, timeout):
+        sent.update(url=url, params=params, timeout=timeout)
+        return FakeResponse(200, [{"symbol": "ADBE"}])
+
+    monkeypatch.setattr("requests.get", fake_get)
+    assert data._fmp_get("profile", symbol="ADBE") == [{"symbol": "ADBE"}]
+    assert sent["url"] == "https://financialmodelingprep.com/stable/profile"
+    assert sent["params"] == {"symbol": "ADBE", "apikey": "secret-123"}
+    assert sent["timeout"] == data.FMP_TIMEOUT_SECONDS
+
+
+def test_fmp_get_remembers_an_answer_so_the_daily_limit_is_not_wasted(monkeypatch):
+    monkeypatch.setenv("FMP_API_KEY", "k")
+    calls = []
+    monkeypatch.setattr("requests.get", lambda url, params, timeout: calls.append(url) or FakeResponse())
+    data._fmp_get("profile", symbol="ADBE")
+    data._fmp_get("profile", symbol="ADBE")
+    data._fmp_get("profile", symbol="AAPL")             # a different question is asked again
+    assert len(calls) == 2
+
+
+def test_fmp_get_asks_again_once_the_remembered_answer_is_old(monkeypatch):
+    monkeypatch.setenv("FMP_API_KEY", "k")
+    calls = []
+    monkeypatch.setattr("requests.get", lambda url, params, timeout: calls.append(url) or FakeResponse())
+    clock = [1000.0]
+    monkeypatch.setattr("data.time.time", lambda: clock[0])
+    data._fmp_get("profile", symbol="ADBE")
+    clock[0] += data.FMP_CACHE_SECONDS + 1
+    data._fmp_get("profile", symbol="ADBE")
+    assert len(calls) == 2
+
+
+@pytest.mark.parametrize("status, message", [
+    (429, "250 requests"),
+    (401, "did not accept the key"),
+    (403, "did not accept the key"),
+    (500, "HTTP 500"),
+])
+def test_fmp_get_turns_each_kind_of_refusal_into_a_source_unavailable_error(monkeypatch, status, message):
+    monkeypatch.setenv("FMP_API_KEY", "secret-123")
+    monkeypatch.setattr("requests.get", lambda url, params, timeout: FakeResponse(status))
+    with pytest.raises(data.SourceUnavailable, match=message) as error:
+        data._fmp_get("profile", symbol="ADBE")
+    assert "secret-123" not in str(error.value)
+
+
+def test_a_company_the_free_plan_does_not_cover_is_a_plain_error_not_a_reason_to_switch(monkeypatch):
+    monkeypatch.setenv("FMP_API_KEY", "k")
+    monkeypatch.setattr("requests.get", lambda url, params, timeout: FakeResponse(402))
+    with pytest.raises(data.UnknownCompany, match="free plan does not cover NOVO"):
+        data._fmp_get("profile", symbol="NOVO")
+
+
+def test_an_unreachable_fmp_never_puts_the_key_in_the_message(monkeypatch):
+    monkeypatch.setenv("FMP_API_KEY", "secret-123")
+
+    def broken(url, params, timeout):
+        raise ConnectionError("failed for https://x/?apikey=secret-123")
+
+    monkeypatch.setattr("requests.get", broken)
+    with pytest.raises(data.SourceUnavailable) as error:
+        data._fmp_get("profile", symbol="ADBE")
+    assert "secret-123" not in str(error.value)
+    assert "ConnectionError" in str(error.value)
+
+
+def test_fetch_fmp_statements_turns_dollars_into_millions_and_picks_the_lines(monkeypatch):
+    with_fmp(monkeypatch)
+    got = data.fetch_fmp_statements("ADBE")
+    assert got["company_name"] == "Adobe Inc."
+    assert got["revenue"] == pytest.approx(24000)
+    assert got["prior_year_revenue"] == pytest.approx(21500)       # the second row
+    assert got["ebit"] == pytest.approx(9000)
+    assert got["capex"] == pytest.approx(180)                      # FMP's -180 made positive
+    assert got["interest_expense"] == pytest.approx(250)
+    assert got["cash_from_working_capital"] == pytest.approx(600)
+    assert got["long_term_debt"] == pytest.approx(6000)
+    assert got["current_debt"] == pytest.approx(500)
+    assert got["cash_and_investments"] == pytest.approx(6500)
+    assert got["stockholders_equity"] == pytest.approx(11000)
+    assert got["shares"] == pytest.approx(400)                     # market value 100,000 / price 250
+    assert got["share_price"] == 250.0
+    assert got["beta"] == 1.5
+    assert got["usd_per_statement_unit"] == 1.0 and got["usd_per_price_unit"] == 1.0
+
+
+def test_fetch_fmp_statements_leaves_out_what_fmp_did_not_send(monkeypatch):
+    thin_cash = [{key: value for key, value in FMP_ANNUAL_CASH[0].items() if key != "capitalExpenditure"}]
+    with_fmp(monkeypatch, **{"cash-flow-statement": thin_cash})
+    assert data.fetch_fmp_statements("ADBE")["capex"] is None
+
+
+def test_a_company_reporting_in_another_currency_comes_back_without_a_rate(monkeypatch):
+    krone = [dict(FMP_ANNUAL_INCOME[0], reportedCurrency="NOK")] + FMP_ANNUAL_INCOME[1:]
+    with_fmp(monkeypatch, **{"income-statement": krone})
+    got = data.fetch_fmp_statements("XYZ")
+    assert got["statement_currency"] == "NOK" and got["usd_per_statement_unit"] is None
+
+
+def test_the_fmp_source_builds_the_same_package_as_the_yahoo_source(monkeypatch):
+    with_fmp(monkeypatch)
+    package = data.get_company_data("adbe", source="fmp")
+    assert package["ticker"] == "ADBE"
+    assert package["revenue"] == pytest.approx(24000)
+    assert package["debt"] == pytest.approx(6500)                  # 6,000 long term + 500 current
+    assert package["interest_expense"] == pytest.approx(250)
+    assert "cost_of_debt_is_fallback" not in package
+
+
+def test_the_fmp_package_has_the_same_fields_as_the_yahoo_package(monkeypatch):
+    with_fmp(monkeypatch)
+    monkeypatch.setattr("yfinance.Ticker", fake_statements_ticker())
+    fmp, yahoo = set(data.get_company_data("ADBE", source="fmp")), set(data.get_company_data("ADBE", source="yahoo"))
+    assert yahoo <= fmp                                  # everything the page reads from Yahoo's package is there
+    assert fmp - yahoo <= {"stockholders_equity"}        # Yahoo's fake has no equity line; FMP always sends one
+
+
+def test_the_fmp_source_estimates_the_cost_of_debt_when_there_is_no_interest_expense(monkeypatch):
+    no_interest = [dict(FMP_ANNUAL_INCOME[0], interestExpense=None)] + FMP_ANNUAL_INCOME[1:]
+    with_fmp(monkeypatch, **{"income-statement": no_interest})
+    package = data.get_company_data("ADBE", source="fmp")
+    assert package["cost_of_debt_is_fallback"] is True
+
+
+def test_an_unknown_ticker_at_fmp_is_a_plain_error_that_names_fmp(monkeypatch):
+    with_fmp(monkeypatch, profile=[])
+    with pytest.raises(data.UnknownCompany, match="Financial Modeling Prep has no figures for NOPE"):
+        data.get_company_data("NOPE", source="fmp")
+
+
+def test_fmp_share_count_is_market_value_over_price(monkeypatch):
+    with_fmp(monkeypatch, profile=[dict(FMP_PROFILE[0], price=None)])
+    assert data.fetch_fmp_statements("ADBE")["shares"] is None
+
+
+def test_fetch_fmp_quote_gives_price_and_beta(monkeypatch):
+    with_fmp(monkeypatch)
+    assert data.fetch_fmp_quote("ADBE") == {"share_price": 250.0, "beta": 1.5}
+
+
+def test_live_fmp_source_is_the_snapshot_with_fmps_price_and_beta(monkeypatch):
+    with_fmp(monkeypatch)
+    package = data.get_company_data("ADBE", source="live_fmp")
+    assert package["share_price"] == 250.0 and package["beta"] == 1.5
+    assert package["revenue"] == EXPECTED_SNAPSHOT["revenue"]
+
+
+def test_live_fmp_source_refuses_a_quote_without_a_price(monkeypatch):
+    with_fmp(monkeypatch, profile=[dict(FMP_PROFILE[0], price=None)])
+    with pytest.raises(data.SourceUnavailable):
+        data.get_company_data("ADBE", source="live_fmp")
+
+
+def test_fmp_history_is_oldest_first_in_millions_with_cash_flow_matched_by_date(monkeypatch):
+    with_fmp(monkeypatch)
+    history = data.fetch_fmp_history("ADBE")
+    assert history["years"] == ["FY2023", "FY2024", "FY2025"]
+    assert history["revenue"] == pytest.approx([19000, 21500, 24000])
+    assert history["operating_income"] == pytest.approx([7000, 7800, 9000])
+    assert history["net_income"] == pytest.approx([5400, 5600, 7000])
+    assert history["free_cash_flow"] == pytest.approx([6900, 7500, 9000])
+    assert history["diluted_shares"] == pytest.approx([460, 430, 400])
+
+
+def test_fmp_history_leaves_a_year_without_cash_flow_blank_not_wrong(monkeypatch):
+    with_fmp(monkeypatch, **{"cash-flow-statement": FMP_ANNUAL_CASH[:1]})        # only the latest year
+    history = data.fetch_fmp_history("ADBE")
+    assert history["free_cash_flow"] == [None, None, pytest.approx(9000)]
+
+
+def test_get_history_any_switches_to_fmp_when_yahoo_is_not_answering(monkeypatch):
+    with_fmp(monkeypatch)
+    monkeypatch.setattr("data._yahoo_busy_until", 10**12)           # Yahoo is cooling down
+    history = data.get_history_any("ADBE")
+    assert history["source"] == "fmp"
+    assert history["years"] == ["FY2023", "FY2024", "FY2025"]
+    assert history["revenue"] == pytest.approx([19000, 21500, 24000])
+
+
+def test_get_history_any_says_yahoo_when_yahoo_answered(monkeypatch):
+    monkeypatch.setattr("yfinance.Ticker", fake_statements_ticker())
+    with_fmp(monkeypatch)
+    monkeypatch.setattr("data.fetch_fmp_history", lambda ticker: pytest.fail("asked FMP"))
+    assert data.get_history_any("ADBE")["source"] == "yahoo"
+
+
+def test_fmp_ttm_adds_the_latest_four_quarters_and_reads_the_latest_balance_sheet(monkeypatch):
+    with_fmp(monkeypatch)
+    ttm = data.fetch_fmp_ttm("ADBE")
+    assert ttm["period_end"] == "28 Aug 2026"
+    assert ttm["revenue"] == pytest.approx(23400)                  # 6,000 + 5,900 + 5,800 + 5,700
+    assert ttm["operating_income"] == pytest.approx(9000)
+    assert ttm["net_income"] == pytest.approx(6600)
+    assert ttm["depreciation_and_amortisation"] == pytest.approx(800)
+    assert ttm["debt"] == pytest.approx(6400)
+    assert ttm["cash_and_investments"] == pytest.approx(7000)
+
+
+def test_fmp_ttm_without_d_and_a_leaves_it_blank_so_ev_ebitda_is_left_out(monkeypatch):
+    with_fmp(monkeypatch, **{"cash-flow-statement_quarter": [{"date": "2026-08-28"}]})
+    assert data.fetch_fmp_ttm("ADBE")["depreciation_and_amortisation"] is None
+
+
+def test_fmp_ttm_asks_for_no_more_rows_than_the_free_plan_allows(monkeypatch):
+    fake = with_fmp(monkeypatch)
+    data.fetch_fmp_ttm("ADBE")
+    assert all(parameters.get("limit", 1) <= data.FMP_ROWS for _, parameters in fake.asked)
+
+
+def test_get_ttm_any_tags_the_provider(monkeypatch):
+    with_fmp(monkeypatch)
+    monkeypatch.setattr("data._yahoo_busy_until", 10**12)           # Yahoo is cooling down
+    got = data.get_ttm_any("ADBE")
+    assert got["source"] == "fmp" and got["revenue"] == pytest.approx(23400)
+
+
+def test_the_fmp_peer_list_leaves_out_the_company_itself(monkeypatch):
+    with_fmp(monkeypatch)
+    peers = data.fetch_fmp_peer_list("ADBE")
+    assert [peer["ticker"] for peer in peers] == ["AAA", "BBB", "HUGE"]
+    assert peers[0]["market_cap"] == pytest.approx(90000)
+
+
+def test_an_fmp_peer_quote_gives_the_multiples_and_margin(monkeypatch):
+    with_fmp(monkeypatch)
+    quote = data.fetch_fmp_peer_quote("AAA")
+    assert (quote["ev_sales"], quote["ev_ebitda"], quote["pe"], quote["operating_margin"]) == (6.0, 15.0, 25.0, 0.3)
+
+
+def test_fmp_peer_suggestions_keep_the_ones_close_in_size_and_fetch_their_multiples(monkeypatch):
+    with_fmp(monkeypatch)
+    figures = data.suggest_peers_fmp("ADBE", 100000, 10, 5)
+    assert figures["peer_tickers"] == ["AAA", "BBB"]               # HUGE is thirty times the size
+    assert figures["peer_ev_sales"] == [6.0, 6.0]
+    assert figures["peer_operating_margin"] == [0.3, 0.3]
+    assert figures["peer_source"] == "industry"
+
+
+def test_fmp_peer_suggestions_with_nobody_in_range_say_so(monkeypatch):
+    with_fmp(monkeypatch, **{"stock-peers": []})
+    figures = data.suggest_peers_fmp("ADBE", 100000, 10, 5)
+    assert figures["peer_tickers"] == [] and figures["peer_source"] is None
+
+
+def test_fmp_peer_suggestions_take_no_more_than_asked_for(monkeypatch):
+    with_fmp(monkeypatch)
+    assert len(data.suggest_peers_fmp("ADBE", 100000, 10, 1)["peer_tickers"]) == 1
+
+
+def test_peer_multiples_any_switches_to_fmp_and_says_so(monkeypatch):
+    with_fmp(monkeypatch)
+    monkeypatch.setattr("data._yahoo_busy_until", 10**12)
+    figures = data.peer_multiples_any(["AAA", "BBB"])
+    assert figures["peer_data_source"] == "fmp" and figures["peer_pe"] == [25.0, 25.0]
+
+
+def test_suggest_peers_any_says_which_provider_gave_the_peers(monkeypatch):
+    with_fmp(monkeypatch)
+    monkeypatch.setattr("data._yahoo_busy_until", 10**12)
+    assert data.suggest_peers_any("ADBE", 100000, 20, 10, 5, 30, 2)["peer_data_source"] == "fmp"
+
+
+# --- Yahoo first, FMP second ---
+
+def test_yahoo_answers_first_and_fmp_is_not_asked(monkeypatch):
+    with_fmp(monkeypatch)
+    got = data._yahoo_then_fmp(lambda: "from yahoo", lambda: pytest.fail("asked FMP"))
+    assert got == ("from yahoo", "yahoo")
+
+
+def test_fmp_answers_when_yahoo_is_not_answering(monkeypatch):
+    with_fmp(monkeypatch)
+
+    def yahoo():
+        raise data.SourceUnavailable("Yahoo is down.")
+
+    assert data._yahoo_then_fmp(yahoo, lambda: "from fmp") == ("from fmp", "fmp")
+
+
+def test_without_a_key_yahoos_own_error_comes_through(monkeypatch):
+    def yahoo():
+        raise data.SourceUnavailable("Yahoo is down.")
+
+    with pytest.raises(data.SourceUnavailable, match="Yahoo is down"):
+        data._yahoo_then_fmp(yahoo, lambda: pytest.fail("asked FMP without a key"))
+
+
+def test_a_real_company_problem_at_yahoo_is_not_sent_to_fmp(monkeypatch):
+    with_fmp(monkeypatch)
+
+    def yahoo():
+        raise ValueError("Yahoo Finance has no figures for NOPE.")
+
+    with pytest.raises(ValueError, match="no figures for NOPE") as error:
+        data._yahoo_then_fmp(yahoo, lambda: pytest.fail("asked FMP"))
+    assert not isinstance(error.value, data.SourceUnavailable)
+
+
+def test_when_both_are_down_the_error_names_both(monkeypatch):
+    with_fmp(monkeypatch)
+
+    def yahoo():
+        raise data.SourceUnavailable("Yahoo is down.")
+
+    def fmp():
+        raise data.SourceUnavailable("FMP is down.")
+
+    with pytest.raises(data.SourceUnavailable) as error:
+        data._yahoo_then_fmp(yahoo, fmp)
+    assert "Yahoo is down." in str(error.value) and "FMP is down." in str(error.value)
+
+
+def test_while_yahoo_is_cooling_down_it_is_not_asked_at_all(monkeypatch):
+    with_fmp(monkeypatch)
+    monkeypatch.setattr("data._yahoo_busy_until", 10**12)
+    assert data._yahoo_then_fmp(lambda: pytest.fail("asked Yahoo"), lambda: "from fmp") == ("from fmp", "fmp")
+
+
+def test_get_other_company_data_uses_yahoo_when_it_works(monkeypatch):
+    monkeypatch.setattr("yfinance.Ticker", fake_statements_ticker())
+    with_fmp(monkeypatch)
+    package, source = data.get_other_company_data("ADBE")
+    assert source == "yahoo" and package["share_price"] == 240.74
+
+
+def test_get_other_company_data_falls_back_to_fmp_when_yahoo_gives_nothing(monkeypatch):
+    monkeypatch.setattr("yfinance.Ticker", fake_statements_ticker(info={}))
+    with_fmp(monkeypatch)
+    package, source = data.get_other_company_data("ADBE")
+    assert source == "fmp" and package["share_price"] == 250.0
+
+
+def test_a_yahoo_that_gave_nothing_starts_the_cool_down(monkeypatch):
+    monkeypatch.setattr("yfinance.Ticker", fake_statements_ticker(info={}))
+    with_fmp(monkeypatch)
+    data.get_other_company_data("ADBE")
+    assert data._yahoo_cooling_down()
+
+
+# --- Adobe: live, then live from FMP, then the snapshot ---
+
+def test_adobe_uses_fmps_quote_when_yahoo_is_not_answering(monkeypatch):
+    class EmptyTicker:
+        def __init__(self, ticker):
+            self.info = {}
+
+    monkeypatch.setattr("yfinance.Ticker", EmptyTicker)
+    with_fmp(monkeypatch)
+    package, source_used = data.get_company_data_with_fallback("ADBE")
+    assert source_used == "live_fmp"
+    assert package["share_price"] == 250.0
+
+
+def test_adobe_uses_the_snapshot_when_neither_provider_answers(monkeypatch):
+    class EmptyTicker:
+        def __init__(self, ticker):
+            self.info = {}
+
+    monkeypatch.setattr("yfinance.Ticker", EmptyTicker)
+    with_fmp(monkeypatch, profile=[dict(FMP_PROFILE[0], price=None)])
+    package, source_used = data.get_company_data_with_fallback("ADBE")
+    assert source_used == "snapshot" and package == EXPECTED_SNAPSHOT
+
+
+def test_adobe_skips_yahoo_while_it_is_cooling_down(monkeypatch):
+    monkeypatch.setattr("data._yahoo_busy_until", 10**12)
+    monkeypatch.setattr("yfinance.Ticker", lambda ticker: pytest.fail("asked Yahoo"))
+    with_fmp(monkeypatch)
+    assert data.get_company_data_with_fallback("ADBE")[1] == "live_fmp"

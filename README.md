@@ -26,6 +26,13 @@ snapshot instead. Every other figure comes from the snapshot of the Excel model 
 the base-case DCF gives an implied share price of $305.60, against a market price of $251.47;
 with live figures the result moves a little with Yahoo's beta.
 
+Yahoo sometimes refuses the shared server the live app runs on, so there is a second source:
+**Financial Modeling Prep** (free plan: US companies only, 250 requests a day). The page asks Yahoo
+first and switches to Financial Modeling Prep, with a note saying so, when Yahoo is not answering.
+It needs a key, kept out of the code: on this computer in `.streamlit/secrets.toml` (git-ignored) as
+`FMP_API_KEY = "..."`, and on Streamlit Cloud in the app's Secrets. Without a key the page works as
+before, on Yahoo alone.
+
 - **Sliders** change revenue growth, operating margin and terminal growth, and an optional
   "Set the WACC myself" control replaces the model's own WACC.
 - A **sensitivity heatmap** shows the price at different WACCs and terminal growth rates.

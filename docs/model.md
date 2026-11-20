@@ -24,6 +24,10 @@ Adobe Form 10-K filings, FY2021–FY2025. Page numbers refer to the FY2025 10-K.
 - Risk-free rate and equity risk premium: Damodaran, implied ERP, 1 Nov 2026
 - Beta and share price: Yahoo Finance, 2 Nov 2026
 - Peer multiples: Yahoo Finance, Statistics tab, 4 Nov 2026
+- When Yahoo is not answering (see `docs/decisions.md`, 20 Nov 2026), the live figures for any company
+  come from Financial Modeling Prep instead: the same statement lines, with the share count worked out as
+  market value divided by price. Its free plan covers US companies only, and its peers are its own peer
+  list, chosen by size, not Yahoo's, chosen by margin and growth. The page says which provider it used.
 
 ## The forecast
 
