@@ -12,6 +12,7 @@ maths, so it is done by valuation.financial_debt, not here.
 """
 
 import copy
+import time
 
 import valuation
 
@@ -136,16 +137,52 @@ def snapshot_source(ticker):
 # Source 2: live (current share price and beta from Yahoo Finance)
 # ---------------------------------------------------------------------------
 
-def fetch_yahoo_quote(ticker):
-    """Ask Yahoo Finance for a stock's current share price and beta.
+# When Yahoo is limiting the app's server it answers with an empty quote (no name, price or beta) while
+# the statements still arrive. The code then asks once more, after this many seconds, before telling the
+# reader. Chosen on 20 Nov 2026, after Yahoo refused the live app twice in three days.
+YAHOO_RETRY_PAUSE_SECONDS = 2
 
-    Returns a dictionary with "share_price" and "beta"; a figure Yahoo does not have comes
-    back as None. This is the only function that touches the internet.
+YAHOO_BUSY_MESSAGE = (
+    "Yahoo Finance isn't answering the app right now. It sometimes limits shared servers, so try again in "
+    "a few minutes. Adobe still works from a frozen snapshot."
+)
+
+
+def _pause(seconds):
+    """Wait a moment. A function of its own so the tests can skip the waiting without touching the
+    clock the rest of the program uses.
     """
-    # Imported here, not at the top, so the snapshot source works even without yfinance.
+    time.sleep(seconds)
+
+
+def _quote_is_empty(info):
+    """Say whether Yahoo's quote has nothing in it: none of a name, a price or a share count."""
+    return not any(
+        info.get(key) for key in ("longName", "shortName", "currentPrice", "regularMarketPrice", "sharesOutstanding")
+    )
+
+
+def _fetch_info(ticker):
+    """Ask Yahoo Finance for a stock's quote, and if it comes back empty (Yahoo limiting the server),
+    wait a moment and ask once more with a fresh request, because the first one keeps its empty answer.
+    """
     import yfinance
 
     info = yfinance.Ticker(ticker).info
+    if _quote_is_empty(info):
+        _pause(YAHOO_RETRY_PAUSE_SECONDS)
+        info = yfinance.Ticker(ticker).info
+    return info
+
+
+def fetch_yahoo_quote(ticker):
+    """Ask Yahoo Finance for a stock's current share price and beta, asking once more if the first
+    answer is empty.
+
+    Returns a dictionary with "share_price" and "beta"; a figure Yahoo does not have comes
+    back as None. This is the only function that touches the internet for a live quote.
+    """
+    info = _fetch_info(ticker)
     return {"share_price": info.get("currentPrice"), "beta": info.get("beta")}
 
 
@@ -164,6 +201,8 @@ def live_source(ticker, fetch_quote=fetch_yahoo_quote):
         raise ValueError("Could not get live figures from Yahoo Finance: %s" % error) from error
 
     price = quote.get("share_price")
+    if price is None and quote.get("beta") is None:
+        raise ValueError(YAHOO_BUSY_MESSAGE)        # nothing at all: Yahoo is not answering
     if price is None or price <= 0:
         raise ValueError("Yahoo Finance did not give a usable share price for %s." % ticker)
     beta = quote.get("beta")
@@ -228,7 +267,8 @@ def fetch_yahoo_statements(ticker):
     import yfinance
 
     stock = yfinance.Ticker(ticker)
-    income, cash_flow, balance, info = stock.income_stmt, stock.cashflow, stock.balance_sheet, stock.info
+    income, cash_flow, balance = stock.income_stmt, stock.cashflow, stock.balance_sheet
+    info = _fetch_info(ticker)
 
     def millions(frame, names, column=0, positive=False):
         value = _statement_line(frame, names, column)
@@ -281,6 +321,14 @@ YAHOO_REQUIRED = [
 ]
 
 
+# The figures that come from Yahoo's quote and exchange rates, not from the statements. When all of
+# them are missing but the statements are there, Yahoo is limiting the server (see YAHOO_BUSY_MESSAGE).
+YAHOO_QUOTE_FIELDS = [
+    "company_name", "statement_currency", "price_currency", "usd_per_statement_unit", "usd_per_price_unit",
+    "shares", "share_price", "beta",
+]
+
+
 # The company's money figures, which Yahoo gives in the currency the company reports in.
 YAHOO_MONEY_FIELDS = [
     "revenue", "prior_year_revenue", "ebit", "net_income", "income_tax", "income_before_tax",
@@ -314,6 +362,8 @@ def yahoo_source(ticker, fetch_statements=fetch_yahoo_statements):
             "Yahoo Finance has no figures for %s. Check that the ticker is right; "
             "US-listed companies work best." % ticker
         )
+    if all(statements.get(name) is None for name in YAHOO_QUOTE_FIELDS):
+        raise ValueError(YAHOO_BUSY_MESSAGE)        # the statements came but no quote at all: Yahoo is limiting us
     for currency_name, rate_name in (
         ("statement_currency", "usd_per_statement_unit"),
         ("price_currency", "usd_per_price_unit"),

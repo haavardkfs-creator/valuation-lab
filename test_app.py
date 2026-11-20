@@ -31,6 +31,12 @@ APP_FILE = str(Path(__file__).parent / "app.py")
 
 
 @pytest.fixture(autouse=True)
+def no_waiting(monkeypatch):
+    """Never really wait in a test: the code pauses before asking Yahoo a second time (see YAHOO_RETRY_PAUSE_SECONDS)."""
+    monkeypatch.setattr("data._pause", lambda seconds: None)
+
+
+@pytest.fixture(autouse=True)
 def forget_remembered_figures():
     """The page remembers Yahoo's answers for 15 minutes; forget them so each test starts clean."""
     st.cache_data.clear()
@@ -1704,3 +1710,65 @@ def test_the_share_count_text_gives_the_years_it_covers():
 
 def test_the_multiple_with_two_decimals_or_a_dash():
     assert app.multiple_or_dash(1.3817671809256662) == "1.38x" and app.multiple_or_dash(None) == "–"
+
+
+# ---------------------------------------------------------------------------
+# Fewer requests to Yahoo: slow-changing data is remembered for hours
+# ---------------------------------------------------------------------------
+
+def test_slow_data_is_remembered_for_six_hours_and_the_market_for_fifteen_minutes():
+    assert app.SLOW_DATA_CACHE_SECONDS == 6 * 60 * 60
+    assert app.LIVE_DATA_CACHE_SECONDS == 15 * 60
+
+
+def test_peer_suggestions_are_looked_up_once_however_often_the_page_is_drawn(monkeypatch):
+    calls = []
+
+    def fake_suggest(*arguments):
+        calls.append(arguments)
+        return {"peer_tickers": ["AAA"], "peer_ev_sales": [2.0], "peer_ev_ebitda": [12.0], "peer_pe": [20.0],
+                "peer_operating_margin": [0.3], "peer_source": "industry"}
+
+    monkeypatch.setattr("data.suggest_peers", fake_suggest)
+    first = app.load_suggested_peers("EXMP", 94_000)
+    second = app.load_suggested_peers("EXMP", 94_000)
+    assert first == second and len(calls) == 1
+    app.load_suggested_peers("OTHER", 94_000)                                       # another company is a new lookup
+    assert len(calls) == 2
+
+
+def test_the_history_and_the_last_twelve_months_are_each_looked_up_once(monkeypatch):
+    history_calls, ttm_calls = [], []
+    monkeypatch.setattr("data.get_history", lambda ticker, rate: history_calls.append(ticker) or {"years": ["FY2025"]})
+    monkeypatch.setattr("data.get_ttm", lambda ticker, rate: ttm_calls.append(ticker) or {"period_end": "31 Aug 2026"})
+    for _ in range(3):
+        app.load_history("EXMP", 1.0)
+        app.load_ttm("EXMP", 1.0)
+    assert history_calls == ["EXMP"] and ttm_calls == ["EXMP"]
+
+
+def test_the_peers_multiples_and_the_company_are_still_remembered_for_the_shorter_time(monkeypatch):
+    # They move with the market, so they keep the 15 minutes: the page uses the shorter constant for them.
+    import inspect
+    source = inspect.getsource(app)
+    assert "@st.cache_data(ttl=LIVE_DATA_CACHE_SECONDS, show_spinner=False)\ndef load_company(" in source
+    assert "@st.cache_data(ttl=LIVE_DATA_CACHE_SECONDS, show_spinner=False)\ndef load_peer_multiples(" in source
+    for slow in ("load_suggested_peers", "load_history", "load_ttm"):
+        assert f"@st.cache_data(ttl=SLOW_DATA_CACHE_SECONDS, show_spinner=False)\ndef {slow}(" in source
+
+
+def test_the_page_shows_the_plain_message_when_yahoo_is_limiting_the_server(monkeypatch):
+    page = run_page(monkeypatch, ticker="nvda", yahoo=fake_statements_ticker(info={}))
+    assert not page.exception
+    [error] = page.error
+    assert "Could not value NVDA." in error.value
+    assert "Yahoo Finance isn't answering the app right now" in error.value
+    assert "company_name" not in error.value                                         # no list of field names any more
+    assert app.FOOTER_TEXT in texts(page.caption)                                    # and the footer is still there
+
+
+def test_adobe_still_works_from_the_snapshot_with_a_warning_when_yahoo_is_limiting_the_server(monkeypatch):
+    page = run_page(monkeypatch, yahoo=fake_statements_ticker(info={}))
+    assert_footer_and_no_crash(page)
+    assert any("could not be reached" in warning for warning in texts(page.warning))
+    assert metrics(page)["Market price"] == "$251.47"                                # the frozen snapshot's price

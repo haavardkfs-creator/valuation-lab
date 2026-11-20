@@ -819,3 +819,26 @@ meaningful" where the number would mean nothing. Checked in the running app, whi
 ("Return on invested capital", "-9.3% over 3 years"): the label is now "ROIC" with the full name in its tooltip,
 and the years sit in the small line under the share count change. In my plan I wrote FY2022's cash conversion as
 1.55x; the sheet says 1.56x (7,396 / 4,756 = 1.555). No new files.
+
+## 2026-11-20 — Hardening against Yahoo limiting the live app
+
+On 18 and 20 Nov 2026 the live app showed "Yahoo Finance did not supply ... company_name, ... share_price,
+beta" for companies other than Adobe, and a yellow "could not be reached" warning for Adobe. From the
+developer's machine Yahoo answered normally, so it was not the code: Yahoo was limiting the Streamlit server,
+which shares its internet address with many other apps. `yfinance` is an unofficial tool, so this can happen
+without warning, and a reboot does not help. Agreed with Haavard to fix this before the next roadmap item.
+Three changes, with no Excel step because nothing new is calculated. (1) A plain message: when the statements
+arrive but none of the quote figures (name, currencies, exchange rates, shares, price, beta) do, the reader
+sees "Yahoo Finance isn't answering the app right now. It sometimes limits shared servers, so try again in a
+few minutes. Adobe still works from a frozen snapshot." instead of a list of field names; if neither the
+statements nor the quote arrive, the old "check the ticker" message stays, and if only some figures are
+missing they are still named. (2) One retry: an empty quote (no name, price or share count) is asked for again
+once, after `YAHOO_RETRY_PAUSE_SECONDS` (2 seconds), with a fresh request because the first one keeps its
+empty answer; the live Adobe quote does the same. (3) Fewer requests: the history, the last twelve months and
+the suggested peers (the most expensive part of a first load: up to 50 lookups) are remembered for 6 hours
+(`SLOW_DATA_CACHE_SECONDS`) instead of 15 minutes, because they change only when a company reports or hardly
+ever; the share price, the company's own figures and the peers' multiples keep the 15 minutes because they
+move with the market. The 6 hours were agreed with Haavard. In the tests the pause is a function of its own
+(`data._pause`) that they replace; replacing `time.sleep` for the whole program made Streamlit's own test
+harness busy-loop and slowed the suite from 16 to 75 seconds. A second data source that does not depend on
+Yahoo is the real fix and is still open. No new files.

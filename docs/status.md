@@ -198,16 +198,23 @@
   `data.py`; `PEER_SECTOR_CANDIDATES_TO_CHECK` in `assumptions.py`; the note and captions in `app.py`. A
   screening rule, so no Excel step. 33 new or changed tests; 525 tests pass. Checked on live data (Coca-Cola,
   Pfizer, First Solar, Apple, Microsoft, Nvidia, Exxon).
-- Done (in the open pull request): roadmap #7, quality numbers. Haavard added the quality block to the
+- Done: roadmap #7 (merged, PR #45), quality numbers. Haavard added the quality block to the
   `history` sheet (rows 24-35). A last row of the Overview gives ROIC (debt + equity - cash as invested capital;
   a tax benefit counts as no tax), cash conversion (reported free cash flow over net income), interest cover and
   the share count change over the history; the History table gets a cash conversion row. `quality_numbers` and
   its small functions in `valuation.py` match the sheet; `stockholders_equity` joins the data package (Yahoo; typed
   into Adobe's snapshot). "Not available", "No interest" and "Not meaningful" where they apply. 35 new tests; 553
   tests pass. Checked on live data (seven companies) and in the running app.
-- Next: roadmap #8, adjustments for one-off items, then #6, #10 and #11, as below. Small items waiting for
-  Haavard's decision: Pfizer's negative tax rate, the adjusted beta, the empty-Yahoo-reply retry, and drawing the
-  overview and history even when the DCF cannot be built.
+- Done (in the open pull request): hardening against Yahoo limiting the live app (it refused the server on 18
+  and 20 Nov 2026, though Yahoo answered from the developer's machine). A plain "Yahoo Finance isn't answering
+  the app right now ... try again in a few minutes. Adobe still works from a frozen snapshot." replaces the
+  list of missing fields; an empty quote is asked for once more after 2 seconds; and the history, the last
+  twelve months and the suggested peers are remembered for 6 hours instead of 15 minutes, to cut the number of
+  requests. No Excel step. 18 new tests; 571 tests pass. Not a full fix: see Open.
+- Next: roadmap #8, adjustments for one-off items (Haavard's three answers are still needed: one yearly amount
+  for both the fiscal year and the twelve months, P/E as reported, and a sidebar box for companies other than
+  Adobe), then #6, #10 and #11, as below. Small items waiting for Haavard's decision: Pfizer's negative tax
+  rate, the adjusted beta, and drawing the overview and history even when the DCF cannot be built.
 - Open:
   - A negative tax rate flows into the forecast. Pfizer's last-year tax rate is -3.54% (a tax
     benefit; seen on 18 Nov 2026 in the new WACC table), and the starting point holds the tax rate
@@ -222,10 +229,11 @@
   - Low-beta companies get odd DCF prices: on 16 Nov 2026 Pfizer's WACC is 5.96% and its DCF
     price $94.96 against a market price of $28.89, and both terminal value cautions fire. The
     caution says so, but the cure is the planned adjusted beta.
-  - Yahoo sometimes returns an empty quote to the live server: on 18 Nov 2026 NVDA showed "Yahoo
-    Finance did not supply ... company_name, ... share_price, beta" and worked a few minutes later.
-    Possible fix, not built: retry the quote once, and say "this is usually temporary, try again in
-    a minute".
+  - The live app still depends on Yahoo through `yfinance`, an unofficial tool. When Yahoo limits the server
+    (18 and 20 Nov 2026) every company except Adobe, which has a snapshot, shows a plain error until it passes;
+    the retry and the longer memory make it rarer, not impossible. The real fix is a second data source that
+    does not depend on Yahoo (the app is built so a source can be swapped); it needs a decision and may need a
+    key.
   - Even after the capex fade, Microsoft's DCF price is 48% below its market price ($278 vs
     $532, 6 Nov 2026). A starting point from one year is not a forecast, and a 17.8% grower
     fading to 2.5% over five years is a conservative path for it.
