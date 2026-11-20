@@ -967,6 +967,45 @@ def margin_growth_table(dcf_inputs, terminal_growth_rate, wacc_override, margin_
     }
 
 
+def run_scenarios(
+    dcf_inputs, terminal_growth_rate, wacc_override, margin_shifts, growth_shifts, probabilities,
+    market_price, tolerance,
+):
+    """Value the company in several scenarios and weight the prices by how likely each is (workbook:
+    `scenarios` sheet, rows 5-24).
+
+    Each scenario is a shift in every forecast year's operating margin and another in every year's
+    revenue growth (decimals: 0.05 is five percentage points), added to the inputs the DCF uses. The
+    WACC and terminal growth are the same in all of them, so a scenario with no shifts is the DCF's own
+    price. `margin_shifts`, `growth_shifts` and `probabilities` are lists of the same length, one entry
+    per scenario (bear, base, bull). The probabilities are decimals and must add up to 1, to within
+    `tolerance`, or this stops with a plain error. Returns each scenario's price and its gap to the
+    market price, and the probability-weighted price and its gap to the market price.
+    """
+    if not len(margin_shifts) == len(growth_shifts) == len(probabilities):
+        raise ValueError("Every scenario needs a margin shift, a growth shift and a probability.")
+    if abs(sum(probabilities) - 1) > tolerance:
+        raise ValueError("The scenario probabilities must add up to 100%%, not %.1f%%." % (sum(probabilities) * 100))
+
+    def price_in(margin_shift, growth_shift):
+        changed = dict(dcf_inputs)
+        changed["operating_margins"] = shift_rates(dcf_inputs["operating_margins"], margin_shift)
+        changed["growth_rates"] = shift_rates(dcf_inputs["growth_rates"], growth_shift)
+        return run_full_dcf(
+            **changed, terminal_growth_rate=terminal_growth_rate, wacc_override=wacc_override
+        )["implied_share_price"]
+
+    prices = [price_in(margin, growth) for margin, growth in zip(margin_shifts, growth_shifts)]
+    weighted_price = sum(probability * price for probability, price in zip(probabilities, prices))
+    return {
+        "prices": prices,
+        "upsides": [price / market_price - 1 for price in prices],
+        "probabilities": list(probabilities),
+        "weighted_price": weighted_price,
+        "weighted_vs_market": weighted_price / market_price - 1,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Starting point for other companies (docs/model.md: "Starting point for other companies")
 # ---------------------------------------------------------------------------

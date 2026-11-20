@@ -235,6 +235,28 @@ biggest risks: the margin and the growth are (workbook: sheet `reverse dcf`, shi
   readings are the check; every cell is the same calculation at another pair of shifts.
 - Cells are coloured against the market price, green above and red below, like the WACC table.
 
+## Scenarios
+
+A bear, a base and a bull case, and a probability-weighted price (workbook: sheet `scenarios`, built by
+Haavard on 20 Nov 2026). The DCF gives one price from one set of assumptions; scenarios show how much it
+moves when the two biggest assumptions are wrong.
+- Each scenario shifts every forecast year's operating margin and every year's revenue growth by a number
+  of percentage points (the `reverse dcf` sheet's shifts, applied to all years). The bear case is -5 points of
+  margin and -2 of growth, the bull case +5 and +2, and the base case is no shift, so it is the DCF itself
+  (the sheet's check C24 is the base price minus `valuation` C26, and must be 0). WACC and terminal growth
+  are the same in all three.
+- The probabilities are typed and default to 25%, 50% and 25%; they must add up to 100% (C9 is the sum minus
+  1, and must be 0).
+- Probability-weighted price = bear probability x bear price + base probability x base price + bull
+  probability x bull price (C21), and its gap to the market price is price divided by market price minus 1
+  (C22).
+- Adobe on the workbook's figures: bear $248.29 (-1.3% against the market price of $251.47), base $305.60
+  (+21.5%), bull $370.49 (+47.3%), weighted $307.50 (+22.3%). The page applies the scenarios on top of
+  whatever the sliders are set to, so its base case always equals the DCF price above it.
+- Tried on Coca-Cola (bear $50, base $69, bull $90 against a market price of $97) and First Solar (bear
+  $175, base $221, bull $274 against $145): scenarios show when even the bull case does not reach the market
+  price, and when even the bear case is above it.
+
 ## What the market price implies (the reverse DCF)
 
 Instead of asking what the company is worth, this asks what the market is already assuming

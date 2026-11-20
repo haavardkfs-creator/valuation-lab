@@ -225,8 +225,13 @@
   live Yahoo, live Financial Modeling Prep, then the snapshot. Yahoo gets a five-minute cool-down after refusing, a
   real problem with a company (unknown ticker) is never sent to the backup, and the page names the provider it used.
   `requests==2.34.2` pinned. Free plan: US companies only, 250 requests a day. 61 new tests; 650 tests pass.
-- Next: roadmap #6, scenarios (bear, base, bull and a probability-weighted price; Haavard decides the inputs and
-  probabilities), then #10 and #11, as below. Small items waiting for Haavard's decision: Pfizer's negative tax rate,
+- Done (in the open pull request): roadmap #6, scenarios. Haavard built the `scenarios` sheet (bear -5 / -2
+  points, base 0, bull +5 / +2, weights 25/50/25; Adobe bear $248.29, base $305.60, bull $370.49, weighted $307.50).
+  `run_scenarios` in `valuation.py` matches its cells; a "Scenarios" section under "What the market price implies"
+  shows a table of the three cases and the weighted price, with editable boxes in a closed sidebar box; probabilities
+  that do not add to 100% get a plain warning. Defaults in `assumptions.py`. 23 new tests; 673 tests pass. Checked in
+  the running app. The FMP live check and key replacement are still to do (see Open).
+- Next: roadmap #10 (forward multiples) and #11 (thesis and export), as below. Small items waiting for Haavard's decision: Pfizer's negative tax rate,
   the adjusted beta, a one-time net income adjustment (for the P/E), and drawing the overview and history even when the DCF cannot be built.
 - Open:
   - A negative tax rate flows into the forecast. Pfizer's last-year tax rate is -3.54% (a tax
