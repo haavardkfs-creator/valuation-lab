@@ -238,3 +238,8 @@ def test_the_margin_and_growth_table_steps_are_the_ones_agreed_with_haavard():
     assert a.MARGIN_GROWTH_TABLE_MARGIN_SHIFTS == [-0.10, -0.05, 0.0, 0.05, 0.10]
     assert a.MARGIN_GROWTH_TABLE_GROWTH_SHIFTS == [-0.04, -0.02, 0.0, 0.02, 0.04]
     assert 0.0 in a.MARGIN_GROWTH_TABLE_MARGIN_SHIFTS and 0.0 in a.MARGIN_GROWTH_TABLE_GROWTH_SHIFTS
+
+
+def test_the_sector_top_up_looks_at_thirty_companies():
+    # 19 Nov 2026: only used when the industry gives fewer than MINIMUM_PEERS suitable peers.
+    assert a.PEER_SECTOR_CANDIDATES_TO_CHECK == 30

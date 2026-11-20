@@ -1117,8 +1117,9 @@ def draw_multiples(multiples, peers, notes, peers_are_suggested, own_label, over
         )
     if peers_are_suggested:
         st.caption(
-            "Peers suggested from Yahoo's industry list, closest in size. Closest in size is "
-            "not the same as most similar business, so change them in the sidebar if you know better."
+            "Peers suggested from Yahoo's industry list: those whose operating margin and revenue growth "
+            "are closest to the company's, within a tenth to ten times its size. Similar margins and growth "
+            "are only a rough sign of a similar business, so change them in the sidebar if you know better."
         )
     draw_explanations("multiples")
 
@@ -1149,6 +1150,8 @@ def load_suggested_peers(ticker, market_value):
         assumptions.PEER_CANDIDATES_TO_CHECK,
         assumptions.PEER_BIGGEST_SIZE_GAP,
         assumptions.SUGGESTED_PEERS,
+        assumptions.PEER_SECTOR_CANDIDATES_TO_CHECK,
+        assumptions.MINIMUM_PEERS,
     )
 
 
@@ -1211,8 +1214,10 @@ def draw_peer_box(company):
     """
     notes = []
     market_value = round(company["share_price"] * company["shares"])
+    suggested_source = None
     try:
-        suggested = load_suggested_peers(company["ticker"], market_value)["peer_tickers"]
+        suggestion = load_suggested_peers(company["ticker"], market_value)
+        suggested, suggested_source = suggestion["peer_tickers"], suggestion["peer_source"]
     except ValueError as error:
         suggested = []
         notes.append(("warning", f"{error} Type peer tickers in the sidebar yourself."))
@@ -1224,10 +1229,16 @@ def draw_peer_box(company):
         key=f"peers_{company['ticker']}",      # one box per company, so peers are not carried over
         help=(
             "Companies to compare with, separated by commas. Suggested from Yahoo's industry "
-            f"list, closest in size; change them as you like (up to {assumptions.MAX_TYPED_PEERS})."
+            f"list, the closest in margin and growth; change them as you like (up to {assumptions.MAX_TYPED_PEERS})."
         ),
     )
     tickers, cut_off = parse_peer_tickers(typed, company["ticker"], assumptions.MAX_TYPED_PEERS)
+    if suggested_source == "sector" and tickers == suggested:
+        notes.append((
+            "caption",
+            "This company's industry had too few suitable peers, so some or all of these come from its "
+            "wider sector. They are the closest in margin and growth, but check that they fit.",
+        ))
     if cut_off:
         notes.append(("caption", f"Only the first {assumptions.MAX_TYPED_PEERS} peers are used."))
     if not tickers:

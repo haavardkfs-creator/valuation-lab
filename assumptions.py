@@ -46,10 +46,18 @@ MINIMUM_PEERS = 2
 # Suggesting peers for another company (see docs/model.md, "Suggesting peers"). The page looks up
 # the first PEER_CANDIDATES_TO_CHECK companies in the company's Yahoo industry, keeps those that
 # are no more than PEER_BIGGEST_SIZE_GAP times bigger or smaller than it (a tenth to ten times
-# its market value), and suggests the SUGGESTED_PEERS closest in size. Chosen with Haavard on
-# 16 Nov 2026; Yahoo's lists are ordered by importance, so the first 20 are enough and keep the
-# first load to a few seconds.
+# its market value), and suggests the SUGGESTED_PEERS that look most like the company: the closest
+# operating margin and revenue growth (changed from "closest in size" on 19 Nov 2026, which brought
+# Snowflake, a loss-maker, into Adobe's peers). Chosen with Haavard on 16 Nov 2026; Yahoo's lists are
+# ordered by importance, so the first 20 are enough and keep the first load to a few seconds.
 PEER_CANDIDATES_TO_CHECK = 20
+
+# When the industry gives fewer than MINIMUM_PEERS suitable peers (Apple, Microsoft), the page tops the
+# list up from the wider sector (technology rather than consumer electronics), looking at this many
+# companies of the sector's list (it is long, and Yahoo lists the most important first). It is only
+# looked up in that case, which adds a few seconds to the first load. Chosen with Haavard on 19 Nov
+# 2026 after trying Apple, Microsoft and First Solar.
+PEER_SECTOR_CANDIDATES_TO_CHECK = 30
 PEER_BIGGEST_SIZE_GAP = 10
 SUGGESTED_PEERS = 5
 

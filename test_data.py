@@ -672,11 +672,12 @@ def test_the_fallback_cost_of_debt_is_the_same_in_every_currency(monkeypatch):
 # Peers: suggested from Yahoo's industry list, with their multiples
 # ---------------------------------------------------------------------------
 
-def quote(ticker, market_cap, ev_sales=2.0, ev_ebitda=12.0, pe=20.0, currency="USD", operating_margin=0.20):
+def quote(ticker, market_cap, ev_sales=2.0, ev_ebitda=12.0, pe=20.0, currency="USD", operating_margin=0.20, revenue_growth=0.05):
     """A peer's quote as fetch_peer_quote returns it (market value in $ millions)."""
     return {
         "ticker": ticker, "market_cap": market_cap, "currency": currency,
         "ev_sales": ev_sales, "ev_ebitda": ev_ebitda, "pe": pe, "operating_margin": operating_margin,
+        "revenue_growth": revenue_growth,
     }
 
 
@@ -698,7 +699,9 @@ def fake_candidates(ticker, how_many):
 def suggest_for_coca_cola(**kwargs):
     arguments = dict(
         ticker="KO", company_market_value=427_000, candidates_to_check=20, biggest_size_gap=10,
-        how_many=5, fetch_candidates=fake_candidates, fetch_quote=COCA_COLA_PEER_QUOTES.__getitem__,
+        how_many=5, sector_candidates_to_check=30, minimum_industry_peers=2,
+        fetch_candidates=fake_candidates, fetch_sector=lambda ticker, how_many: [],
+        fetch_quote=COCA_COLA_PEER_QUOTES.__getitem__,       # no quote for KO itself: ranked by size, as before
     )
     arguments.update(kwargs)
     return data.suggest_peers(**arguments)
@@ -737,7 +740,7 @@ def test_a_company_with_no_suitable_peers_gets_empty_lists_not_an_error():
     got = suggest_for_coca_cola(company_market_value=5_000_000)      # like Apple: nothing close in size
     assert got == {
         "peer_tickers": [], "peer_ev_sales": [], "peer_ev_ebitda": [], "peer_pe": [],
-        "peer_operating_margin": [],
+        "peer_operating_margin": [], "peer_source": None,
     }
 
 
@@ -812,12 +815,14 @@ def test_fetch_peer_quote_turns_the_market_value_into_millions_and_picks_the_mul
     FakeInfoTicker.infos = {"PEP": {
         "marketCap": 200_363_819_008, "currency": "USD", "enterpriseToRevenue": 2.434,
         "enterpriseToEbitda": 12.472, "trailingPE": 18.50692, "operatingMargins": 0.16046,
+        "revenueGrowth": 0.04,
     }}
     monkeypatch.setattr("yfinance.Ticker", FakeInfoTicker)
     got = data.fetch_peer_quote("PEP")
     assert got == {
         "ticker": "PEP", "market_cap": pytest.approx(200_363.819008), "currency": "USD",
         "ev_sales": 2.434, "ev_ebitda": 12.472, "pe": 18.50692, "operating_margin": 0.16046,
+        "revenue_growth": 0.04,
     }
 
 
@@ -826,7 +831,7 @@ def test_fetch_peer_quote_gives_none_for_a_figure_yahoo_does_not_have(monkeypatc
     monkeypatch.setattr("yfinance.Ticker", FakeInfoTicker)
     got = data.fetch_peer_quote("LOSS")
     assert got["pe"] is None and got["ev_ebitda"] is None and got["ev_sales"] is None
-    assert got["operating_margin"] is None
+    assert got["operating_margin"] is None and got["revenue_growth"] is None
     assert data.fetch_peer_quote("UNKNOWN")["market_cap"] is None
 
 
@@ -1144,3 +1149,133 @@ def test_columns_that_are_not_dates_give_no_period_date(monkeypatch):
     monkeypatch.setattr("yfinance.Ticker", fake_statements_ticker())    # the page tests' fake has no quarterly statements at all
     with pytest.raises(ValueError, match="Could not get the last twelve months"):
         data.get_ttm("ADBE")
+
+
+# ---------------------------------------------------------------------------
+# Peers by profile (margin and growth), and a top-up from the wider sector
+# ---------------------------------------------------------------------------
+
+# Adobe-like: worth about 94,000, a margin of 36% and growth of 13%. Market values in $ millions.
+PROFILE_QUOTES = {
+    "ME": quote("ME", 94_000, operating_margin=0.36, revenue_growth=0.13),
+    "INTU": quote("INTU", 93_000, operating_margin=0.29, revenue_growth=0.14),
+    "SNOW": quote("SNOW", 99_000, operating_margin=-0.22, revenue_growth=0.35),
+    "CDNS": quote("CDNS", 85_000, operating_margin=0.30, revenue_growth=0.22),
+    "ADSK": quote("ADSK", 60_000, operating_margin=0.28, revenue_growth=0.16),
+    "PAYX": quote("PAYX", 40_000, operating_margin=0.40, revenue_growth=0.05),
+    "TINY": quote("TINY", 1_000, operating_margin=0.36, revenue_growth=0.13),             # a perfect profile but far too small
+    "SEC1": quote("SEC1", 100_000, operating_margin=0.35, revenue_growth=0.12),           # sector: a near-perfect profile
+    "SEC2": quote("SEC2", 80_000, operating_margin=0.30, revenue_growth=0.10),
+    "SEC3": quote("SEC3", 120_000, operating_margin=0.20, revenue_growth=0.30),
+    "SECP": quote("SECP", 90_000, currency="GBp", operating_margin=0.36, revenue_growth=0.13),        # not in dollars
+}
+
+
+def suggest_by_profile(industry, sector=(), **kwargs):
+    arguments = dict(
+        ticker="ME", company_market_value=94_000, candidates_to_check=20, biggest_size_gap=10, how_many=5,
+        sector_candidates_to_check=30, minimum_industry_peers=2,
+        fetch_candidates=lambda ticker, how_many: list(industry)[:how_many],
+        fetch_sector=lambda ticker, how_many: list(sector)[:how_many],
+        fetch_quote=PROFILE_QUOTES.__getitem__,
+    )
+    arguments.update(kwargs)
+    return data.suggest_peers(**arguments)
+
+
+def test_suggested_peers_are_ranked_by_how_much_they_look_like_the_company():
+    got = suggest_by_profile(["SNOW", "CDNS", "INTU", "PAYX", "ADSK", "TINY"])
+    # Against 36% and 13%: INTU 0.08, ADSK 0.11, PAYX 0.12, CDNS 0.15, SNOW 0.80. TINY is too small.
+    assert got["peer_tickers"] == ["INTU", "ADSK", "PAYX", "CDNS", "SNOW"]
+    assert got["peer_source"] == "industry"
+
+
+def test_without_the_companys_own_profile_the_peers_are_ranked_by_size():
+    def no_own_quote(symbol):
+        if symbol == "ME":
+            raise ConnectionError("no answer")
+        return PROFILE_QUOTES[symbol]
+
+    got = suggest_by_profile(["SNOW", "CDNS", "INTU", "PAYX", "ADSK"], fetch_quote=no_own_quote)
+    assert got["peer_tickers"] == ["INTU", "SNOW", "CDNS", "ADSK", "PAYX"]            # 93k, 99k, 85k, 60k, 40k around 94k
+
+
+def test_a_company_with_too_few_industry_peers_is_topped_up_from_its_sector():
+    # Only INTU is in the industry list; the sector has three more suitable companies and one in pence.
+    got = suggest_by_profile(["INTU"], sector=["SEC3", "SEC1", "SECP", "SEC2", "INTU"])
+    assert got["peer_tickers"] == ["INTU", "SEC1", "SEC2", "SEC3"]                      # INTU first, then the sector's by profile
+    assert got["peer_source"] == "sector"
+    assert "SECP" not in got["peer_tickers"]                                           # not in dollars
+    assert got["peer_tickers"].count("INTU") == 1                                      # not listed twice
+
+
+def test_the_top_up_never_makes_the_list_longer_than_asked_for():
+    got = suggest_by_profile(["INTU"], sector=["SEC1", "SEC2", "SEC3"], how_many=3)
+    assert got["peer_tickers"] == ["INTU", "SEC1", "SEC2"]
+
+
+def test_a_company_whose_industry_gives_enough_peers_is_not_topped_up():
+    def never(ticker, how_many):
+        raise AssertionError("the sector must not be looked up")
+
+    got = suggest_by_profile(["INTU", "ADSK"], fetch_sector=never)                      # two suitable peers is enough
+    assert got["peer_tickers"] == ["INTU", "ADSK"] and got["peer_source"] == "industry"
+
+
+def test_a_company_with_no_industry_peers_gets_the_sectors():
+    got = suggest_by_profile([], sector=["SEC2", "SEC1"])
+    assert got["peer_tickers"] == ["SEC1", "SEC2"] and got["peer_source"] == "sector"
+
+
+def test_without_any_suitable_peers_even_in_the_sector_the_lists_are_empty():
+    got = suggest_by_profile(["TINY"], sector=["TINY", "SECP"])
+    assert got["peer_tickers"] == [] and got["peer_source"] is None
+
+
+def test_a_sector_list_that_cannot_be_had_just_means_no_top_up():
+    def down(ticker, how_many):
+        raise ConnectionError("no internet")
+
+    got = suggest_by_profile(["INTU"], fetch_sector=down)
+    assert got["peer_tickers"] == ["INTU"] and got["peer_source"] == "industry"
+
+
+def test_sector_companies_that_cannot_be_read_just_mean_no_top_up():
+    def sector_unreadable(symbol):
+        if symbol.startswith("SEC"):
+            raise ConnectionError("no answer")
+        return PROFILE_QUOTES[symbol]
+
+    got = suggest_by_profile(["INTU"], sector=["SEC1", "SEC2"], fetch_quote=sector_unreadable)
+    assert got["peer_tickers"] == ["INTU"] and got["peer_source"] == "industry"
+
+
+def test_the_top_up_applies_the_same_size_filter():
+    got = suggest_by_profile(["INTU"], sector=["TINY"])                                # a perfect profile, but 94 times too small
+    assert got["peer_tickers"] == ["INTU"]
+
+
+# The sector lookup that really talks to Yahoo, with yfinance faked.
+
+class FakeSector:
+    """A stand-in for yfinance.Sector: the sector holds the company and two others."""
+    def __init__(self, key):
+        self.top_companies = None if key == "nothing" else pd.DataFrame(
+            {"name": ["a", "b", "c"]}, index=["ME", "AAA", "BBB"]
+        )
+
+
+def test_fetch_sector_candidates_lists_the_sector_without_the_company_itself(monkeypatch):
+    FakeInfoTicker.infos = {"ME": {"sectorKey": "technology"}}
+    monkeypatch.setattr("yfinance.Ticker", FakeInfoTicker)
+    monkeypatch.setattr("yfinance.Sector", FakeSector)
+    assert data.fetch_sector_candidates("ME", 30) == ["AAA", "BBB"]
+    assert data.fetch_sector_candidates("ME", 1) == ["AAA"]
+
+
+def test_fetch_sector_candidates_gives_nothing_when_yahoo_has_no_sector(monkeypatch):
+    FakeInfoTicker.infos = {"ODD": {}, "NOTHING": {"sectorKey": "nothing"}}
+    monkeypatch.setattr("yfinance.Ticker", FakeInfoTicker)
+    monkeypatch.setattr("yfinance.Sector", FakeSector)
+    assert data.fetch_sector_candidates("ODD", 30) == []
+    assert data.fetch_sector_candidates("NOTHING", 30) == []

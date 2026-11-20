@@ -573,13 +573,27 @@ def size_gap(company_value, other_value):
     return max(ratio, 1 / ratio)
 
 
-def closest_peers(company_value, candidates, biggest_size_gap, how_many):
-    """From the candidate peers, pick the ones closest in size (market value) to the company.
+def profile_distance(company_margin, company_growth, peer_margin, peer_growth):
+    """Say how different a peer's business looks from the company's: the gap in operating margin
+    plus the gap in revenue growth, in decimals (0.10 is ten percentage points), counting both
+    equally. A rough stand-in for "a similar business". Gives None if any of the four figures is
+    missing.
+    """
+    figures = (company_margin, company_growth, peer_margin, peer_growth)
+    if any(figure is None or figure != figure for figure in figures):         # figure != figure: not a number
+        return None
+    return abs(peer_margin - company_margin) + abs(peer_growth - company_growth)
 
-    Each candidate is a dictionary with a "market_cap". A candidate with no market value, or
-    one more than biggest_size_gap times bigger or smaller than the company, is left out; the
-    rest are ordered from closest to furthest, and the first how_many are returned. The
-    candidates come back unchanged.
+
+def closest_peers(company_value, candidates, biggest_size_gap, how_many, company_margin=None, company_growth=None):
+    """From the candidate peers, pick the ones that look most like the company.
+
+    Each candidate is a dictionary with a "market_cap", and an "operating_margin" and a
+    "revenue_growth" if known. A candidate with no market value, or one more than biggest_size_gap
+    times bigger or smaller than the company, is left out. The rest are ordered by profile_distance
+    (closest margin and growth first); candidates without a distance, and every candidate if the
+    company's own margin or growth is not given, come after those that have one, ordered by how
+    close they are in size. The first how_many are returned, unchanged.
     """
     in_range = [
         candidate
@@ -588,7 +602,14 @@ def closest_peers(company_value, candidates, biggest_size_gap, how_many):
         and candidate["market_cap"] > 0
         and size_gap(company_value, candidate["market_cap"]) <= biggest_size_gap
     ]
-    in_range.sort(key=lambda candidate: size_gap(company_value, candidate["market_cap"]))
+
+    def ranking(candidate):
+        distance = profile_distance(
+            company_margin, company_growth, candidate.get("operating_margin"), candidate.get("revenue_growth")
+        )
+        return (distance is None, distance or 0, size_gap(company_value, candidate["market_cap"]))
+
+    in_range.sort(key=ranking)
     return in_range[:how_many]
 
 

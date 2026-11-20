@@ -1466,3 +1466,67 @@ def test_a_loss_over_the_last_twelve_months_has_no_pe_or_ev_ebitda():
     assert got["pe"] is None and got["ev_ebitda"] is None          # EBITDA is -60
     assert got["operating_margin"] == close(-0.09)                 # a loss is still a negative margin
     assert got["ev_sales"] == close((1000 + 150) / 1000)           # enterprise value is 1,150
+
+
+# ---------------------------------------------------------------------------
+# Peers by business profile (margin and growth), not only by size (hand-worked: a screening rule)
+# ---------------------------------------------------------------------------
+
+def test_profile_distance_is_the_margin_gap_plus_the_growth_gap():
+    # Adobe (margin 36%, growth 13%) against Intuit (29%, 14%): 7 points + 1 point.
+    assert v.profile_distance(0.36, 0.13, 0.29, 0.14) == close(0.08)
+    assert v.profile_distance(0.36, 0.13, 0.36, 0.13) == 0                 # identical profiles
+
+
+def test_profile_distance_counts_a_gap_above_and_below_alike():
+    assert v.profile_distance(0.30, 0.10, 0.40, 0.10) == close(v.profile_distance(0.30, 0.10, 0.20, 0.10))
+
+
+def test_profile_distance_is_none_when_any_figure_is_missing():
+    assert v.profile_distance(None, 0.1, 0.2, 0.1) is None
+    assert v.profile_distance(0.3, 0.1, None, 0.1) is None
+    assert v.profile_distance(0.3, 0.1, 0.2, float("nan")) is None
+
+
+# Adobe-like candidates (market values in $ millions; Adobe is worth about 94,000).
+ADOBE_LIKE_CANDIDATES = [
+    {"ticker": "CDNS", "market_cap": 85_000, "operating_margin": 0.30, "revenue_growth": 0.22},
+    {"ticker": "INTU", "market_cap": 93_000, "operating_margin": 0.29, "revenue_growth": 0.14},
+    {"ticker": "SNOW", "market_cap": 99_000, "operating_margin": -0.22, "revenue_growth": 0.35},
+    {"ticker": "PAYX", "market_cap": 40_000, "operating_margin": 0.40, "revenue_growth": 0.05},
+    {"ticker": "ADSK", "market_cap": 60_000, "operating_margin": 0.28, "revenue_growth": 0.16},
+]
+
+
+def test_peers_are_ranked_by_margin_and_growth_not_by_size():
+    chosen = v.closest_peers(94_000, ADOBE_LIKE_CANDIDATES, 10, 5, company_margin=0.36, company_growth=0.13)
+    # Distances from Adobe (36%, 13%): INTU 0.07 + 0.01 = 0.08, ADSK 0.08 + 0.03 = 0.11,
+    # PAYX 0.04 + 0.08 = 0.12, CDNS 0.06 + 0.09 = 0.15, SNOW 0.58 + 0.22 = 0.80.
+    assert [peer["ticker"] for peer in chosen] == ["INTU", "ADSK", "PAYX", "CDNS", "SNOW"]
+    # By size alone Snowflake (99k against Adobe's 94k) would have come second: the loss-maker is the least like Adobe.
+
+
+def test_the_size_filter_still_applies_when_ranking_by_profile():
+    giant = {"ticker": "GIANT", "market_cap": 5_000_000, "operating_margin": 0.36, "revenue_growth": 0.13}   # a perfect profile, 53 times the size
+    chosen = v.closest_peers(94_000, ADOBE_LIKE_CANDIDATES + [giant], 10, 5, company_margin=0.36, company_growth=0.13)
+    assert "GIANT" not in [peer["ticker"] for peer in chosen]
+
+
+def test_candidates_without_a_margin_or_growth_come_after_those_with_one_ordered_by_size():
+    unknown_near = {"ticker": "NEAR", "market_cap": 95_000}                    # no profile, almost the same size
+    unknown_far = {"ticker": "FAR", "market_cap": 20_000}                      # no profile, much smaller
+    chosen = v.closest_peers(94_000, [unknown_far, unknown_near] + ADOBE_LIKE_CANDIDATES, 10, 7, company_margin=0.36, company_growth=0.13)
+    tickers = [peer["ticker"] for peer in chosen]
+    assert tickers[-2:] == ["NEAR", "FAR"]                                     # after every candidate with a profile
+    assert set(tickers[:5]) == {"CDNS", "INTU", "SNOW", "PAYX", "ADSK"}
+
+
+def test_without_the_companys_own_margin_or_growth_the_ranking_is_by_size_as_before():
+    chosen = v.closest_peers(94_000, ADOBE_LIKE_CANDIDATES, 10, 5)
+    assert [peer["ticker"] for peer in chosen] == ["INTU", "SNOW", "CDNS", "ADSK", "PAYX"]     # 93k, 99k, 85k, 60k, 40k by closeness to 94k
+    assert v.closest_peers(94_000, ADOBE_LIKE_CANDIDATES, 10, 5, company_margin=0.36) == chosen    # growth missing too
+
+
+def test_the_first_how_many_by_profile_are_returned():
+    chosen = v.closest_peers(94_000, ADOBE_LIKE_CANDIDATES, 10, 2, company_margin=0.36, company_growth=0.13)
+    assert [peer["ticker"] for peer in chosen] == ["INTU", "ADSK"]
