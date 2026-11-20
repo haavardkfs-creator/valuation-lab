@@ -249,20 +249,28 @@
   the market price implies, scenarios, assumptions, WACC, charts, sensitivity tables and peer multiples). The same
   goes for a discount rate at or below terminal growth. A bad ticker or missing data still gets only the error. No
   new maths, so no Excel step. 705 tests pass (one test rewritten, two added). Merged (pull request 52).
-- Done (in the open pull request): P/S added to the multiples, and counted in the middle price. Haavard built it
+- Done: P/S added to the multiples, and counted in the middle price. Haavard built it
   in the `Multiples` sheet (G7:G13 peer P/S and median, row 30 the implied price, C35:C37 now over H27:H30, C66
   Adobe's own P/S). `price_from_ps` and `run_multiples` in `valuation.py` match the cells: P/S median 4.97x, price
   $286.03, the middle of the four prices $377.05 (was $420.52), DCF vs multiples -18.9% (was -27.3%). Yahoo's and
   Financial Modeling Prep's peer lookups both give P/S (FMP's `priceToSalesRatioTTM`, checked live against Yahoo:
   Apple 10.396 on both), the peer table has a P/S column, and a peer can be flagged "P/S outlier". Adobe's
   frozen snapshot has the four P/S of 20 Nov 2026, the other three columns are from April. 710 tests pass.
-  Forward P/E is the next pull request (Yahoo already gives next year's analyst EPS, so no FMP requests).
-- Next: forward P/E (roadmap #10, Excel first; adjusted analyst EPS, so forward is compared with forward), then #11
-  (thesis and export, with design talk first). Small item waiting for Haavard's decision: a one-time net income
+  Merged (pull request 53).
+- Done (in the open pull request): forward P/E added, the fifth multiple, counted in the middle price. Haavard built it in
+  the `Multiples` sheet (rows 68-77: the peers' forward P/E, their median 14.25 and Adobe's next-year EPS 27.41; row 31 the
+  price; C35:C37 now over H27:H31). `price_from_forward_pe` and `run_multiples` in `valuation.py` match the cells:
+  forward P/E price $390.59, the middle of the five prices $390.59 (was $377.05), DCF vs multiples -21.8% (was
+  -18.9%). Yahoo supplies both the peers' forward P/E and the company's own next-year EPS for free (so no FMP requests),
+  converted to dollars at the share price's rate; the page says "No estimate" when there is none, and a peer can be flagged
+  "Forward P/E outlier". With Yahoo down the FMP backup gives no forward P/E (it would cost requests). 723 tests pass.
+- Next: #11 (thesis and export, with design talk first). Small item waiting for Haavard's decision: a one-time net income
   adjustment (for the P/E).
 - Open:
-  - P/S has no glossary entry yet: Haavard writes the wording in `docs/glossary.md`, then it goes into
+  - P/S and forward P/E have no glossary entries yet: Haavard writes the wording in `docs/glossary.md`, then it goes into
     `explanations.py` and the multiples box (it holds EV/Sales, EV/EBITDA and P/E today).
+  - Forward P/E uses analysts' adjusted EPS, which can sit far above GAAP EPS (Adobe 27.41 against 17.91). Fine for
+    forward against forward, but the price from it leans on analysts' optimism; also only next year, not further out.
   - Ideas from Haavard (20 Nov 2026), not started: show recent news and management changes for a company (Yahoo has
     a list of officers and a news feed per ticker, probably free), and the important macro factors (interest rates,
     inflation, oil; the Federal Reserve's free FRED service is the usual source and needs its own key; interest
