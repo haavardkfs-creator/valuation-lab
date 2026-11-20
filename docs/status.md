@@ -265,15 +265,28 @@
   converted to dollars at the share price's rate; the page says "No estimate" when there is none, and a peer can be flagged
   "Forward P/E outlier". With Yahoo down the FMP backup gives no forward P/E (it would cost requests). 723 tests pass.
   Merged (pull request 54).
-- Done (in the open pull request): #11, part 1 of 3, news and management. A "News and management" section at the end of
+- Done: #11, part 1 of 3, news and management (merged, pull request 55). A "News and management" section at the end of
   the page, for every company that loads (Ford too): the 5 most recent Yahoo headlines as links, with publisher and date,
   and Yahoo's top 5 officers with titles. Headlines and names are shown safely (formatting characters escaped, only
   https links), and if Yahoo cannot give them the section says so and the page carries on. No maths, so no Excel step.
   756 tests pass (33 new).
-- Next: #11 part 2, the macro backdrop (FRED; Haavard registers a free key first), then part 3, the thesis page with Haavard's
-  own reasons boxes and a Markdown download (nothing saved on the server). Small item waiting for Haavard's decision: a one-time net income
-  adjustment (for the P/E).
+- Done (in the open pull request): redesign Phase 1 of 5, the design system. Haavard asked for a much more professional
+  look (answer first, football field and other charts, tabs, polish). Phase 1 changes only how things look: a dark navy
+  theme in `.streamlit/config.toml` (colours, rounded corners, the Inter font, chart colours) and a new `theme.py` that
+  holds the same six-colour palette as Python constants, the card styling (rounded, bordered, soft shadow), a readable-text
+  chooser, and `money_short` ($1.2B). The heatmap tint now works on dark (its strongest tint is capped so the text stays at
+  4.5 contrast). `test_theme.py` (36 tests) checks every colour for readability, that the two files agree, and the number
+  format. No valuation logic or text changed: all 756 earlier tests pass unchanged; 792 pass in all. Haavard chose: dark
+  navy (replacing the earlier light-theme decision), one pull request per phase, existing number formats kept (the new
+  style only in new visuals), English.
+- Next: redesign Phase 2, the "answer first" header (company name, four KPI cards, verdict badge, 12-month sparkline).
+  Phases 3 (Plotly charts: football field, waterfall, cash flow, heatmap, peers, terminal value share), 4 (tabs, layout,
+  mobile) and 5 (polish) follow, one at a time on Haavard's OK. #11 part 2 (macro backdrop, needs a free FRED key) and part 3
+  (thesis page with Haavard's reasons boxes and a Markdown download) wait until after the redesign.
 - Open:
+  - CLAUDE.md still says "Light theme in config.toml, colours only" under "Already decided", and lists `.streamlit/config.toml`
+    as "Theme settings only" with no row for `theme.py` or `test_theme.py`. Haavard changes his own rules file: the lines
+    to update are given in the pull request description.
   - P/S and forward P/E have no glossary entries yet: Haavard writes the wording in `docs/glossary.md`, then it goes into
     `explanations.py` and the multiples box (it holds EV/Sales, EV/EBITDA and P/E today).
   - Forward P/E uses analysts' adjusted EPS, which can sit far above GAAP EPS (Adobe 27.41 against 17.91). Fine for
