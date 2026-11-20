@@ -237,6 +237,12 @@
   `MARKET_BETA` are in `assumptions.py`. Applies to every company except Adobe (Adobe's base case stays $305.60). The page
   shows both betas and says when a tax rate was replaced. Pfizer's DCF goes from $96 to $65 against a market price of $28.
   17 new tests, 4 updated; 690 tests pass.
+- Done (in the open pull request): the cash flow check. Investigating Pfizer (DCF $65, market $28) found no bug:
+  about $7bn of costs sit between its operating profit and its pre-tax income and the model cannot see them.
+  Haavard built the check in `history` rows 37-49; `free_cash_flow_check` in `valuation.py` matches it, the limit
+  (1.25) is in `assumptions.py`, and the History section warns when the model's free cash flow for the last year
+  is more than 25% above the reported one (Pfizer 1.83; nine other real companies are quiet). 13 new tests; 703
+  tests pass.
 - Next: roadmap #10 (forward multiples) and #11 (thesis and export), as below. Small items waiting for Haavard's decision:
   a one-time net income adjustment (for the P/E), and drawing the overview and history even when the DCF cannot be built.
 - Open:
@@ -245,9 +251,10 @@
     profit", because the starting point needs last year's tax rate, and nothing below it is drawn. The
     overview and the history do not need a tax rate and would help most here. Needs a decision: draw them
     even when the DCF cannot be built.
-  - Pfizer's DCF price is still $65 against a market price of $28 (20 Nov 2026), even with the adjusted beta and the
-    normal tax rate; its WACC is 6.4%. The rest of the gap is not explained: the starting point holds last year's margin
-    flat, and the terminal value cautions still fire. Worth a look at what Pfizer's last year contains before trusting it.
+  - Pfizer's DCF price is still $65 against a market price of $28 (20 Nov 2026). Investigated: no bug, but the model
+    cannot see about $7bn of costs between its operating profit and its pre-tax income, nor a possible patent cliff (the
+    market implies about -13.6% revenue growth a year). The History section now warns about the cash flow gap; typing
+    -7000 into the one-off box takes the DCF to $42. What the $7bn is can be read in the 10-K's "other (income)/deductions".
   - The live app has a backup for Yahoo now (Financial Modeling Prep), but only for US companies, and the free plan's 250
     requests a day would run out after roughly twenty fresh companies. After the pull request is merged: add
     `FMP_API_KEY` to Streamlit Cloud's Secrets (App settings, Secrets) and reboot the app. The key was shown in a

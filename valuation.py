@@ -315,6 +315,22 @@ def last_year_free_cash_flow(ebit, tax_rate, depreciation_and_amortisation, cape
     )
 
 
+def free_cash_flow_check(model_free_cash_flow, reported_free_cash_flow, limit):
+    """Compare the cash the model says the business made last year with the cash the company reports
+    (workbook: `history` rows 45-49). The ratio is the model's over the reported figure; it is a warning
+    when it is above `limit`, which means the model is much more generous than the company's own cash
+    flow. A ratio below 1 is normal (reported free cash flow adds back share-based pay) and never warns.
+    Returns None when either figure is missing, or when the reported figure is zero or negative, because
+    the ratio would then mean nothing.
+    """
+    ratio = None
+    if model_free_cash_flow is not None and reported_free_cash_flow is not None:
+        ratio = ratio_or_none(model_free_cash_flow, reported_free_cash_flow)
+    if ratio is None:
+        return None
+    return {"ratio": ratio, "warn": ratio > limit}
+
+
 def margin_gap(company_margin, peer_margins, minimum_peers):
     """Work out how far the company's operating margin is above (positive) or below (negative)
     the middle of its peers' margins, in decimals (0.10 is ten percentage points). Gives None if

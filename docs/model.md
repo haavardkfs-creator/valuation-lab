@@ -404,6 +404,27 @@ last fiscal year). They are the last row of the Overview, and cash conversion is
 - The equity is Yahoo's stockholders' equity for the last fiscal year, converted to US dollars for a company
   that reports in another currency; for Adobe it is typed into the snapshot ($11,623m, `history` C26).
 
+## Cash flow check
+
+(workbook: sheet `history`, rows 37-49, Pfizer FY2025.) The History section already quoted two free cash flow
+figures for the last year: the one the company reports (cash from operations minus capital spending) and the
+model's own (operating profit after tax, plus depreciation, minus capex, plus working capital). This check turns the
+gap into a warning when it is large.
+- Ratio = the model's free cash flow / the reported one. Pfizer: 16,631.73 / 9,075 = 1.83 (C47). The model's figure
+  uses last year's tax rate as reported, here -3.54%.
+- The page warns when the ratio is above 1.25 (C48 and C49: "Warn" above the limit, "OK" at or below it). A made-up
+  reported figure of 14,000 gives 1.19, so no warning (D47, D49).
+- A ratio below 1 never warns: the reported figure adds back share-based pay, which the model does not, so the model
+  is usually the lower one (Coca-Cola 0.75, Apple 0.89, Microsoft 0.64).
+- No check when either figure is missing or the reported one is zero or negative, because the ratio would mean
+  nothing.
+- What a warning means: something between operating profit and cash is left out of the model. For Pfizer, about $7bn
+  of costs sit between its operating profit ($17.4bn) and its pre-tax income ($7.5bn), beyond $2.7bn of interest, and the
+  model ignores them. The reader is told to check the annual report or to adjust operating income in the sidebar (an
+  adjustment of -$7,000m takes Pfizer's DCF from $65 to $42 against a market price of $28).
+- On live data (20 Nov 2026) only Pfizer warns: Merck 1.13, Nvidia 0.95, Apple 0.89, Coca-Cola 0.75, Microsoft 0.64,
+  Exxon 0.61, First Solar 0.94 do not.
+
 ## Is the latest year typical?
 
 The DCF's starting point for another company is built from its last year alone, and one year can be a

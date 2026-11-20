@@ -1558,6 +1558,55 @@ def test_the_starting_point_without_a_normal_rate_is_unchanged():
 
 
 # ---------------------------------------------------------------------------
+# The cash flow check (workbook: `history` rows 37-49, Pfizer FY2025)
+# ---------------------------------------------------------------------------
+
+CASH_FLOW_RATIO_LIMIT = 1.25                    # history C48; assumptions.FREE_CASH_FLOW_RATIO_WARNING
+
+
+def pfizers_model_free_cash_flow():
+    """Pfizer's last year the way the model builds it: history C38:C45."""
+    tax_rate = -266 / 7520                      # C41
+    return v.last_year_free_cash_flow(17407, tax_rate, 6592, 2629, -5354)
+
+
+def test_the_models_free_cash_flow_for_pfizer_matches_the_sheet():
+    assert pfizers_model_free_cash_flow() == close(16631.726329787234)            # C45
+
+
+def test_the_cash_flow_ratio_and_the_warning_match_the_sheet_for_pfizer():
+    check = v.free_cash_flow_check(pfizers_model_free_cash_flow(), 9075, CASH_FLOW_RATIO_LIMIT)
+    assert check["ratio"] == close(1.8326971162299983)                            # C47
+    assert check["warn"] is True                                                  # C49: "Warn"
+
+
+def test_the_made_up_example_in_the_sheet_does_not_warn():
+    check = v.free_cash_flow_check(pfizers_model_free_cash_flow(), 14000, CASH_FLOW_RATIO_LIMIT)
+    assert check["ratio"] == close(1.1879804521276596)                            # D47
+    assert check["warn"] is False                                                 # D49: "OK"
+
+
+def test_a_model_cash_flow_below_the_reported_one_never_warns():
+    check = v.free_cash_flow_check(5000, 9000, CASH_FLOW_RATIO_LIMIT)
+    assert check["ratio"] < 1 and check["warn"] is False
+
+
+def test_a_ratio_exactly_at_the_limit_does_not_warn():
+    assert v.free_cash_flow_check(12500, 10000, 1.25)["warn"] is False            # the sheet's rule is "above the limit"
+
+
+def test_there_is_no_check_without_both_figures_or_with_reported_cash_flow_at_or_below_zero():
+    assert v.free_cash_flow_check(None, 9075, CASH_FLOW_RATIO_LIMIT) is None
+    assert v.free_cash_flow_check(16000, None, CASH_FLOW_RATIO_LIMIT) is None
+    assert v.free_cash_flow_check(16000, 0, CASH_FLOW_RATIO_LIMIT) is None
+    assert v.free_cash_flow_check(16000, -500, CASH_FLOW_RATIO_LIMIT) is None
+
+
+def test_a_loss_making_company_with_a_model_loss_is_not_checked():
+    assert v.free_cash_flow_check(-4687, -4949, CASH_FLOW_RATIO_LIMIT) is None   # Intel's two negatives: no ratio
+
+
+# ---------------------------------------------------------------------------
 # Trailing twelve months (workbook: `ttm` sheet, Adobe, the four quarters to 31 Aug 2026)
 # ---------------------------------------------------------------------------
 
