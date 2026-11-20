@@ -775,3 +775,25 @@ with no figures yet (Nvidia), so the latest four quarters with revenue are used;
 there. If the quarters cannot be had, the page keeps the fiscal year and says so. The margin warning
 against peers now uses the TTM margin, which makes it like for like (First Solar's gap is 31.4 points, not
 24.3). No new files.
+
+## 2026-11-19 — Suggest peers by profile, and top up from the sector (roadmap #5c)
+
+The hard part of the peer-robustness item: choosing peers by business type, not size. Yahoo only has an
+industry and a sector, so there is no real business description to match on. Three ideas were tried on real
+companies and Haavard agreed to the first two together: rank the industry's candidates by how close their
+operating margin and revenue growth are to the company's (equal weights, size kept only as a filter of a
+tenth to ten times), and top up from the wider sector when the industry gives fewer than 2 suitable peers,
+labelled so the reader checks them. The third idea, doing nothing more, remained as the editable box. It is
+a screening rule, so no Excel step; it is written up in `docs/model.md` ("Suggesting peers"). Results: Adobe's
+size ranking had brought in Snowflake (a loss-maker); by profile Intuit, Autodesk and Cadence come first;
+Pfizer gains Johnson & Johnson; Apple and Microsoft get large technology companies with the sector note;
+First Solar is not topped up, which is right because its sector top-up would be Seagate, ADP and Accenture.
+In `valuation.py`, `profile_distance` is new and `closest_peers` ranks by it (candidates without a margin or
+growth, or a company without its own, fall back to size, so the old behaviour is kept when profile data is
+missing). In `data.py`, the quotes now carry revenue growth, `fetch_sector_candidates` is new, and
+`suggest_peers` ranks, tops up and says where the peers came from (`peer_source`); a sector that cannot be
+had only means no top-up. `PEER_SECTOR_CANDIDATES_TO_CHECK` (30) is a named constant. The page's caption,
+the peer box's tooltip and a note for sector-sourced peers say what was done; the note disappears when the
+reader edits the box. A first load that needs the sector is slower (about 11 to 12 seconds on live data, 5
+to 8 otherwise). Known limits: growth is the latest quarter against a year earlier, so it is noisy; "closest
+in margin and growth" is not "most similar business". No new files.

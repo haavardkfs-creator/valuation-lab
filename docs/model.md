@@ -129,13 +129,25 @@ other than Adobe, the page suggests peers, which the reader can change:
 - Keep only peers within 10 times the company's market value, bigger or smaller: a peer a tenth
   of its size, or ten times its size, is the limit. A company twice as big and one half the size
   are both "2 away".
-- Suggest the 5 closest in size. A company with fewer than 5 suitable peers gets fewer, and one
-  with none (Apple, whose Yahoo industry holds only tiny companies) gets none, and types its own.
+- Suggest the 5 that look most like the company: the closest operating margin and revenue growth.
+  The profile distance of a peer = the gap in operating margin + the gap in revenue growth, counted
+  equally (Adobe, with 36% and 13%, is 0.08 away from Intuit's 29% and 14%). A peer without a margin or
+  growth comes after those with one, ordered by size; if the company's own margin or growth is not
+  known, all are ordered by size. (Until 19 Nov 2026 the 5 were the closest in size, which brought
+  Snowflake, a loss-maker with a margin of -22%, into Adobe's peers.) Revenue growth is Yahoo's latest
+  quarter against a year earlier, so it is noisy; the score is only a rough sign of a similar business.
+- If the industry gives fewer than 2 suitable peers (Apple, Microsoft), the list is topped up from the
+  first 30 companies of the company's wider sector (technology rather than consumer electronics), under
+  the same rules, and the page says so and asks the reader to check them. A sector is only looked up in
+  that case; a company whose industry has enough peers (First Solar, with 3) is not topped up, because a
+  sector list can be far off (First Solar's would give Seagate, ADP and Accenture). A company with no
+  suitable peers anywhere gets none, and types its own.
 - The peers' EV/Sales, EV/EBITDA and P/E come from the same Yahoo lookup (trailing twelve months).
   A peer with no usable multiple is dealt with by the rule above.
-- On real data (16 Nov 2026): Coca-Cola gets PepsiCo, Monster and Keurig Dr Pepper; Adobe's
-  own industry list gives Snowflake, Intuit, ServiceNow, Cadence and ADP (Adobe keeps its
-  hand-chosen peers); Apple and Microsoft get fewer than 2 and would need typed peers.
+- On real data (19 Nov 2026): Coca-Cola gets Monster, PepsiCo and Keurig Dr Pepper; Pfizer gets Johnson &
+  Johnson, Bristol-Myers, Merck, Amgen and Gilead; First Solar gets Enphase, Nextracker and Sunrun; Apple
+  gets Microsoft, AMD, Broadcom, Nvidia and SK Hynix, and Microsoft gets Palantir, Apple, Cisco, AMD and
+  Broadcom (both from the sector); Adobe keeps its hand-chosen peers.
 
 How the page uses them (companies other than Adobe; Adobe keeps its four peers and has no box):
 - The sidebar has a "Peer tickers" box, filled in with the suggestions the first time a company

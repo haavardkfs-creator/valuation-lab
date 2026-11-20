@@ -555,10 +555,28 @@ def fetch_peer_candidates(ticker, how_many):
     return [symbol for symbol in top_companies.index if symbol != ticker][:how_many]
 
 
+def fetch_sector_candidates(ticker, how_many):
+    """Ask Yahoo Finance which companies are in the same sector as this one (a wider group than its
+    industry: technology, not software), and return the tickers of the first how_many (Yahoo lists
+    the most important first), leaving out the company itself. Returns an empty list if Yahoo does
+    not know the company's sector. This is the only function that looks up a sector on the internet.
+    """
+    import yfinance
+
+    sector_key = yfinance.Ticker(ticker).info.get("sectorKey")
+    if not sector_key:
+        return []
+    top_companies = yfinance.Sector(sector_key).top_companies
+    if top_companies is None:
+        return []
+    return [symbol for symbol in top_companies.index if symbol != ticker][:how_many]
+
+
 def fetch_peer_quote(ticker):
     """Ask Yahoo Finance for one peer's market value (in $ millions), the currency it trades in
-    its three multiples (EV/Sales, EV/EBITDA and P/E) and its operating margin, all trailing
-    twelve months. A figure Yahoo does not have comes back as None. This is the only function that looks up a peer on
+    its three multiples (EV/Sales, EV/EBITDA and P/E), its operating margin and its revenue growth
+    (the latest quarter against a year earlier), all as Yahoo gives them. A figure Yahoo does not
+    have comes back as None. This is the only function that looks up a peer on
     the internet.
     """
     import yfinance
@@ -573,6 +591,7 @@ def fetch_peer_quote(ticker):
         "ev_ebitda": info.get("enterpriseToEbitda"),
         "pe": info.get("trailingPE"),
         "operating_margin": info.get("operatingMargins"),
+        "revenue_growth": info.get("revenueGrowth"),
     }
 
 
@@ -601,29 +620,10 @@ def peer_multiples(tickers, fetch_quote=fetch_peer_quote):
         raise ValueError("Could not get peer figures from Yahoo Finance: %s" % error) from error
 
 
-def suggest_peers(
-    ticker,
-    company_market_value,
-    candidates_to_check,
-    biggest_size_gap,
-    how_many,
-    fetch_candidates=fetch_peer_candidates,
-    fetch_quote=fetch_peer_quote,
-):
-    """Suggest peers for a company: look at the first candidates_to_check companies in its
-    Yahoo industry, keep those that trade in US dollars and are within biggest_size_gap times
-    of the company's market value ($ millions), and return the how_many closest in size, with
-    their multiples (see peer_figures). Returns empty lists when nothing suitable is found.
-
-    One peer Yahoo cannot look up is skipped. Stops with a plain error if Yahoo cannot be
-    reached at all. The two fetch functions can be swapped, which is how the tests run without
-    the internet.
+def read_quotes(symbols, fetch_quote):
+    """Look up each peer, skipping one Yahoo cannot read. Stops with a plain error if there were
+    candidates and none could be read, which means Yahoo cannot be reached.
     """
-    try:
-        symbols = fetch_candidates(ticker, candidates_to_check)
-    except Exception as error:      # Yahoo can fail in many ways; the reader needs one clear message
-        raise ValueError("Could not get peers from Yahoo Finance: %s" % error) from error
-
     quotes = []
     for symbol in symbols:
         try:
@@ -631,11 +631,72 @@ def suggest_peers(
         except Exception:           # one unreadable peer should not hide the others
             continue
     if symbols and not quotes:
-        raise ValueError("Could not get peers from Yahoo Finance: none of the %d candidates could be read." % len(symbols))
+        raise ValueError(
+            "Could not get peers from Yahoo Finance: none of the %d candidates could be read." % len(symbols)
+        )
+    return quotes
 
-    in_dollars = [quote for quote in quotes if quote["currency"] == "USD"]
-    chosen = valuation.closest_peers(company_market_value, in_dollars, biggest_size_gap, how_many)
-    return peer_figures(chosen)
+
+def suggest_peers(
+    ticker,
+    company_market_value,
+    candidates_to_check,
+    biggest_size_gap,
+    how_many,
+    sector_candidates_to_check,
+    minimum_industry_peers,
+    fetch_candidates=fetch_peer_candidates,
+    fetch_sector=fetch_sector_candidates,
+    fetch_quote=fetch_peer_quote,
+):
+    """Suggest peers for a company: look at the first candidates_to_check companies in its Yahoo
+    industry, keep those that trade in US dollars and are within biggest_size_gap times of the
+    company's market value ($ millions), and return the how_many that look most like it, meaning
+    the closest operating margin and revenue growth (see valuation.closest_peers; if the company's
+    own margin or growth is unknown they are ranked by size), with their multiples (see peer_figures).
+
+    If the industry gives fewer than minimum_industry_peers suitable peers (Apple, Microsoft), the
+    list is topped up from the first sector_candidates_to_check companies in the company's wider
+    sector, chosen the same way. The answer also has "peer_source": "industry", "sector" (some or
+    all came from the wider sector, so the reader should check them), or None when nothing was found.
+    Returns empty lists when nothing suitable is found.
+
+    One peer Yahoo cannot look up is skipped. Stops with a plain error if Yahoo cannot be reached at
+    all; a sector list that cannot be had only means no top-up. The fetch functions can be swapped,
+    which is how the tests run without the internet.
+    """
+    try:
+        symbols = fetch_candidates(ticker, candidates_to_check)
+    except Exception as error:      # Yahoo can fail in many ways; the reader needs one clear message
+        raise ValueError("Could not get peers from Yahoo Finance: %s" % error) from error
+    quotes = read_quotes(symbols, fetch_quote)
+
+    try:
+        own = fetch_quote(ticker)
+        own_margin, own_growth = own["operating_margin"], own["revenue_growth"]
+    except Exception:               # without its own profile the ranking falls back to size
+        own_margin = own_growth = None
+
+    def best(candidate_quotes, limit):
+        in_dollars = [quote for quote in candidate_quotes if quote["currency"] == "USD"]
+        return valuation.closest_peers(
+            company_market_value, in_dollars, biggest_size_gap, limit, own_margin, own_growth
+        )
+
+    chosen, source = best(quotes, how_many), "industry"
+    if len(chosen) < minimum_industry_peers:
+        try:
+            sector_symbols = [
+                symbol for symbol in fetch_sector(ticker, sector_candidates_to_check) if symbol not in symbols
+            ]
+            extra = best(read_quotes(sector_symbols, fetch_quote), how_many - len(chosen))
+        except Exception:           # no sector list, or none could be read: keep what the industry gave
+            extra = []
+        if extra:
+            chosen, source = chosen + extra, "sector"
+    figures = peer_figures(chosen)
+    figures["peer_source"] = source if chosen else None
+    return figures
 
 
 # ---------------------------------------------------------------------------

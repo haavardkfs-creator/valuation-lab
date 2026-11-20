@@ -361,12 +361,12 @@ def test_a_low_wacc_company_gets_the_cautions_on_the_page(monkeypatch):
 # Peers for another company: suggested, editable, with the multiples that follow
 # ---------------------------------------------------------------------------
 
-def peer_info(market_cap_billions, ev_sales, ev_ebitda, pe, currency="USD", operating_margin=None):
+def peer_info(market_cap_billions, ev_sales, ev_ebitda, pe, currency="USD", operating_margin=None, revenue_growth=None):
     """What Yahoo says about a made-up peer."""
     return {
         "marketCap": market_cap_billions * 1_000_000_000, "currency": currency,
         "enterpriseToRevenue": ev_sales, "enterpriseToEbitda": ev_ebitda, "trailingPE": pe,
-        "operatingMargins": operating_margin,
+        "operatingMargins": operating_margin, "revenueGrowth": revenue_growth,
     }
 
 
@@ -1514,3 +1514,96 @@ def test_the_margin_warning_uses_the_last_twelve_months_margin():
     overview = app.apply_ttm({"operating_margin": 0.306, "ev_sales": 1, "ev_ebitda": 1, "pe": 1}, {"share_price": 150.98, "shares": 107}, ttm)
     warning = app.margin_gap_warning("First Solar", overview["operating_margin"], {"peer_operating_margin": [0.186, 0.006, 0.063]})
     assert "(37.7%) is 31.4 points above" in warning              # First Solar's TTM margin, not its fiscal-year 30.6%
+
+
+# ---------------------------------------------------------------------------
+# Peers by profile in the peer box, and the note when they come from the wider sector
+# ---------------------------------------------------------------------------
+
+def run_profile_page(monkeypatch, industry_peers, sector_peers=None):
+    """Run Example Corp's page (margin 36.6%, growth 10.5%, worth about $94bn) with made-up peers in its
+    industry and, if given, in its wider sector. Both are dictionaries of ticker -> Yahoo info.
+    """
+    import pandas as pandas_
+
+    sector_peers = sector_peers or {}
+    everyone = {**industry_peers, **sector_peers}
+
+    class Industry:
+        def __init__(self, key):
+            self.top_companies = pandas_.DataFrame({"name": ["x"] * (len(industry_peers) + 1)}, index=["EXMP", *industry_peers])
+
+    class Sector:
+        def __init__(self, key):
+            self.top_companies = pandas_.DataFrame({"name": ["x"] * (len(sector_peers) + 1)}, index=["EXMP", *sector_peers])
+
+    base = fake_statements_ticker(info=dict(
+        ADOBE_YAHOO_INFO, longName="Example Corp", industryKey="widgets", sectorKey="gadgets",
+        operatingMargins=0.366, revenueGrowth=0.105,
+    ))
+
+    class Fake(base):
+        def __init__(self, ticker):
+            super().__init__(ticker)
+            if ticker in everyone:
+                self.info = dict(everyone[ticker])
+
+    monkeypatch.setattr("yfinance.Industry", Industry)
+    monkeypatch.setattr("yfinance.Sector", Sector)
+    return run_page(monkeypatch, ticker="exmp", yahoo=Fake)
+
+
+# By size AAA (90bn) would come first, then BBB (80bn), then CCC (60bn). By profile against 36.6% and
+# 10.5%: CCC (35%, 10%) is closest, then AAA (30%, 12%), then BBB (5%, 40%).
+PROFILE_PEERS = {
+    "AAA": peer_info(90, 2.0, 12.0, 20.0, operating_margin=0.30, revenue_growth=0.12),
+    "BBB": peer_info(80, 3.0, 16.0, 30.0, operating_margin=0.05, revenue_growth=0.40),
+    "CCC": peer_info(60, 4.0, 10.0, 25.0, operating_margin=0.35, revenue_growth=0.10),
+}
+
+
+def test_the_peer_box_is_filled_in_with_the_peers_that_look_most_like_the_company(monkeypatch):
+    page = run_profile_page(monkeypatch, PROFILE_PEERS)
+    assert page.sidebar.text_input(key="peers_EXMP").value == "CCC, AAA, BBB"      # not AAA, BBB, CCC, which is by size
+
+
+def test_the_suggested_peers_caption_says_they_are_chosen_by_margin_and_growth(monkeypatch):
+    page = run_profile_page(monkeypatch, PROFILE_PEERS)
+    [caption] = [c for c in texts(page.caption) if c.startswith("Peers suggested from Yahoo's industry list")]
+    assert "operating margin and revenue growth are closest to the company's" in caption
+    assert "within a tenth to ten times its size" in caption
+    assert "closest in size" not in caption
+
+
+def test_no_sector_note_when_the_industry_gives_enough_peers(monkeypatch):
+    page = run_profile_page(monkeypatch, PROFILE_PEERS)
+    assert not any("wider sector" in c for c in texts(page.caption))
+
+
+SECTOR_PEERS = {
+    "SEC1": peer_info(100, 2.5, 13.0, 22.0, operating_margin=0.35, revenue_growth=0.11),
+    "SEC2": peer_info(70, 3.5, 15.0, 28.0, operating_margin=0.25, revenue_growth=0.08),
+}
+
+
+def test_a_company_with_one_industry_peer_is_topped_up_from_its_sector_with_a_note(monkeypatch):
+    page = run_profile_page(monkeypatch, {"AAA": PROFILE_PEERS["AAA"]}, SECTOR_PEERS)
+    assert page.sidebar.text_input(key="peers_EXMP").value == "AAA, SEC1, SEC2"
+    [note] = [c for c in texts(page.caption) if "wider sector" in c]
+    assert note.startswith("This company's industry had too few suitable peers, so some or all of these come from its wider sector.")
+    assert "check that they fit" in note
+    assert page.dataframe[-1].value.index.tolist()[1:-1] == ["AAA", "SEC1", "SEC2"]      # the table shows all three
+
+
+def test_the_sector_note_goes_away_when_the_reader_changes_the_peers(monkeypatch):
+    page = run_profile_page(monkeypatch, {"AAA": PROFILE_PEERS["AAA"]}, SECTOR_PEERS)
+    page.sidebar.text_input(key="peers_EXMP").set_value("AAA, SEC1").run()
+    assert not page.exception
+    assert not any("wider sector" in c for c in texts(page.caption))
+
+
+def test_a_company_with_no_peers_anywhere_still_gets_the_empty_box_and_its_note(monkeypatch):
+    page = run_profile_page(monkeypatch, {}, {})
+    assert not page.exception
+    assert page.sidebar.text_input(key="peers_EXMP").value == ""
+    assert any("No suitable peers were found" in c for c in texts(page.caption))

@@ -181,7 +181,7 @@
   points, labelled with the average each gives, coloured against the market price, centred on the page's
   current settings so the middle is the DCF price. `margin_growth_table` in `valuation.py` matches the six
   readings; the steps are in `assumptions.py`. 17 new tests; 471 tests pass. Checked in the running app.
-- Done (in the open pull request): roadmap #5b, the company on trailing twelve months. Haavard built the
+- Done: roadmap #5b (merged, PR #43), the company on trailing twelve months. Haavard built the
   `ttm` sheet (Adobe's four quarters to 31 Aug 2026). EV/Sales, EV/EBITDA, P/E and the operating margin in
   the Overview and in the peers table's own row now use the last four quarters, like the peers' figures;
   free cash flow yield, net debt over EBITDA, revenue growth, the History and the DCF stay on the last
@@ -190,9 +190,17 @@
   quarter with no figures yet (Nvidia) and a missing long-term debt line (First Solar). Falls back to the
   fiscal year, and says so, if Yahoo lacks the quarters. 27 new tests; 498 tests pass. Checked on live data
   (First Solar, Adobe, Coca-Cola, Nvidia, Apple).
-- Next: roadmap #5c, peers by business type (needs a decision), then #7, #8, #6, #10 and #11, as below.
-  Small items waiting for Haavard's decision: Pfizer's negative tax rate, the adjusted beta, the
-  empty-Yahoo-reply retry, and drawing the overview and history even when the DCF cannot be built.
+- Done (in the open pull request): roadmap #5c, peers by profile. Suggested peers are now the 5 whose
+  operating margin and revenue growth are closest to the company's (within a tenth to ten times its size),
+  not the closest in size, and a company whose industry gives fewer than 2 suitable peers (Apple, Microsoft)
+  is topped up from its wider sector, with a note. `profile_distance` and the new `closest_peers` ranking in
+  `valuation.py`; revenue growth in the quotes, `fetch_sector_candidates` and the top-up in `suggest_peers` in
+  `data.py`; `PEER_SECTOR_CANDIDATES_TO_CHECK` in `assumptions.py`; the note and captions in `app.py`. A
+  screening rule, so no Excel step. 33 new or changed tests; 525 tests pass. Checked on live data (Coca-Cola,
+  Pfizer, First Solar, Apple, Microsoft, Nvidia, Exxon).
+- Next: roadmap #7, quality metrics, then #8, #6, #10 and #11, as below. Small items waiting for Haavard's
+  decision: Pfizer's negative tax rate, the adjusted beta, the empty-Yahoo-reply retry, and drawing the
+  overview and history even when the DCF cannot be built.
 - Open:
   - A negative tax rate flows into the forecast. Pfizer's last-year tax rate is -3.54% (a tax
     benefit; seen on 18 Nov 2026 in the new WACC table), and the starting point holds the tax rate
