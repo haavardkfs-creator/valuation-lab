@@ -1497,6 +1497,67 @@ def test_the_scenarios_leave_the_inputs_they_were_given_alone():
 
 
 # ---------------------------------------------------------------------------
+# The tax rate used and the adjusted beta (workbook: `starting point` rows 68-84, Pfizer FY2025)
+# ---------------------------------------------------------------------------
+
+NORMAL_TAX_RATE = 0.21                          # starting point C72; assumptions.NORMAL_TAX_RATE
+BETA_WEIGHT_ON_OBSERVED = 2 / 3                 # starting point C77
+MARKET_BETA = 1.0                               # starting point C78
+
+
+def test_a_negative_tax_rate_is_replaced_by_the_normal_rate_as_in_the_sheet():
+    last_year = -266 / 7520                                                   # C71: -3.54%, Pfizer
+    assert v.tax_rate_used(last_year, NORMAL_TAX_RATE) == close(0.21)         # C73
+    assert last_year == close(-0.035372340425531917)
+
+
+def test_a_positive_tax_rate_is_used_as_it_is_as_in_the_sheet():
+    assert v.tax_rate_used(1200 / 6000, NORMAL_TAX_RATE) == close(0.2)        # D73
+
+
+def test_a_tax_rate_of_exactly_zero_is_used_as_it_is():
+    assert v.tax_rate_used(0.0, NORMAL_TAX_RATE) == 0.0
+
+
+def test_the_adjusted_beta_matches_the_sheet():
+    assert v.adjusted_beta(0.297, BETA_WEIGHT_ON_OBSERVED, MARKET_BETA) == close(0.53133333333333332)       # C79
+
+
+def test_the_cost_of_equity_with_each_beta_matches_the_sheet():
+    risk_free, premium = 0.0529, 0.0441                                       # C80, C81
+    observed = v.cost_of_equity(risk_free, 0.297, premium)
+    adjusted = v.cost_of_equity(risk_free, v.adjusted_beta(0.297, BETA_WEIGHT_ON_OBSERVED, MARKET_BETA), premium)
+    assert observed == close(0.065997700000000006)                            # C82
+    assert adjusted == close(0.076331800000000005)                            # C83
+    assert (adjusted - observed) * 100 == close(1.0334099999999999)           # C84
+
+
+def test_a_beta_of_one_is_not_changed_and_other_betas_move_towards_it():
+    assert v.adjusted_beta(1.0, BETA_WEIGHT_ON_OBSERVED, MARKET_BETA) == 1.0
+    assert 0.3 < v.adjusted_beta(0.3, BETA_WEIGHT_ON_OBSERVED, MARKET_BETA) < 1.0
+    assert 1.0 < v.adjusted_beta(2.0, BETA_WEIGHT_ON_OBSERVED, MARKET_BETA) < 2.0
+
+
+def test_all_the_weight_on_the_observed_beta_leaves_it_alone():
+    assert v.adjusted_beta(0.297, 1.0, MARKET_BETA) == 0.297
+
+
+def test_the_starting_point_uses_the_normal_tax_rate_when_last_years_was_negative():
+    ratios = dict(STARTING_POINT_RATIOS, tax_rate=-0.0354)
+    assert v.starting_point_assumptions(ratios, TERMINAL_GROWTH_RATE, 5, normal_tax_rate=0.21)["tax_rate"] == 0.21
+
+
+def test_the_starting_point_keeps_a_positive_tax_rate_even_with_a_normal_rate_given():
+    ratios = dict(STARTING_POINT_RATIOS, tax_rate=0.17)
+    assert v.starting_point_assumptions(ratios, TERMINAL_GROWTH_RATE, 5, normal_tax_rate=0.21)["tax_rate"] == 0.17
+
+
+def test_the_starting_point_without_a_normal_rate_is_unchanged():
+    ratios = dict(STARTING_POINT_RATIOS, tax_rate=-0.0354)
+    assert v.starting_point_assumptions(ratios, TERMINAL_GROWTH_RATE, 5)["tax_rate"] == -0.0354
+
+
+# ---------------------------------------------------------------------------
 # Trailing twelve months (workbook: `ttm` sheet, Adobe, the four quarters to 31 Aug 2026)
 # ---------------------------------------------------------------------------
 

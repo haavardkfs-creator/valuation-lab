@@ -903,3 +903,20 @@ and `run_scenarios` in `valuation.py` reproduces its prices and weighted price e
 slider settings, so moving a slider moves all three prices. The weights are a judgment, not a fact, and the page says
 so. No new files.
 
+## 2026-11-20 — A normal tax rate for negative rates and an adjusted beta (one pull request)
+
+Two inputs made low-beta companies' DCF prices look odd (Pfizer: DCF $96 against a market price of $28), and they are
+one idea, making a company's inputs more realistic, so they went in one pull request, each built in Excel first
+(`starting point` rows 68-73 and 75-84). Decisions with Haavard, after trying six real companies. (1) Tax: when last
+year's rate is negative, the forecast uses 21% (the US federal rate), not zero (too kind) and not left alone. On its own the
+change is small (flooring at zero moved Pfizer by $2); it matters because it also keeps the after-tax cost of debt
+below the pre-tax cost. (2) Beta: two-thirds observed plus one-third of 1, for every company except Adobe, so Adobe's
+hand-built $305.60 base case, the `scenarios` sheet and their tests are not disturbed; the price is that Adobe and the others are
+treated a little differently, and the page says so by showing both betas for the others. (3) Display: the WACC table shows
+"0.53 (observed 0.30)" and says where the number comes from. Result on live data: Pfizer's DCF goes from $96 to $65,
+still well above its $28 market price, so these two changes are honest but do not explain the whole gap; the rest of
+it comes from the starting point (one year's margin held flat) and is not solved. Tests that expected the observed beta
+for other companies were updated, and the very-low-WACC tests now use an observed beta of -0.95, which the adjustment
+turns into the -0.30 they need. `NORMAL_TAX_RATE`, `BETA_WEIGHT_ON_OBSERVED` and `MARKET_BETA` are in `assumptions.py`
+with their Excel cells. No new files.
+

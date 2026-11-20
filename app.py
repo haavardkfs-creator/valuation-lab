@@ -111,8 +111,33 @@ def forecast_assumptions(company):
         cash_from_working_capital=company["cash_from_working_capital"],
     )
     return valuation.starting_point_assumptions(
-        ratios, assumptions.TERMINAL_GROWTH_RATE, assumptions.STARTING_POINT_YEARS
+        ratios, assumptions.TERMINAL_GROWTH_RATE, assumptions.STARTING_POINT_YEARS,
+        normal_tax_rate=assumptions.NORMAL_TAX_RATE,
     )
+
+
+def last_year_tax_rate(company):
+    """Return last year's tax rate for a company other than Adobe (income tax divided by pre-tax income),
+    or None for Adobe or when there was no pre-tax profit to divide by.
+    """
+    if is_base_case(company):
+        return None
+    return valuation.ratio_or_none(company["income_tax"], company["income_before_tax"])
+
+
+def tax_rate_was_replaced(company):
+    """Say whether the forecast uses the normal tax rate because last year's was negative."""
+    rate = last_year_tax_rate(company)
+    return rate is not None and rate < 0
+
+
+def model_beta(company):
+    """Return the beta the model uses: Adobe's observed beta as it is, and for every other company the
+    adjusted beta, pulled part of the way towards the market's beta of 1.
+    """
+    if is_base_case(company):
+        return company["beta"]
+    return valuation.adjusted_beta(company["beta"], assumptions.BETA_WEIGHT_ON_OBSERVED, assumptions.MARKET_BETA)
 
 
 def cost_of_debt(company):
@@ -140,7 +165,7 @@ def build_dcf_inputs(company, growth_shift, margin_shift):
         capex_pcts=base["capex_pcts"],
         wc_pcts=base["wc_pcts"],
         risk_free_rate=company["risk_free_rate"],
-        beta=company["beta"],
+        beta=model_beta(company),
         equity_risk_premium=company["equity_risk_premium"],
         pre_tax_cost_of_debt=cost_of_debt(company),
         share_price=company["share_price"],
@@ -707,11 +732,15 @@ def wacc_sources(company, source_used):
         cost_of_debt = "Estimate: last year's interest expense divided by debt"
     return {
         "risk_free_rate": f"{data.MARKET_FIGURES_SOURCE} (typed in by hand)",
-        "beta": f"{provider}, 5-year monthly" if live else f"{snapshot_note} (Yahoo Finance, 5-year monthly)",
+        "beta": (
+            f"{provider}, 5-year monthly" if live else f"{snapshot_note} (Yahoo Finance, 5-year monthly)"
+        ) + ("" if is_base_case(company) else ", adjusted: two-thirds of the observed beta plus one-third of the market's beta of 1"),
         "equity_risk_premium": f"{data.MARKET_FIGURES_SOURCE} (typed in by hand)",
         "pre_tax_cost_of_debt": cost_of_debt,
         "tax_rate": (
             "The forecast tax rate (the Projection sheet)" if is_base_case(company)
+            else f"The normal US rate, because last year's was negative ({precise_percent(last_year_tax_rate(company))})"
+            if tax_rate_was_replaced(company)
             else "Last year's rate: income tax divided by pre-tax income"
         ),
         "market_value_of_equity": (
@@ -723,6 +752,15 @@ def wacc_sources(company, source_used):
             else f"{provider}: current plus long-term debt"
         ),
     }
+
+
+def beta_text(company, beta_used):
+    """Write the beta the model uses; for a company whose beta was adjusted, add the observed one, for
+    example 0.53 (observed 0.30).
+    """
+    if is_base_case(company):
+        return f"{beta_used:.2f}"
+    return f"{beta_used:.2f} (observed {company['beta']:.2f})"
 
 
 def wacc_table(company, dcf_inputs, source_used):
@@ -744,7 +782,7 @@ def wacc_table(company, dcf_inputs, source_used):
     source = wacc_sources(company, source_used)
     rows = [
         ("Risk-free rate", precise_percent(dcf_inputs["risk_free_rate"]), source["risk_free_rate"]),
-        ("Beta", f"{dcf_inputs['beta']:.2f}", source["beta"]),
+        ("Beta", beta_text(company, dcf_inputs["beta"]), source["beta"]),
         ("Equity risk premium", precise_percent(dcf_inputs["equity_risk_premium"]), source["equity_risk_premium"]),
         ("Cost of equity", precise_percent(build["cost_of_equity"]), "Risk-free rate + beta × equity risk premium"),
         ("Pre-tax cost of debt", precise_percent(dcf_inputs["pre_tax_cost_of_debt"]), source["pre_tax_cost_of_debt"]),
@@ -1585,6 +1623,12 @@ def draw_source_note(company, source_used):
                 f"{provider_name(source_used)} has no interest expense for {company['company_name']}, so its cost "
                 f"of debt ({precise_percent(company['pre_tax_cost_of_debt'])}) is an estimate: the "
                 f"risk-free rate plus a typical credit spread of {precise_percent(data.CREDIT_SPREAD)}."
+            )
+        if tax_rate_was_replaced(company):
+            st.warning(
+                f"{company['company_name']}'s tax rate last year was {precise_percent(last_year_tax_rate(company))} "
+                "(a tax benefit), which cannot go on forever, so the forecast uses a normal rate of "
+                f"{precise_percent(assumptions.NORMAL_TAX_RATE)} instead (the US federal rate)."
             )
         st.warning(
             f"Starting point, not a forecast: this starts from {company['company_name']}'s own "
