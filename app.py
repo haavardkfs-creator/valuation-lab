@@ -482,6 +482,91 @@ def draw_reverse_dcf(company, dcf_inputs, terminal_growth_rate, wacc_override, h
     )
 
 
+def draw_scenario_boxes():
+    """Draw the scenario boxes in a closed box in the sidebar and return what they are set to: for the
+    bear, base and bull cases, the shift in every year's operating margin and in every year's revenue
+    growth (decimals; the base case is always no shift, so it is the DCF itself) and the probability
+    of each (decimals). The boxes start at the defaults in assumptions.py.
+    """
+    limit = assumptions.SCENARIO_SHIFT_LIMIT_POINTS
+
+    def shift_box(label, key, start, low, high):
+        return st.number_input(
+            label, min_value=low, max_value=high, value=start, step=assumptions.SCENARIO_SHIFT_STEP_POINTS,
+            format="%+.1f", key=key,
+        )
+
+    def chance_box(label, key, start):
+        return st.number_input(label, min_value=0, max_value=100, value=start, step=5, key=key)
+
+    with st.sidebar.expander("Scenarios"):
+        st.caption(
+            "Each scenario moves every forecast year's operating margin and revenue growth, in percentage "
+            "points, on top of the sliders above. The base case is the DCF itself."
+        )
+        bear_margin = shift_box("Bear: operating margin (points)", "scenario_bear_margin", assumptions.SCENARIO_BEAR_MARGIN_POINTS, -limit, 0.0)
+        bear_growth = shift_box("Bear: revenue growth (points)", "scenario_bear_growth", assumptions.SCENARIO_BEAR_GROWTH_POINTS, -limit, 0.0)
+        bull_margin = shift_box("Bull: operating margin (points)", "scenario_bull_margin", assumptions.SCENARIO_BULL_MARGIN_POINTS, 0.0, limit)
+        bull_growth = shift_box("Bull: revenue growth (points)", "scenario_bull_growth", assumptions.SCENARIO_BULL_GROWTH_POINTS, 0.0, limit)
+        bear_chance, base_chance, bull_chance = (
+            chance_box(f"{name} probability (%)", f"scenario_{name.lower()}_chance", start)
+            for name, start in zip(("Bear", "Base", "Bull"), assumptions.SCENARIO_PROBABILITIES_PERCENT)
+        )
+    return {
+        "margin_shifts": [bear_margin / 100, 0.0, bull_margin / 100],
+        "growth_shifts": [bear_growth / 100, 0.0, bull_growth / 100],
+        "probabilities": [bear_chance / 100, base_chance / 100, bull_chance / 100],
+    }
+
+
+def scenario_table(scenarios, settings):
+    """Lay the scenarios out as a table, one row each for bear, base and bull: how far the margin and
+    growth move, how likely it is, the price it gives and how far that is from the market price.
+    """
+    rows = {}
+    for number, name in enumerate(("Bear", "Base", "Bull")):
+        rows[name] = {
+            "Operating margin": points_text(settings["margin_shifts"][number]),
+            "Revenue growth": points_text(settings["growth_shifts"][number]),
+            "Probability": f"{settings['probabilities'][number]:.0%}",
+            "Price": dollars(scenarios["prices"][number]),
+            "vs market price": percent(scenarios["upsides"][number]),
+        }
+    return pd.DataFrame(rows).T
+
+
+def draw_scenarios(company, dcf_inputs, terminal_growth_rate, wacc_override, settings):
+    """Draw "Scenarios": the price in a bear, base and bull case and the probability-weighted price
+    against today's market price. The cases and weights come from the boxes in the sidebar; the
+    probabilities must add up to 100%, or the section says so instead of showing prices.
+    """
+    st.subheader("Scenarios")
+    try:
+        scenarios = valuation.run_scenarios(
+            dcf_inputs, terminal_growth_rate, wacc_override, settings["margin_shifts"],
+            settings["growth_shifts"], settings["probabilities"], company["share_price"],
+            assumptions.SCENARIO_PROBABILITY_TOLERANCE,
+        )
+    except ValueError as error:
+        st.warning(f"{error} Change the probabilities in the Scenarios box in the sidebar.")
+        return
+    st.table(scenario_table(scenarios, settings))
+    weighted_column, gap_column = st.columns(2)
+    weighted_column.metric(
+        "Probability-weighted price", dollars(scenarios["weighted_price"]),
+        help="Each scenario's price times its probability, added up.",
+    )
+    gap_column.metric(
+        "Weighted price vs market", percent(scenarios["weighted_vs_market"]),
+        help="The weighted price divided by today's market price, minus 1. Above 0% means the weighted price is higher than the market's.",
+    )
+    st.caption(
+        "Each scenario moves every year's operating margin and revenue growth by the amounts shown, "
+        "on top of the sliders; the WACC and terminal growth are the same in all three. The weights are "
+        "your judgment, not a fact: change them in the Scenarios box in the sidebar."
+    )
+
+
 def draw_overview(overview):
     """Draw the overview: how fast the company is growing, what it earns, how much cash it
     makes for its price and how heavy its debt is, then what the market pays for it.
@@ -1538,6 +1623,7 @@ def draw_page():
     """
     ticker = draw_ticker_box()
     growth_shift, margin_shift, terminal_growth_rate, wacc_override = draw_sliders()
+    scenario_settings = draw_scenario_boxes()
     adjustment = 0.0
     try:
         company, source_used = load_company(ticker)
@@ -1576,6 +1662,7 @@ def draw_page():
     overview = apply_quality(overview, company, history)
     draw_dcf(company, dcf, wacc_override is not None)
     draw_reverse_dcf(company, dcf_inputs, terminal_growth_rate, wacc_override, history)
+    draw_scenarios(company, dcf_inputs, terminal_growth_rate, wacc_override, scenario_settings)
     draw_overview(overview)
     draw_history(history, history_error, overview, company["company_name"])
     year_labels = assumptions.FORECAST_YEAR_LABELS if is_base_case(company) else assumptions.GENERIC_YEAR_LABELS

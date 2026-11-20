@@ -172,6 +172,33 @@ HEATMAP_TERMINAL_GROWTH_RATES = [0.015, 0.02, 0.025, 0.03, 0.035]
 MARGIN_GROWTH_TABLE_MARGIN_SHIFTS = [-0.10, -0.05, 0.0, 0.05, 0.10]
 MARGIN_GROWTH_TABLE_GROWTH_SHIFTS = [-0.04, -0.02, 0.0, 0.02, 0.04]
 
+# ---------------------------------------------------------------------------
+# Scenarios: bear, base and bull (see docs/model.md, "Scenarios"). Each scenario shifts every forecast
+# year's operating margin and revenue growth, in percentage points, on top of the page's current settings;
+# the base case is always the page's own DCF (no shift). Chosen with Haavard on 20 Nov 2026 after trying
+# Adobe, Coca-Cola and First Solar: Adobe's bear price ($248) is about the market's, Coca-Cola's bull price
+# ($90) is still below it. Excel: scenarios C6:E8. The weights are a judgment, not a fact; the page lets
+# the reader change all of them.
+# ---------------------------------------------------------------------------
+SCENARIO_BEAR_MARGIN_POINTS = -5.0
+SCENARIO_BEAR_GROWTH_POINTS = -2.0
+SCENARIO_BULL_MARGIN_POINTS = 5.0
+SCENARIO_BULL_GROWTH_POINTS = 2.0
+
+# The probabilities as whole percentages, in the order bear, base, bull. They must add up to 100.
+SCENARIO_PROBABILITIES_PERCENT = [25, 50, 25]
+
+# How far the boxes on the page let a scenario move the margin or the growth (bear down to minus this,
+# bull up to this), and the step of the boxes. Wide enough for a real downturn, narrow enough to keep a
+# bear case below the base and a bull case above it.
+SCENARIO_SHIFT_LIMIT_POINTS = 20.0
+SCENARIO_SHIFT_STEP_POINTS = 0.5
+
+# How far the probabilities may be from adding up to exactly 100% before the page refuses them. It only
+# covers the tiny rounding of decimal arithmetic (6% + 57% + 37% as decimals comes to 0.9999999999999999).
+SCENARIO_PROBABILITY_TOLERANCE = 1e-9
+
+
 # The WACC slider (Phase 5). Only used when the box "Set the WACC myself" is ticked; unticked,
 # the model works out its own WACC (10.9266%).
 # ---------------------------------------------------------------------------

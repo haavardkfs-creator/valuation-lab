@@ -1898,6 +1898,103 @@ def test_the_provider_is_named_from_the_source_used():
 
 
 # ---------------------------------------------------------------------------
+# Scenarios: bear, base and bull
+# ---------------------------------------------------------------------------
+
+def scenario_rows(page):
+    """Return the scenarios table as {"Bear": {...}, "Base": {...}, "Bull": {...}}."""
+    [table] = [table.value for table in page.table if list(table.value.index) == ["Bear", "Base", "Bull"]]
+    return table.to_dict("index")
+
+
+def dollars_to_number(text):
+    return float(text.replace("$", "").replace(",", ""))
+
+
+def test_the_page_has_a_scenarios_section_with_a_row_for_each_case(monkeypatch):
+    page = run_page(monkeypatch)
+    assert_footer_and_no_crash(page)
+    assert "Scenarios" in texts(page.subheader)
+    rows = scenario_rows(page)
+    assert rows["Bear"]["Operating margin"] == "-5.0 points" and rows["Bear"]["Revenue growth"] == "-2.0 points"
+    assert rows["Base"]["Operating margin"] == "+0.0 points" and rows["Base"]["Probability"] == "50%"
+    assert rows["Bull"]["Operating margin"] == "+5.0 points" and rows["Bull"]["Revenue growth"] == "+2.0 points"
+
+
+def test_the_base_scenario_is_the_dcf_price_on_the_page(monkeypatch):
+    page = run_page(monkeypatch)
+    assert scenario_rows(page)["Base"]["Price"] == metrics(page)["DCF implied price"]
+
+
+def test_the_bear_price_is_below_the_base_and_the_bull_above(monkeypatch):
+    rows = scenario_rows(run_page(monkeypatch))
+    bear, base, bull = (dollars_to_number(rows[name]["Price"]) for name in ("Bear", "Base", "Bull"))
+    assert bear < base < bull
+
+
+def test_the_weighted_price_is_the_probabilities_times_the_prices(monkeypatch):
+    page = run_page(monkeypatch)
+    rows = scenario_rows(page)
+    bear, base, bull = (dollars_to_number(rows[name]["Price"]) for name in ("Bear", "Base", "Bull"))
+    assert dollars_to_number(metrics(page)["Probability-weighted price"]) == pytest.approx(
+        0.25 * bear + 0.5 * base + 0.25 * bull, abs=0.02              # each price on the page is rounded to the cent
+    )
+    assert "Weighted price vs market" in metrics(page)
+
+
+def test_the_scenario_boxes_start_at_the_defaults_in_assumptions(monkeypatch):
+    page = run_page(monkeypatch)
+    assert page.sidebar.number_input(key="scenario_bear_margin").value == assumptions.SCENARIO_BEAR_MARGIN_POINTS
+    assert page.sidebar.number_input(key="scenario_bull_growth").value == assumptions.SCENARIO_BULL_GROWTH_POINTS
+    chances = [page.sidebar.number_input(key=f"scenario_{name}_chance").value for name in ("bear", "base", "bull")]
+    assert chances == assumptions.SCENARIO_PROBABILITIES_PERCENT
+
+
+def test_a_bear_case_cannot_be_set_above_no_change_nor_a_bull_case_below(monkeypatch):
+    page = run_page(monkeypatch)
+    assert page.sidebar.number_input(key="scenario_bear_margin").max == 0.0
+    assert page.sidebar.number_input(key="scenario_bull_margin").min == 0.0
+
+
+def test_changing_the_bear_case_changes_its_price_and_the_weighted_price(monkeypatch):
+    page = run_page(monkeypatch)
+    before = scenario_rows(page)["Bear"]["Price"], metrics(page)["Probability-weighted price"]
+    page.sidebar.number_input(key="scenario_bear_margin").set_value(-10.0).run()
+    after = scenario_rows(page)["Bear"]["Price"], metrics(page)["Probability-weighted price"]
+    assert dollars_to_number(after[0]) < dollars_to_number(before[0])
+    assert dollars_to_number(after[1]) < dollars_to_number(before[1])
+
+
+def test_probabilities_that_do_not_add_to_100_give_a_plain_warning_and_no_prices(monkeypatch):
+    page = run_page(monkeypatch)
+    page.sidebar.number_input(key="scenario_bear_chance").set_value(40).run()      # 40 + 50 + 25 = 115
+    assert not page.exception
+    assert any("add up to 100%, not 115.0%" in warning for warning in texts(page.warning))
+    assert "Probability-weighted price" not in metrics(page)
+    assert app.FOOTER_TEXT in texts(page.caption)                                    # the rest of the page still draws
+
+
+def test_scenarios_move_with_the_sliders_because_the_base_is_the_current_dcf(monkeypatch):
+    page = run_page(monkeypatch)
+    before = dollars_to_number(scenario_rows(page)["Base"]["Price"])
+    page.sidebar.slider[0].set_value(2.0).run()                                      # growth +2 points
+    after = dollars_to_number(scenario_rows(page)["Base"]["Price"])
+    assert after > before
+    assert scenario_rows(page)["Base"]["Price"] == metrics(page)["DCF implied price"]
+
+
+def test_another_company_gets_scenarios_too(monkeypatch):
+    page = run_page(monkeypatch, ticker="exmp")
+    assert_footer_and_no_crash(page)
+    assert scenario_rows(page)["Base"]["Price"] == metrics(page)["DCF implied price"]
+
+
+def test_scenarios_sit_right_after_what_the_market_price_implies(monkeypatch):
+    headings = texts(run_page(monkeypatch).subheader)
+    assert headings.index("Scenarios") == headings.index("What the market price implies") + 1
+
+
+# ---------------------------------------------------------------------------
 # One-off adjustment to operating income
 # ---------------------------------------------------------------------------
 
@@ -1924,7 +2021,7 @@ def test_the_adjustment_box_is_in_the_sidebar_for_other_companies_and_starts_at_
 
 def test_adobe_has_no_adjustment_box(monkeypatch):
     page = run_page(monkeypatch, yahoo=adobe_with_quarters())
-    assert len(page.sidebar.number_input) == 0
+    assert not [box for box in page.sidebar.number_input if box.key.startswith("oneoff_")]
     assert "One-off items" not in [header.value for header in page.sidebar.header]
 
 

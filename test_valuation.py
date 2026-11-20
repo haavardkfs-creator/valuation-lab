@@ -1410,6 +1410,93 @@ def test_the_table_leaves_the_inputs_it_was_given_alone():
 
 
 # ---------------------------------------------------------------------------
+# Scenarios (workbook: `scenarios` sheet, Adobe: bear -5 / -2 pts, base 0 / 0, bull +5 / +2, weights 25/50/25)
+# ---------------------------------------------------------------------------
+
+SCENARIO_TOLERANCE = 1e-9                       # assumptions.SCENARIO_PROBABILITY_TOLERANCE
+
+
+def adobe_scenarios(
+    margin_shifts=(-0.05, 0.0, 0.05), growth_shifts=(-0.02, 0.0, 0.02), probabilities=(0.25, 0.5, 0.25),
+    wacc_override=None, market_price=SHARE_PRICE,
+):
+    return v.run_scenarios(
+        adobe_dcf_inputs(), TERMINAL_GROWTH_RATE, wacc_override, list(margin_shifts), list(growth_shifts),
+        list(probabilities), market_price, SCENARIO_TOLERANCE,
+    )
+
+
+def test_the_three_scenario_prices_match_the_scenarios_sheet():
+    bear, base, bull = adobe_scenarios()["prices"]
+    assert bear == pytest.approx(248.28867196312052, abs=1e-6)          # scenarios C19
+    assert base == pytest.approx(305.60201673218938, abs=1e-6)          # D19
+    assert bull == pytest.approx(370.48811419488419, abs=1e-6)          # E19
+
+
+def test_the_upsides_match_the_scenarios_sheet():
+    bear, base, bull = adobe_scenarios()["upsides"]
+    assert bear == pytest.approx(-0.012650924710221778, abs=1e-9)       # C20
+    assert base == pytest.approx(0.2152623244609273, abs=1e-9)          # D20
+    assert bull == pytest.approx(0.47328951443466094, abs=1e-9)         # E20
+
+
+def test_the_probability_weighted_price_matches_the_scenarios_sheet():
+    result = adobe_scenarios()
+    assert result["weighted_price"] == pytest.approx(307.49520490559587, abs=1e-6)       # C21
+    assert result["weighted_vs_market"] == pytest.approx(0.22279080966157339, abs=1e-9)  # C22
+
+
+def test_the_base_scenario_is_the_dcfs_own_price():
+    assert adobe_scenarios()["prices"][1] == close(run_base_case()["implied_share_price"])     # the sheet's check C24
+
+
+def test_the_scenario_prices_agree_with_the_margin_and_growth_table():
+    table = adobe_margin_growth_table()
+    bear, base, bull = adobe_scenarios()["prices"]
+    assert bear == close(price_in_table(table, -0.05, -0.02))
+    assert bull == close(price_in_table(table, 0.05, 0.02))
+
+
+def test_the_weighted_price_is_the_probabilities_times_the_prices():
+    result = adobe_scenarios(probabilities=(0.2, 0.5, 0.3))
+    bear, base, bull = result["prices"]
+    assert result["weighted_price"] == close(0.2 * bear + 0.5 * base + 0.3 * bull)
+
+
+def test_all_the_weight_on_one_scenario_gives_that_scenarios_price():
+    result = adobe_scenarios(probabilities=(0.0, 0.0, 1.0))
+    assert result["weighted_price"] == close(result["prices"][2])
+
+
+def test_probabilities_that_do_not_add_to_one_are_refused_in_plain_words():
+    with pytest.raises(ValueError, match="add up to 100%, not 90.0%"):
+        adobe_scenarios(probabilities=(0.25, 0.4, 0.25))
+
+
+def test_probabilities_that_only_differ_by_rounding_noise_are_accepted():
+    assert 0.06 + 0.57 + 0.37 != 1                                     # the computer's arithmetic is not exact
+    adobe_scenarios(probabilities=(0.06, 0.57, 0.37))
+
+
+def test_scenarios_need_one_of_each_input_per_scenario():
+    with pytest.raises(ValueError, match="Every scenario needs"):
+        adobe_scenarios(margin_shifts=(-0.05, 0.0), probabilities=(0.25, 0.5, 0.25))
+
+
+def test_scenarios_use_a_wacc_the_reader_set():
+    own = adobe_scenarios()["weighted_price"]
+    higher = adobe_scenarios(wacc_override=0.13)["weighted_price"]
+    assert higher < own
+
+
+def test_the_scenarios_leave_the_inputs_they_were_given_alone():
+    inputs = adobe_dcf_inputs()
+    before = (list(inputs["operating_margins"]), list(inputs["growth_rates"]))
+    v.run_scenarios(inputs, TERMINAL_GROWTH_RATE, None, [-0.05, 0, 0.05], [-0.02, 0, 0.02], [0.25, 0.5, 0.25], SHARE_PRICE, SCENARIO_TOLERANCE)
+    assert (inputs["operating_margins"], inputs["growth_rates"]) == before
+
+
+# ---------------------------------------------------------------------------
 # Trailing twelve months (workbook: `ttm` sheet, Adobe, the four quarters to 31 Aug 2026)
 # ---------------------------------------------------------------------------
 

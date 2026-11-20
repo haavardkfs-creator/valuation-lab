@@ -886,3 +886,20 @@ directly. Known limits: US companies only on the free plan; FMP's share count is
 as good as those two; its beta may be measured differently from Yahoo's; the 250 requests a day would run out after
 roughly twenty fresh companies. No new files.
 
+## 2026-11-20 — Scenarios: bear, base, bull and a probability-weighted price (roadmap #6)
+
+A DCF gives one number from one set of assumptions, which looks more certain than it is. Four decisions with
+Haavard. (1) Levers: a scenario shifts every year's operating margin and revenue growth, the same two levers as the
+sliders and the margin-and-growth table; terminal growth and WACC stay as they are, because they are not what
+the company's own results decide. (2) Sizes: bear -5 margin points and -2 growth points, bull +5 and +2, chosen after trying
+Adobe, Coca-Cola and First Solar (Adobe's bear price is about the market's, Coca-Cola's bull price is still below it);
+editable in a closed "Scenarios" box in the sidebar, limited to 20 points either way and to the right side of no change,
+so a bear case cannot be better than the base and a bull case cannot be worse. The base case is always no shift, so it is the DCF
+itself and a test checks that. (3) Probabilities: 25%, 50% and 25%, editable, and anything that does not add up to
+100% gets a plain warning instead of prices, with a tolerance only for rounding noise in decimal arithmetic. (4) Placement: a
+"Scenarios" section directly under "What the market price implies", because both ask what the market price is
+assuming. Built Excel first: the `scenarios` sheet (inputs C6:E8, results C19:E22, one block per case below)
+and `run_scenarios` in `valuation.py` reproduces its prices and weighted price exactly. Scenarios work on top of the
+slider settings, so moving a slider moves all three prices. The weights are a judgment, not a fact, and the page says
+so. No new files.
+
