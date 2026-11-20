@@ -39,6 +39,13 @@ FOOTER_TEXT = "Valuation Lab is a learning project, not investment advice."
 # call agreed with Haavard, not a rule from Yahoo.
 LIVE_DATA_CACHE_SECONDS = 15 * 60
 
+# How long the page remembers what changes only when a company reports, or hardly ever: the history, the
+# last twelve months, and the suggested peers (which cost the most requests: up to 50 lookups for one
+# company). Remembering them for hours instead of minutes means far fewer requests to Yahoo, which
+# sometimes limits the app's shared server. Chosen with Haavard on 20 Nov 2026. The share price and the
+# peers' multiples, which move with the market, keep the shorter time above.
+SLOW_DATA_CACHE_SECONDS = 6 * 60 * 60
+
 
 def dollars(amount):
     """Write a number as a dollar price with two decimals, for example $305.60."""
@@ -1226,10 +1233,10 @@ def load_company(ticker):
     return data.get_company_data(ticker, source="yahoo"), "yahoo"
 
 
-@st.cache_data(ttl=LIVE_DATA_CACHE_SECONDS, show_spinner=False)
+@st.cache_data(ttl=SLOW_DATA_CACHE_SECONDS, show_spinner=False)
 def load_suggested_peers(ticker, market_value):
     """Ask Yahoo for suggested peers for a company and remember the answer for
-    LIVE_DATA_CACHE_SECONDS. The market value is in $ millions. Stops with a plain error if
+    SLOW_DATA_CACHE_SECONDS. The market value is in $ millions. Stops with a plain error if
     Yahoo cannot be reached.
     """
     return data.suggest_peers(
@@ -1262,18 +1269,18 @@ def load_adobe_peer_margins(tickers):
         return [None] * len(tickers)
 
 
-@st.cache_data(ttl=LIVE_DATA_CACHE_SECONDS, show_spinner=False)
+@st.cache_data(ttl=SLOW_DATA_CACHE_SECONDS, show_spinner=False)
 def load_history(ticker, usd_per_unit):
     """Fetch a company's yearly history (in US dollars) and remember it for
-    LIVE_DATA_CACHE_SECONDS. Stops with a plain error if Yahoo cannot be reached or has none.
+    SLOW_DATA_CACHE_SECONDS. Stops with a plain error if Yahoo cannot be reached or has none.
     """
     return data.get_history(ticker, usd_per_unit)
 
 
-@st.cache_data(ttl=LIVE_DATA_CACHE_SECONDS, show_spinner=False)
+@st.cache_data(ttl=SLOW_DATA_CACHE_SECONDS, show_spinner=False)
 def load_ttm(ticker, usd_per_unit):
     """Fetch a company's last twelve months (in US dollars) and remember them for
-    LIVE_DATA_CACHE_SECONDS. Stops with a plain error if Yahoo cannot be reached or lacks them.
+    SLOW_DATA_CACHE_SECONDS. Stops with a plain error if Yahoo cannot be reached or lacks them.
     """
     return data.get_ttm(ticker, usd_per_unit)
 

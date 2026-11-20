@@ -12,6 +12,14 @@ import test_valuation as base       # holds the base case assumptions, so they l
 import valuation as v
 
 
+@pytest.fixture(autouse=True)
+def no_waiting(monkeypatch):
+    """Never really wait in a test: record the pauses the code asks for instead (see YAHOO_RETRY_PAUSE_SECONDS)."""
+    pauses = []
+    monkeypatch.setattr("data._pause", pauses.append)
+    return pauses
+
+
 # ---------------------------------------------------------------------------
 # The snapshot matches the Excel model
 # ---------------------------------------------------------------------------
@@ -1318,3 +1326,104 @@ def test_the_equity_of_a_company_in_another_currency_is_converted_to_dollars(mon
     info = dict(ADOBE_YAHOO_INFO, financialCurrency="NOK", currency="NOK")
     monkeypatch.setattr("yfinance.Ticker", fake_statements_ticker(balance=balance, info=info, fx_rates={"NOKUSD=X": 0.10}))
     assert data.get_company_data("AKER.OL", source="yahoo")["stockholders_equity"] == pytest.approx(1000)
+
+
+# ---------------------------------------------------------------------------
+# When Yahoo limits the server: one retry, and a plain message
+# ---------------------------------------------------------------------------
+
+def test_a_quote_with_nothing_in_it_is_called_empty():
+    assert data._quote_is_empty({})
+    assert data._quote_is_empty({"beta": 1.3, "trailingPE": 20})                    # no name, price or share count
+    assert not data._quote_is_empty({"longName": "Adobe Inc."})
+    assert not data._quote_is_empty({"currentPrice": 240.74})
+    assert not data._quote_is_empty({"sharesOutstanding": 389_200_000})
+
+
+def ticker_that_is_empty_at_first(empty_answers):
+    """A stand-in for yfinance.Ticker whose first `empty_answers` requests get an empty quote, then Adobe's."""
+    requests = []
+
+    class Flaky(fake_statements_ticker()):
+        def __init__(self, ticker):
+            super().__init__(ticker)
+            requests.append(ticker)
+            if len(requests) <= empty_answers:
+                self.info = {}
+
+    return Flaky, requests
+
+
+def test_an_empty_quote_is_asked_for_again_once_after_a_pause(monkeypatch, no_waiting):
+    flaky, requests = ticker_that_is_empty_at_first(empty_answers=2)        # the statements request, then the first info request
+    monkeypatch.setattr("yfinance.Ticker", flaky)
+    got = data.fetch_yahoo_statements("ADBE")
+    assert got["company_name"] == "Adobe Inc." and got["share_price"] == 240.74    # the retry got the quote
+    assert no_waiting == [data.YAHOO_RETRY_PAUSE_SECONDS]                          # it waited once
+    assert len(requests) == 3                                                      # statements, quote, quote again
+
+
+def test_a_good_quote_is_not_asked_for_twice_and_nothing_is_waited_for(monkeypatch, no_waiting):
+    monkeypatch.setattr("yfinance.Ticker", fake_statements_ticker())
+    data.fetch_yahoo_statements("ADBE")
+    assert no_waiting == []
+
+
+def test_a_live_quote_is_also_asked_for_again_when_empty(monkeypatch, no_waiting):
+    flaky, requests = ticker_that_is_empty_at_first(empty_answers=1)
+    monkeypatch.setattr("yfinance.Ticker", flaky)
+    assert data.fetch_yahoo_quote("ADBE") == {"share_price": 240.74, "beta": 1.383}
+    assert no_waiting == [data.YAHOO_RETRY_PAUSE_SECONDS] and len(requests) == 2
+
+
+def test_the_pause_is_two_seconds():
+    assert data.YAHOO_RETRY_PAUSE_SECONDS == 2
+
+
+def test_when_yahoo_stays_empty_the_reader_gets_a_plain_message_not_a_list_of_fields(monkeypatch):
+    # The statements arrive but Yahoo's quote is empty twice, as on the live app on 18 and 20 Nov 2026.
+    monkeypatch.setattr("yfinance.Ticker", fake_statements_ticker(info={}))
+    with pytest.raises(ValueError) as error:
+        data.get_company_data("NVDA", source="yahoo")
+    assert str(error.value) == data.YAHOO_BUSY_MESSAGE
+    assert "company_name" not in str(error.value) and "try again in a few minutes" in str(error.value)
+
+
+def test_the_plain_message_says_adobe_still_works():
+    assert "Adobe still works from a frozen snapshot" in data.YAHOO_BUSY_MESSAGE
+
+
+def test_when_yahoo_has_nothing_at_all_the_old_message_about_the_ticker_stays(monkeypatch):
+    # No quote and no statements: more likely a ticker Yahoo does not know than Yahoo being busy.
+    empty = {"Total Revenue": (float("nan"), float("nan"))}
+    monkeypatch.setattr("yfinance.Ticker", fake_statements_ticker(income=empty, cash_flow={"X": (1.0, 1.0)}, balance={"Y": (1.0, 1.0)}, info={}))
+    with pytest.raises(ValueError, match="has no figures for ZZZZ. Check that the ticker is right"):
+        data.get_company_data("ZZZZ", source="yahoo")
+
+
+def test_a_quote_with_only_some_figures_missing_still_names_them(monkeypatch):
+    info = {key: value for key, value in ADOBE_YAHOO_INFO.items() if key != "beta"}      # only the beta is missing
+    monkeypatch.setattr("yfinance.Ticker", fake_statements_ticker(info=info))
+    with pytest.raises(ValueError, match="did not supply, for ADBE: beta"):
+        data.get_company_data("ADBE", source="yahoo")
+
+
+def test_a_live_quote_with_neither_price_nor_beta_gets_the_plain_message():
+    with pytest.raises(ValueError) as error:
+        data.live_source("ADBE", fetch_quote=lambda ticker: {"share_price": None, "beta": None})
+    assert str(error.value) == data.YAHOO_BUSY_MESSAGE
+
+
+def test_a_live_quote_missing_only_one_figure_keeps_its_own_message():
+    with pytest.raises(ValueError, match="did not give a beta"):
+        data.live_source("ADBE", fetch_quote=lambda ticker: {"share_price": 240.74, "beta": None})
+    with pytest.raises(ValueError, match="did not give a usable share price"):
+        data.live_source("ADBE", fetch_quote=lambda ticker: {"share_price": None, "beta": 1.38})
+
+
+def test_adobe_falls_back_to_the_snapshot_when_yahoo_gives_nothing(monkeypatch):
+    # What the live app does when Yahoo limits it: Adobe keeps working from the frozen snapshot.
+    monkeypatch.setattr("yfinance.Ticker", fake_statements_ticker(info={}))
+    package, source = data.get_company_data_with_fallback("ADBE")
+    assert source == data.FALLBACK_SOURCE == "snapshot"
+    assert package["share_price"] == 251.47                                          # the snapshot's price, not a live one
