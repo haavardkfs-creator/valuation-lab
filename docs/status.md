@@ -219,10 +219,15 @@
   stay as reported, and a yellow note says so. `apply_adjustment`, `apply_adjustment_to_ttm` and `adjustment_note` in
   `app.py`; no new maths in `valuation.py`. 18 new tests; 589 tests pass. Checked on live First Solar (-$500m: DCF
   $156 against a price of $152) and in the running app.
+- Done (in the open pull request): a second data source, Financial Modeling Prep, behind Yahoo. When Yahoo is not
+  answering, the company's figures, history, last twelve months, suggested peers and the peers' multiples come from
+  Financial Modeling Prep (a key in Streamlit's private settings; without one the backup is off), and Adobe's chain is
+  live Yahoo, live Financial Modeling Prep, then the snapshot. Yahoo gets a five-minute cool-down after refusing, a
+  real problem with a company (unknown ticker) is never sent to the backup, and the page names the provider it used.
+  `requests==2.34.2` pinned. Free plan: US companies only, 250 requests a day. 61 new tests; 650 tests pass.
 - Next: roadmap #6, scenarios (bear, base, bull and a probability-weighted price; Haavard decides the inputs and
   probabilities), then #10 and #11, as below. Small items waiting for Haavard's decision: Pfizer's negative tax rate,
-  the adjusted beta, a one-time net income adjustment (for the P/E), a second data source that does not depend on
-  Yahoo, and drawing the overview and history even when the DCF cannot be built.
+  the adjusted beta, a one-time net income adjustment (for the P/E), and drawing the overview and history even when the DCF cannot be built.
 - Open:
   - A negative tax rate flows into the forecast. Pfizer's last-year tax rate is -3.54% (a tax
     benefit; seen on 18 Nov 2026 in the new WACC table), and the starting point holds the tax rate
@@ -237,11 +242,11 @@
   - Low-beta companies get odd DCF prices: on 16 Nov 2026 Pfizer's WACC is 5.96% and its DCF
     price $94.96 against a market price of $28.89, and both terminal value cautions fire. The
     caution says so, but the cure is the planned adjusted beta.
-  - The live app still depends on Yahoo through `yfinance`, an unofficial tool. When Yahoo limits the server
-    (18 and 20 Nov 2026) every company except Adobe, which has a snapshot, shows a plain error until it passes;
-    the retry and the longer memory make it rarer, not impossible. The real fix is a second data source that
-    does not depend on Yahoo (the app is built so a source can be swapped); it needs a decision and may need a
-    key.
+  - The live app has a backup for Yahoo now (Financial Modeling Prep), but only for US companies, and the free plan's 250
+    requests a day would run out after roughly twenty fresh companies. After the pull request is merged: add
+    `FMP_API_KEY` to Streamlit Cloud's Secrets (App settings, Secrets) and reboot the app. The key was shown in a
+    screenshot and in chat on 20 Nov 2026, so create a new one on the Financial Modeling Prep dashboard once its 12-hour lock
+    ends, and replace it in `.streamlit/secrets.toml` and in Streamlit Cloud.
   - Even after the capex fade, Microsoft's DCF price is 48% below its market price ($278 vs
     $532, 6 Nov 2026). A starting point from one year is not a forecast, and a 17.8% grower
     fading to 2.5% over five years is a conservative path for it.

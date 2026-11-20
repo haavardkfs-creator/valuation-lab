@@ -272,6 +272,14 @@ def market_value(share_price, shares):
     return share_price * shares
 
 
+def shares_from_market_value(market_value_amount, share_price):
+    """Work out how many shares a company has from what the market says the shares are worth in
+    total and the price of one share: market value divided by price. Used when a data source gives the
+    market value and the price but not the share count.
+    """
+    return market_value_amount / share_price
+
+
 def market_enterprise_value(market_value_amount, net_debt_amount):
     """Work out the value of the whole business at today's price: what the shares are worth,
     plus net debt (or minus the net cash).

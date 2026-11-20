@@ -5,6 +5,8 @@ assumptions.py, hands both to valuation.py, and puts what comes back on the page
 rail 5). Run it with: streamlit run app.py
 """
 
+import os
+
 import pandas as pd
 import streamlit as st
 
@@ -583,22 +585,44 @@ def draw_assumptions(company, dcf_inputs, year_labels, dcf, terminal_growth_rate
     )
 
 
+def provider_name(source_used):
+    """Name the provider behind a source: "yahoo" and "live" are Yahoo Finance, "fmp" and "live_fmp"
+    are Financial Modeling Prep. The frozen snapshot has no provider, so it gets Yahoo Finance, whose
+    figures it was copied from.
+    """
+    return data.FMP_NAME if source_used in ("fmp", "live_fmp") else "Yahoo Finance"
+
+
+def bridge_fmp_key():
+    """Copy the Financial Modeling Prep key from Streamlit's private settings (the secrets file on
+    this computer, or the Secrets box on Streamlit Cloud) into the environment, where data.py looks
+    for it. With no key the backup is simply switched off. The key is never shown or stored here.
+    """
+    try:
+        key = st.secrets["FMP_API_KEY"]
+    except Exception:           # no secrets at all, or no such key: the backup stays off
+        return
+    if key:
+        os.environ.setdefault("FMP_API_KEY", str(key))
+
+
 def wacc_sources(company, source_used):
     """Say, in plain words, where each input to the WACC comes from: typed in by hand, from
     Yahoo Finance today, from the frozen snapshot of the Excel model, or estimated. Returns a
     dictionary with one entry per input that has a source.
     """
-    live = source_used != data.FALLBACK_SOURCE            # Yahoo today (live, or the yahoo source)
+    live = source_used != data.FALLBACK_SOURCE            # a provider today, not the snapshot
+    provider = provider_name(source_used)
     snapshot_note = "Frozen snapshot of the Excel model"
     if company.get("cost_of_debt_is_fallback"):
-        cost_of_debt = "Estimate: the risk-free rate plus a typical credit spread (Yahoo has no interest expense)"
+        cost_of_debt = f"Estimate: the risk-free rate plus a typical credit spread ({provider} has no interest expense)"
     elif "pre_tax_cost_of_debt" in company:
         cost_of_debt = "The weighted average interest rate in the 10-K's debt notes"
     else:
         cost_of_debt = "Estimate: last year's interest expense divided by debt"
     return {
         "risk_free_rate": f"{data.MARKET_FIGURES_SOURCE} (typed in by hand)",
-        "beta": "Yahoo Finance, 5-year monthly" if live else f"{snapshot_note} (Yahoo Finance, 5-year monthly)",
+        "beta": f"{provider}, 5-year monthly" if live else f"{snapshot_note} (Yahoo Finance, 5-year monthly)",
         "equity_risk_premium": f"{data.MARKET_FIGURES_SOURCE} (typed in by hand)",
         "pre_tax_cost_of_debt": cost_of_debt,
         "tax_rate": (
@@ -606,12 +630,12 @@ def wacc_sources(company, source_used):
             else "Last year's rate: income tax divided by pre-tax income"
         ),
         "market_value_of_equity": (
-            "Today's share price from Yahoo Finance, times shares" if live
+            f"Today's share price from {provider}, times shares" if live
             else f"{snapshot_note}: share price times shares"
         ),
         "debt": (
             "The 10-K: current plus long-term debt" if is_base_case(company)
-            else "Yahoo Finance: current plus long-term debt"
+            else f"{provider}: current plus long-term debt"
         ),
     }
 
@@ -834,7 +858,7 @@ def draw_history(history, error, overview, company_name):
     # unescaped dollar signs as a maths formula.
     st.caption(free_cash_flow_note(history, overview, company_name).replace("$", "\\$"))
     st.caption(
-        f"Yahoo Finance gives {len(history['years'])} years of figures for this company. Shares are "
+        f"{provider_name(history.get('source'))} gives {len(history['years'])} years of figures for this company. Shares are "
         "the diluted average over each year, not the number outstanding that the valuation uses; a "
         "fall means buybacks. One year can be a peak or a bottom, so look at the direction, not "
         "just the latest number."
@@ -1197,10 +1221,10 @@ def draw_multiples(multiples, peers, notes, peers_are_suggested, own_label, over
         "margin counts, because a loss is real information. "
         + (
             f"The company's own row is its last twelve months (to {overview['ttm_period_end']}) at "
-            "today's price, like the peers' figures from Yahoo, so the two are like for like."
+            f"today's price, like the peers' figures from {provider_name(peers.get('peer_data_source'))}, so the two are like for like."
             if overview.get("ttm_period_end")
             else "The company's own row comes from its last fiscal year and today's price; the peers' "
-            "figures are Yahoo's trailing twelve months, so small differences are expected."
+            f"figures are {provider_name(peers.get('peer_data_source'))}'s trailing twelve months, so small differences are expected."
         )
     )
     for sentence in flag_explanations(peers):
@@ -1212,9 +1236,16 @@ def draw_multiples(multiples, peers, notes, peers_are_suggested, own_label, over
         )
     if peers_are_suggested:
         st.caption(
-            "Peers suggested from Yahoo's industry list: those whose operating margin and revenue growth "
-            "are closest to the company's, within a tenth to ten times its size. Similar margins and growth "
-            "are only a rough sign of a similar business, so change them in the sidebar if you know better."
+            (
+                "Peers suggested from Financial Modeling Prep's peer list: the ones closest to the company in "
+                "size, within a tenth to ten times. Size is only a rough sign of a similar business, so "
+                "change them in the sidebar if you know better."
+                if peers.get("peer_data_source") == "fmp"
+                else "Peers suggested from Yahoo's industry list: those whose operating margin and revenue "
+                "growth are closest to the company's, within a tenth to ten times its size. Similar margins "
+                "and growth are only a rough sign of a similar business, so change them in the sidebar if "
+                "you know better."
+            )
         )
     draw_explanations("multiples")
 
@@ -1224,13 +1255,14 @@ def load_company(ticker):
     """Fetch a company's figures and remember them for LIVE_DATA_CACHE_SECONDS, so moving a
     slider does not ask Yahoo again.
 
-    Adobe comes from the live source, falling back to the snapshot if Yahoo fails. Any other
-    company comes from Yahoo's statements, with no fallback. Returns the package of figures
-    and the name of the source that supplied it; stops with a plain error if it cannot.
+    Adobe comes from Yahoo's live quote, then Financial Modeling Prep's, then the snapshot. Any other
+    company comes from Yahoo's statements, or Financial Modeling Prep's if Yahoo is not answering, with
+    no snapshot to fall back on. Returns the package of figures and the name of the source that
+    supplied it; stops with a plain error if it cannot.
     """
     if ticker == assumptions.BASE_CASE_TICKER:
         return data.get_company_data_with_fallback(ticker)
-    return data.get_company_data(ticker, source="yahoo"), "yahoo"
+    return data.get_other_company_data(ticker)
 
 
 @st.cache_data(ttl=SLOW_DATA_CACHE_SECONDS, show_spinner=False)
@@ -1239,7 +1271,7 @@ def load_suggested_peers(ticker, market_value):
     SLOW_DATA_CACHE_SECONDS. The market value is in $ millions. Stops with a plain error if
     Yahoo cannot be reached.
     """
-    return data.suggest_peers(
+    return data.suggest_peers_any(
         ticker,
         market_value,
         assumptions.PEER_CANDIDATES_TO_CHECK,
@@ -1255,7 +1287,7 @@ def load_peer_multiples(tickers):
     """Fetch the multiples of the peers in the box (a tuple of tickers) and remember them for
     LIVE_DATA_CACHE_SECONDS. Stops with a plain error if Yahoo cannot be reached.
     """
-    return data.peer_multiples(list(tickers))
+    return data.peer_multiples_any(list(tickers))
 
 
 def load_adobe_peer_margins(tickers):
@@ -1274,7 +1306,7 @@ def load_history(ticker, usd_per_unit):
     """Fetch a company's yearly history (in US dollars) and remember it for
     SLOW_DATA_CACHE_SECONDS. Stops with a plain error if Yahoo cannot be reached or has none.
     """
-    return data.get_history(ticker, usd_per_unit)
+    return data.get_history_any(ticker, usd_per_unit)
 
 
 @st.cache_data(ttl=SLOW_DATA_CACHE_SECONDS, show_spinner=False)
@@ -1282,7 +1314,7 @@ def load_ttm(ticker, usd_per_unit):
     """Fetch a company's last twelve months (in US dollars) and remember them for
     SLOW_DATA_CACHE_SECONDS. Stops with a plain error if Yahoo cannot be reached or lacks them.
     """
-    return data.get_ttm(ticker, usd_per_unit)
+    return data.get_ttm_any(ticker, usd_per_unit)
 
 
 def parse_peer_tickers(text, own_ticker, how_many):
@@ -1458,14 +1490,14 @@ def draw_source_note(company, source_used):
     page had to fall back to the frozen snapshot. Other companies: a quiet line, and a visible
     warning that the forecast is only a starting point.
     """
-    if source_used == "yahoo":
-        st.caption("All figures are from Yahoo Finance's latest annual statements.")
+    if source_used in ("yahoo", "fmp"):
+        st.caption(f"All figures are from {provider_name(source_used)}'s latest annual statements.")
         conversion = currency_note(company)
         if conversion:
             st.caption(conversion)
         if company.get("cost_of_debt_is_fallback"):
             st.warning(
-                f"Yahoo Finance has no interest expense for {company['company_name']}, so its cost "
+                f"{provider_name(source_used)} has no interest expense for {company['company_name']}, so its cost "
                 f"of debt ({precise_percent(company['pre_tax_cost_of_debt'])}) is an estimate: the "
                 f"risk-free rate plus a typical credit spread of {precise_percent(data.CREDIT_SPREAD)}."
             )
@@ -1476,10 +1508,17 @@ def draw_source_note(company, source_used):
         )
     elif source_used == data.PREFERRED_SOURCE:
         st.caption("Share price and beta are live from Yahoo Finance.")
+    elif source_used == "live_fmp":
+        st.caption(
+            f"Share price and beta are live from {data.FMP_NAME}, because Yahoo Finance could not be reached."
+        )
     else:
         st.warning(
-            "Yahoo Finance could not be reached, so share price and beta come from a "
-            "frozen snapshot."
+            (
+                f"Neither Yahoo Finance nor {data.FMP_NAME} could be reached"
+                if data.fmp_available() else "Yahoo Finance could not be reached"
+            )
+            + ", so share price and beta come from a frozen snapshot."
         )
 
 
@@ -1558,4 +1597,5 @@ def draw_page():
 
 
 st.set_page_config(page_title="Valuation Lab")
+bridge_fmp_key()
 draw_page()

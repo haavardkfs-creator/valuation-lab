@@ -12,9 +12,25 @@ maths, so it is done by valuation.financial_debt, not here.
 """
 
 import copy
+import os
 import time
 
 import valuation
+
+
+class SourceUnavailable(ValueError):
+    """A data source is not answering (Yahoo limiting the server, a network failure, a daily limit used
+    up), as opposed to a real problem with the company asked about (an unknown ticker, a loss with no
+    tax rate). Only this kind of error makes the page try its backup source; it is a ValueError, so
+    code that expects ValueError still works.
+    """
+
+
+class UnknownCompany(ValueError):
+    """A provider answered, and it has nothing on this company (an unknown ticker, or a company its free
+    plan does not cover). This is a real answer about the company, not a sign that the provider is down,
+    so it is passed on as it is and never makes the page try another source.
+    """
 
 
 # ---------------------------------------------------------------------------
@@ -155,6 +171,23 @@ def _pause(seconds):
     time.sleep(seconds)
 
 
+# After Yahoo has said it is busy, the page skips Yahoo for this many seconds and goes straight to its
+# backup, instead of waiting and retrying on every click. Chosen with Haavard on 20 Nov 2026.
+YAHOO_COOLDOWN_SECONDS = 300
+_yahoo_busy_until = 0.0         # when the cool-down ends; the whole server shares it, because it is one program
+
+
+def _yahoo_cooling_down():
+    """Say whether Yahoo said it was busy a moment ago, so it should be skipped for now."""
+    return time.time() < _yahoo_busy_until
+
+
+def _start_yahoo_cooldown():
+    """Note that Yahoo is busy, so it is skipped for YAHOO_COOLDOWN_SECONDS."""
+    global _yahoo_busy_until
+    _yahoo_busy_until = time.time() + YAHOO_COOLDOWN_SECONDS
+
+
 def _quote_is_empty(info):
     """Say whether Yahoo's quote has nothing in it: none of a name, a price or a share count."""
     return not any(
@@ -198,11 +231,12 @@ def live_source(ticker, fetch_quote=fetch_yahoo_quote):
     try:
         quote = fetch_quote(ticker)
     except Exception as error:      # Yahoo can fail in many ways; the reader needs one clear message
-        raise ValueError("Could not get live figures from Yahoo Finance: %s" % error) from error
+        raise SourceUnavailable("Could not get live figures from Yahoo Finance: %s" % error) from error
 
     price = quote.get("share_price")
     if price is None and quote.get("beta") is None:
-        raise ValueError(YAHOO_BUSY_MESSAGE)        # nothing at all: Yahoo is not answering
+        _start_yahoo_cooldown()
+        raise SourceUnavailable(YAHOO_BUSY_MESSAGE)        # nothing at all: Yahoo is not answering
     if price is None or price <= 0:
         raise ValueError("Yahoo Finance did not give a usable share price for %s." % ticker)
     beta = quote.get("beta")
@@ -338,8 +372,20 @@ YAHOO_MONEY_FIELDS = [
 
 
 def yahoo_source(ticker, fetch_statements=fetch_yahoo_statements):
-    """Return a company's figures from Yahoo Finance's financial statements, for any company,
-    all in US dollars.
+    """Return a company's figures from Yahoo Finance's financial statements (see statements_source).
+    When Yahoo says it is busy, it is skipped for the next few minutes (YAHOO_COOLDOWN_SECONDS).
+    """
+    try:
+        return statements_source(ticker, fetch_statements, "Yahoo Finance", YAHOO_BUSY_MESSAGE)
+    except SourceUnavailable as error:
+        if str(error) == YAHOO_BUSY_MESSAGE:
+            _start_yahoo_cooldown()
+        raise
+
+
+def statements_source(ticker, fetch_statements, provider, busy_message):
+    """Return a company's figures from a provider's financial statements, for any company the
+    provider covers, all in US dollars.
 
     A company that reports or trades in another currency (kroner, pence, ...) is converted at
     the exchange rate Yahoo gives today: the statement figures at the statement currency's
@@ -348,35 +394,38 @@ def yahoo_source(ticker, fetch_statements=fetch_yahoo_statements):
     the debt notes and no peer multiples, because Yahoo cannot supply them. When Yahoo has no
     interest expense either (Apple), the package carries a fallback cost of debt, the risk-free
     rate plus a credit spread, and says so. Stops with a plain error naming any other figure
-    Yahoo did not supply, or if Yahoo cannot be reached.
+    the provider did not supply, or a SourceUnavailable error if the provider cannot be reached or
+    (when busy_message is given) sends the statements without a quote, which means it is limiting us.
     `fetch_statements` can be swapped, which is how the tests run without the internet.
     """
     try:
         statements = fetch_statements(ticker)
-    except Exception as error:      # Yahoo can fail in many ways; the reader needs one clear message
-        raise ValueError("Could not get figures from Yahoo Finance: %s" % error) from error
+    except (SourceUnavailable, UnknownCompany):
+        raise
+    except Exception as error:      # a provider can fail in many ways; the reader needs one clear message
+        raise SourceUnavailable("Could not get figures from %s: %s" % (provider, error)) from error
 
     missing = [name for name in YAHOO_REQUIRED if statements.get(name) is None]
     if len(missing) == len(YAHOO_REQUIRED):
         raise ValueError(
-            "Yahoo Finance has no figures for %s. Check that the ticker is right; "
-            "US-listed companies work best." % ticker
+            "%s has no figures for %s. Check that the ticker is right; "
+            "US-listed companies work best." % (provider, ticker)
         )
-    if all(statements.get(name) is None for name in YAHOO_QUOTE_FIELDS):
-        raise ValueError(YAHOO_BUSY_MESSAGE)        # the statements came but no quote at all: Yahoo is limiting us
+    if busy_message and all(statements.get(name) is None for name in YAHOO_QUOTE_FIELDS):
+        raise SourceUnavailable(busy_message)        # the statements came but no quote at all: the provider is limiting us
     for currency_name, rate_name in (
         ("statement_currency", "usd_per_statement_unit"),
         ("price_currency", "usd_per_price_unit"),
     ):
         if statements.get(currency_name) is not None and statements.get(rate_name) is None:
             raise ValueError(
-                "Yahoo Finance has no exchange rate for %s, so the figures for %s cannot be "
-                "converted to US dollars." % (statements[currency_name], ticker)
+                "%s has no exchange rate for %s, so the figures for %s cannot be "
+                "converted to US dollars." % (provider, statements[currency_name], ticker)
             )
     if missing:
-        raise ValueError("Yahoo Finance did not supply, for %s: %s." % (ticker, ", ".join(missing)))
+        raise ValueError("%s did not supply, for %s: %s." % (provider, ticker, ", ".join(missing)))
     if statements["share_price"] <= 0 or statements["shares"] <= 0:
-        raise ValueError("Yahoo Finance gave a share price or share count of zero or less for %s." % ticker)
+        raise ValueError("%s gave a share price or share count of zero or less for %s." % (provider, ticker))
 
     to_usd = valuation.convert_currency
     statement_rate = statements["usd_per_statement_unit"]
@@ -484,8 +533,10 @@ def get_history(ticker, usd_per_unit=1.0, fetch_history=fetch_yahoo_history):
     """
     try:
         history = fetch_history(ticker)
+    except SourceUnavailable:
+        raise
     except Exception as error:      # Yahoo can fail in many ways; the reader needs one clear message
-        raise ValueError("Could not get the history from Yahoo Finance: %s" % error) from error
+        raise SourceUnavailable("Could not get the history from Yahoo Finance: %s" % error) from error
     if not history["years"]:
         raise ValueError("Yahoo Finance has no yearly figures for %s." % ticker)
     return history_in_dollars(history, usd_per_unit)
@@ -576,8 +627,10 @@ def get_ttm(ticker, usd_per_unit=1.0, fetch_ttm=fetch_yahoo_ttm):
     """
     try:
         ttm = fetch_ttm(ticker)
+    except SourceUnavailable:
+        raise
     except Exception as error:      # Yahoo can fail in many ways; the reader needs one clear message
-        raise ValueError("Could not get the last twelve months from Yahoo Finance: %s" % error) from error
+        raise SourceUnavailable("Could not get the last twelve months from Yahoo Finance: %s" % error) from error
     needed = ["revenue", "operating_income", "net_income", "debt", "cash_and_investments"]
     missing = [name for name in needed if ttm[name] is None]
     if missing:
@@ -669,8 +722,10 @@ def peer_multiples(tickers, fetch_quote=fetch_peer_quote):
     """
     try:
         return peer_figures([fetch_quote(ticker) for ticker in tickers])
+    except SourceUnavailable:
+        raise
     except Exception as error:      # Yahoo can fail in many ways; the reader needs one clear message
-        raise ValueError("Could not get peer figures from Yahoo Finance: %s" % error) from error
+        raise SourceUnavailable("Could not get peer figures from Yahoo Finance: %s" % error) from error
 
 
 def read_quotes(symbols, fetch_quote):
@@ -684,7 +739,7 @@ def read_quotes(symbols, fetch_quote):
         except Exception:           # one unreadable peer should not hide the others
             continue
     if symbols and not quotes:
-        raise ValueError(
+        raise SourceUnavailable(
             "Could not get peers from Yahoo Finance: none of the %d candidates could be read." % len(symbols)
         )
     return quotes
@@ -720,8 +775,10 @@ def suggest_peers(
     """
     try:
         symbols = fetch_candidates(ticker, candidates_to_check)
+    except SourceUnavailable:
+        raise
     except Exception as error:      # Yahoo can fail in many ways; the reader needs one clear message
-        raise ValueError("Could not get peers from Yahoo Finance: %s" % error) from error
+        raise SourceUnavailable("Could not get peers from Yahoo Finance: %s" % error) from error
     quotes = read_quotes(symbols, fetch_quote)
 
     try:
@@ -753,6 +810,371 @@ def suggest_peers(
 
 
 # ---------------------------------------------------------------------------
+# Source 4: Financial Modeling Prep (FMP), a keyed backup for when Yahoo is limiting the server
+# ---------------------------------------------------------------------------
+
+FMP_NAME = "Financial Modeling Prep"
+FMP_BASE_URL = "https://financialmodelingprep.com/stable/"
+FMP_TIMEOUT_SECONDS = 20
+FMP_ROWS = 5                 # the free plan returns at most 5 rows (years or quarters) per request
+# The free plan allows 250 requests a day, so an answer is remembered in the running program for this
+# long: the same statements serve the company, its history and its peers. Chosen with Haavard on 20 Nov 2026.
+FMP_CACHE_SECONDS = 6 * 60 * 60
+FMP_LIMIT_MESSAGE = (
+    "Financial Modeling Prep's free daily limit of 250 requests has been used up; it starts again within a day."
+)
+_fmp_cache = {}              # (path, parameters) -> (when it was asked, the answer)
+
+
+def fmp_api_key():
+    """Return the Financial Modeling Prep key from the environment (the page puts it there from
+    Streamlit's private settings), or None if there is none. The key is never written anywhere.
+    """
+    return os.environ.get("FMP_API_KEY") or None
+
+
+def fmp_available():
+    """Say whether a Financial Modeling Prep key is set, so the backup can be tried at all."""
+    return fmp_api_key() is not None
+
+
+def _fmp_get(path, **parameters):
+    """Ask Financial Modeling Prep for one thing and return its answer (a list of rows). The answer
+    is remembered for FMP_CACHE_SECONDS so the free daily limit is not wasted on repeats. Stops with a
+    SourceUnavailable error if it cannot be reached, the key is refused or the daily limit is used up,
+    and with an UnknownCompany error if the free plan does not cover the company (non-US companies).
+    This is the only function that talks to Financial Modeling Prep.
+    """
+    key = fmp_api_key()
+    if key is None:
+        raise SourceUnavailable("No Financial Modeling Prep key is set.")
+    cache_key = (path, tuple(sorted(parameters.items())))
+    cached = _fmp_cache.get(cache_key)
+    if cached is not None and time.time() - cached[0] < FMP_CACHE_SECONDS:
+        return cached[1]
+    import requests         # already installed as part of yfinance; it carries the security certificates
+
+    try:
+        response = requests.get(
+            FMP_BASE_URL + path, params=dict(parameters, apikey=key), timeout=FMP_TIMEOUT_SECONDS
+        )
+    except Exception as error:      # the address, which holds the key, is never put in a message
+        raise SourceUnavailable(
+            "Could not reach %s: %s" % (FMP_NAME, type(error).__name__)
+        ) from None
+    if response.status_code == 429:
+        raise SourceUnavailable(FMP_LIMIT_MESSAGE)
+    if response.status_code in (401, 403):
+        raise SourceUnavailable("%s did not accept the key." % FMP_NAME)
+    if response.status_code == 402:
+        raise UnknownCompany(
+            "%s's free plan does not cover %s: it works for US-listed companies."
+            % (FMP_NAME, parameters.get("symbol", path))
+        )
+    if response.status_code != 200:
+        raise SourceUnavailable("%s answered with an error (HTTP %d)." % (FMP_NAME, response.status_code))
+    answer = response.json()
+    _fmp_cache[cache_key] = (time.time(), answer)
+    return answer
+
+
+def _fmp_rows(path, ticker, **parameters):
+    """Ask for rows (years, quarters, one profile) and stop with a plain error if there are none,
+    which is what Financial Modeling Prep sends for a ticker it does not know.
+    """
+    rows = _fmp_get(path, symbol=ticker, **parameters)
+    if not isinstance(rows, list) or not rows:
+        raise UnknownCompany(
+            "%s has no figures for %s. Check that the ticker is right; US-listed companies work best."
+            % (FMP_NAME, ticker)
+        )
+    return rows
+
+
+def _fmp_millions(value):
+    """Turn Financial Modeling Prep's dollars into millions, keeping a missing figure missing."""
+    return None if value is None else value / 1_000_000
+
+
+def fetch_fmp_statements(ticker):
+    """Get a company's latest annual figures from Financial Modeling Prep, in the same shape as
+    fetch_yahoo_statements: money in millions, capex and interest as positive amounts, shares worked
+    out as market value over price (FMP has no share count). Its free plan covers US companies, so the
+    currencies are US dollars, and a company reporting in another currency comes back without a rate.
+    """
+    profile = _fmp_rows("profile", ticker)[0]
+    income = _fmp_rows("income-statement", ticker, limit=FMP_ROWS)
+    balance = _fmp_rows("balance-sheet-statement", ticker, limit=FMP_ROWS)
+    cash_flow = _fmp_rows("cash-flow-statement", ticker, limit=FMP_ROWS)
+    latest_income, latest_balance, latest_cash = income[0], balance[0], cash_flow[0]
+    price, market_cap = profile.get("price"), profile.get("marketCap")
+    reported, traded = latest_income.get("reportedCurrency"), profile.get("currency")
+    capex = latest_cash.get("capitalExpenditure")
+    return {
+        "company_name": profile.get("companyName"),
+        "statement_currency": reported,
+        "price_currency": traded,
+        "usd_per_statement_unit": 1.0 if reported == "USD" else None,
+        "usd_per_price_unit": 1.0 if traded == "USD" else None,
+        "revenue": _fmp_millions(latest_income.get("revenue")),
+        "prior_year_revenue": _fmp_millions(income[1].get("revenue")) if len(income) > 1 else None,
+        "ebit": _fmp_millions(latest_income.get("operatingIncome")),
+        "net_income": _fmp_millions(latest_income.get("netIncome")),
+        "income_tax": _fmp_millions(latest_income.get("incomeTaxExpense")),
+        "income_before_tax": _fmp_millions(latest_income.get("incomeBeforeTax")),
+        "interest_expense": _fmp_millions(latest_income.get("interestExpense")),
+        "depreciation_and_amortisation": _fmp_millions(latest_cash.get("depreciationAndAmortization")),
+        "capex": None if capex is None else _fmp_millions(abs(capex)),
+        "cash_from_working_capital": _fmp_millions(latest_cash.get("changeInWorkingCapital")),
+        "long_term_debt": _fmp_millions(latest_balance.get("longTermDebt")),
+        "current_debt": _fmp_millions(latest_balance.get("shortTermDebt")),
+        "cash_and_investments": _fmp_millions(latest_balance.get("cashAndShortTermInvestments")),
+        "stockholders_equity": _fmp_millions(latest_balance.get("totalStockholdersEquity")),
+        "shares": (
+            None if not price or not market_cap
+            else valuation.shares_from_market_value(_fmp_millions(market_cap), price)
+        ),
+        "share_price": price,
+        "beta": profile.get("beta"),
+    }
+
+
+def fmp_source(ticker, fetch_statements=fetch_fmp_statements):
+    """Return a company's figures from Financial Modeling Prep, in the same package as the Yahoo
+    source (see statements_source): all in US dollars, with the same cost-of-debt fallback.
+    """
+    return statements_source(ticker, fetch_statements, FMP_NAME, None)
+
+
+def fetch_fmp_quote(ticker):
+    """Get a stock's current share price and beta from Financial Modeling Prep, in the same shape as
+    fetch_yahoo_quote.
+    """
+    profile = _fmp_rows("profile", ticker)[0]
+    return {"share_price": profile.get("price"), "beta": profile.get("beta")}
+
+
+def live_fmp_source(ticker, fetch_quote=fetch_fmp_quote):
+    """Return Adobe's figures with today's share price and beta from Financial Modeling Prep, and
+    everything else from the snapshot (the same as live_source, with the other provider).
+    """
+    package = snapshot_source(ticker)
+    quote = fetch_quote(ticker)
+    if not quote.get("share_price") or quote["share_price"] <= 0 or quote.get("beta") is None:
+        raise SourceUnavailable("%s did not give a usable share price and beta for %s." % (FMP_NAME, ticker))
+    package["share_price"], package["beta"] = quote["share_price"], quote["beta"]
+    return package
+
+
+def fetch_fmp_history(ticker):
+    """Get a company's yearly history from Financial Modeling Prep (up to 5 years), in the same shape
+    as fetch_yahoo_history: oldest first, millions, the diluted average share count, and free cash
+    flow as the company reports it. The cash flow is matched to its year by date.
+    """
+    income = _fmp_rows("income-statement", ticker, limit=FMP_ROWS)
+    cash_flow = {row.get("date"): row for row in _fmp_rows("cash-flow-statement", ticker, limit=FMP_ROWS)}
+    history = {"years": []}
+    for field in HISTORY_MONEY_FIELDS + ["diluted_shares"]:
+        history[field] = []
+    for row in income:                                              # the latest year first
+        if row.get("revenue") is None:
+            continue
+        cash = cash_flow.get(row.get("date"), {})
+        history["years"].append("FY%s" % row.get("fiscalYear", str(row.get("date", ""))[:4]))
+        history["revenue"].append(_fmp_millions(row.get("revenue")))
+        history["operating_income"].append(_fmp_millions(row.get("operatingIncome")))
+        history["net_income"].append(_fmp_millions(row.get("netIncome")))
+        history["free_cash_flow"].append(_fmp_millions(cash.get("freeCashFlow")))
+        history["diluted_shares"].append(_fmp_millions(row.get("weightedAverageShsOutDil")))
+    for field in history:
+        history[field].reverse()                                    # oldest first, as a reader expects
+    return history
+
+
+def fetch_fmp_ttm(ticker):
+    """Get a company's last twelve months from Financial Modeling Prep, in the same shape as
+    fetch_yahoo_ttm: the sum of the latest four quarters of revenue, operating income, net income and
+    D&A (matched by date), and debt and cash from the latest quarter's balance sheet.
+    """
+    income = _fmp_rows("income-statement", ticker, period="quarter", limit=FMP_ROWS)
+    cash_flow = {row.get("date"): row for row in _fmp_rows("cash-flow-statement", ticker, period="quarter", limit=FMP_ROWS)}
+    balance = _fmp_rows("balance-sheet-statement", ticker, period="quarter", limit=FMP_ROWS)[0]
+    quarters = [row for row in income if row.get("revenue") is not None][:4]       # the latest four, newest first
+
+    def four(name, rows_by_date=None):
+        return [
+            _fmp_millions((row if rows_by_date is None else rows_by_date.get(row.get("date"), {})).get(name))
+            for row in quarters
+        ]
+
+    long_term_debt = _fmp_millions(balance.get("longTermDebt"))
+    if long_term_debt is None and balance.get("totalDebt") is not None:
+        long_term_debt = 0.0                                        # the line is left out when it is zero
+    current_debt = _fmp_millions(balance.get("shortTermDebt"))
+    return {
+        "period_end": (
+            valuation_date_label(quarters[0].get("date")) if quarters else None
+        ),
+        "revenue": valuation.trailing_total(four("revenue")),
+        "operating_income": valuation.trailing_total(four("operatingIncome")),
+        "net_income": valuation.trailing_total(four("netIncome")),
+        "depreciation_and_amortisation": valuation.trailing_total(four("depreciationAndAmortization", cash_flow)),
+        "debt": (
+            None if long_term_debt is None
+            else valuation.financial_debt(0 if current_debt is None else current_debt, long_term_debt)
+        ),
+        "cash_and_investments": _fmp_millions(balance.get("cashAndShortTermInvestments")),
+    }
+
+
+def valuation_date_label(iso_date):
+    """Write a date such as 2026-08-28 as 28 Aug 2026, or None if it cannot be read."""
+    import datetime
+
+    try:
+        return datetime.date.fromisoformat(str(iso_date)).strftime("%-d %b %Y")
+    except ValueError:
+        return None
+
+
+def fetch_fmp_peer_list(ticker):
+    """Get the peers Financial Modeling Prep lists for a company, each with its market value in
+    millions, in the shape closest_peers takes. The free plan covers US companies, so the currency is
+    US dollars. The company itself is left out.
+    """
+    return [
+        {"ticker": row["symbol"], "market_cap": _fmp_millions(row.get("mktCap")), "currency": "USD"}
+        for row in _fmp_get("stock-peers", symbol=ticker)
+        if row.get("symbol") and row["symbol"] != ticker
+    ]
+
+
+def fetch_fmp_peer_quote(symbol):
+    """Get one peer's multiples and operating margin from Financial Modeling Prep (two requests), in
+    the same shape as fetch_peer_quote. Its market value comes from the peer list, and the revenue
+    growth, which would cost a third request, is left out (None).
+    """
+    metrics = _fmp_rows("key-metrics-ttm", symbol)[0]
+    ratios = _fmp_rows("ratios-ttm", symbol)[0]
+    return {
+        "ticker": symbol,
+        "market_cap": None,
+        "currency": "USD",
+        "ev_sales": metrics.get("evToSalesTTM"),
+        "ev_ebitda": metrics.get("evToEBITDATTM"),
+        "pe": ratios.get("priceToEarningsRatioTTM"),
+        "operating_margin": ratios.get("operatingProfitMarginTTM"),
+        "revenue_growth": None,
+    }
+
+
+def suggest_peers_fmp(
+    ticker,
+    company_market_value,
+    biggest_size_gap,
+    how_many,
+    fetch_peer_list=fetch_fmp_peer_list,
+    fetch_quote=fetch_fmp_peer_quote,
+):
+    """Suggest peers from Financial Modeling Prep's own peer list: keep those within biggest_size_gap
+    times of the company's market value ($ millions), take the how_many closest in size, and fetch their
+    multiples. To save the free daily limit it does not rank by margin and growth, and there is no
+    sector top-up. Returns the same lists as suggest_peers, with "peer_source" "industry" (or None).
+    """
+    candidates = fetch_peer_list(ticker)
+    chosen = valuation.closest_peers(company_market_value, candidates, biggest_size_gap, how_many)
+    figures = peer_figures(read_quotes([candidate["ticker"] for candidate in chosen], fetch_quote))
+    figures["peer_source"] = "industry" if chosen else None
+    return figures
+
+
+# ---------------------------------------------------------------------------
+# Yahoo first, Financial Modeling Prep second
+# ---------------------------------------------------------------------------
+
+def _yahoo_then_fmp(yahoo_call, fmp_call):
+    """Try Yahoo; if it is not answering (or has said it is busy a moment ago), try Financial Modeling
+    Prep if a key is set. Returns the answer and which provider gave it ("yahoo" or "fmp"). A real
+    problem with the company (an unknown ticker, no pre-tax profit) is not retried with the backup.
+    Stops with a SourceUnavailable error naming both if neither answers.
+    """
+    if _yahoo_cooling_down():
+        yahoo_error = SourceUnavailable(YAHOO_BUSY_MESSAGE)
+    else:
+        try:
+            return yahoo_call(), "yahoo"
+        except SourceUnavailable as error:
+            yahoo_error = error
+    if not fmp_available():
+        raise yahoo_error
+    try:
+        return fmp_call(), "fmp"
+    except SourceUnavailable as fmp_error:
+        raise SourceUnavailable("%s %s" % (yahoo_error, fmp_error)) from fmp_error
+
+
+def get_other_company_data(ticker):
+    """Get a company's package of figures for any company but Adobe: from Yahoo, or from Financial
+    Modeling Prep when Yahoo is not answering. Returns the package and the provider's name.
+    """
+    return _yahoo_then_fmp(
+        lambda: get_company_data(ticker, source="yahoo"),
+        lambda: get_company_data(ticker, source="fmp"),
+    )
+
+
+def get_history_any(ticker, usd_per_unit=1.0):
+    """Get a company's yearly history from Yahoo, or from Financial Modeling Prep when Yahoo is not
+    answering. The history says which provider gave it, under "source".
+    """
+    history, source = _yahoo_then_fmp(
+        lambda: get_history(ticker, usd_per_unit),
+        lambda: get_history(ticker, usd_per_unit, fetch_history=fetch_fmp_history),
+    )
+    return dict(history, source=source)
+
+
+def get_ttm_any(ticker, usd_per_unit=1.0):
+    """Get a company's last twelve months from Yahoo, or from Financial Modeling Prep when Yahoo is
+    not answering. The set says which provider gave it, under "source".
+    """
+    ttm, source = _yahoo_then_fmp(
+        lambda: get_ttm(ticker, usd_per_unit),
+        lambda: get_ttm(ticker, usd_per_unit, fetch_ttm=fetch_fmp_ttm),
+    )
+    return dict(ttm, source=source)
+
+
+def suggest_peers_any(
+    ticker, company_market_value, candidates_to_check, biggest_size_gap, how_many,
+    sector_candidates_to_check, minimum_industry_peers,
+):
+    """Suggest peers from Yahoo (by margin and growth, with a sector top-up), or from Financial
+    Modeling Prep's peer list (by size) when Yahoo is not answering. The figures say which
+    provider gave them, under "peer_data_source".
+    """
+    figures, source = _yahoo_then_fmp(
+        lambda: suggest_peers(
+            ticker, company_market_value, candidates_to_check, biggest_size_gap, how_many,
+            sector_candidates_to_check, minimum_industry_peers,
+        ),
+        lambda: suggest_peers_fmp(ticker, company_market_value, biggest_size_gap, how_many),
+    )
+    return dict(figures, peer_data_source=source)
+
+
+def peer_multiples_any(tickers):
+    """Get the multiples of peers the reader chose, from Yahoo, or from Financial Modeling Prep when
+    Yahoo is not answering. The figures say which provider gave them, under "peer_data_source".
+    """
+    figures, source = _yahoo_then_fmp(
+        lambda: peer_multiples(tickers),
+        lambda: peer_multiples(tickers, fetch_quote=fetch_fmp_peer_quote),
+    )
+    return dict(figures, peer_data_source=source)
+
+
+# ---------------------------------------------------------------------------
 # Choosing a source and fetching
 # ---------------------------------------------------------------------------
 
@@ -762,6 +1184,8 @@ SOURCES = {
     "snapshot": snapshot_source,
     "live": live_source,
     "yahoo": yahoo_source,
+    "fmp": lambda ticker: fmp_source(ticker),
+    "live_fmp": lambda ticker: live_fmp_source(ticker),
 }
 
 DEFAULT_SOURCE = "snapshot"
@@ -797,13 +1221,20 @@ FALLBACK_SOURCE = "snapshot"
 
 
 def get_company_data_with_fallback(ticker):
-    """Fetch a company's figures from the live source, or from the snapshot if the live
-    source fails.
+    """Fetch Adobe's figures with a live share price and beta from Yahoo, or from Financial Modeling
+    Prep if Yahoo is not answering, or from the frozen snapshot if neither is.
 
-    Returns two things: the package of figures, and the name of the source that supplied it,
-    so the page can tell the reader where the numbers came from.
+    Returns two things: the package of figures, and the name of the source that supplied it
+    ("live", "live_fmp" or "snapshot"), so the page can tell the reader where the numbers came from.
     """
-    try:
-        return get_company_data(ticker, source=PREFERRED_SOURCE), PREFERRED_SOURCE
-    except ValueError:      # live_source turns every Yahoo failure into a ValueError
-        return get_company_data(ticker, source=FALLBACK_SOURCE), FALLBACK_SOURCE
+    if not _yahoo_cooling_down():
+        try:
+            return get_company_data(ticker, source=PREFERRED_SOURCE), PREFERRED_SOURCE
+        except SourceUnavailable:       # live_source turns every Yahoo failure into this error
+            pass
+    if fmp_available():
+        try:
+            return get_company_data(ticker, source="live_fmp"), "live_fmp"
+        except SourceUnavailable:
+            pass
+    return get_company_data(ticker, source=FALLBACK_SOURCE), FALLBACK_SOURCE
