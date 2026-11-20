@@ -38,6 +38,8 @@ PEER_EV_SALES = [6.71, 4.35, 4.85, 10.19]
 PEER_EV_EBITDA = [22.94, 13.45, 12.63, 26.18]
 PEER_PE = [32.73, 20.72, 20.97, 82.62]
 PEER_PS = [6.56, 3.30, 3.38, 8.06]    # G8:G11 (added 20 Nov 2026)
+PEER_FORWARD_PE = [17.22, 10.05, 11.28, 21.20]    # Multiples D70:D73 (added 20 Nov 2026)
+ADOBE_FORWARD_EPS = 27.41             # Multiples C77: analysts' adjusted EPS for next year
 MINIMUM_PEERS = 2                     # assumptions.MINIMUM_PEERS: fewest peers a multiple needs
 
 # Adobe FY2025 figures used by the multiples (Multiples sheet C17:C21).
@@ -255,16 +257,18 @@ def test_full_dcf_multiples_summary_matches_multiples_sheet():
         ),
         v.price_from_pe(ADOBE_NET_INCOME, v.peer_median(PEER_PE), SHARES),
         v.price_from_ps(BASE_REVENUE, v.peer_median(PEER_PS), SHARES),
+        v.price_from_forward_pe(ADOBE_FORWARD_EPS, v.peer_median(PEER_FORWARD_PE)),
     ]
     assert prices == [
         close(333.58309927360767), close(420.51859564164647), close(463.53631961259072),
         close(286.03372881355932),                                       # H30
+        close(390.59250000000003),                                       # H31
     ]
     assert min(prices) == close(286.03372881355932)                      # Multiples C35
     assert max(prices) == close(463.53631961259072)                      # Multiples C36
-    assert v.peer_median(prices) == close(377.05084745762707)           # Multiples C37
+    assert v.peer_median(prices) == close(390.59250000000003)           # Multiples C37
     assert v.dcf_vs_multiples(run_base_case()["implied_share_price"], v.peer_median(prices)) == close(
-        -0.18949388711682214
+        -0.21759374096484352
     )                                                                    # Multiples C39
 
 
@@ -280,6 +284,8 @@ def run_base_case_multiples():
         peer_ev_ebitda=PEER_EV_EBITDA,
         peer_pe=PEER_PE,
         peer_ps=PEER_PS,
+        forward_eps=ADOBE_FORWARD_EPS,
+        peer_forward_pe=PEER_FORWARD_PE,
         dcf_price=run_base_case()["implied_share_price"],
         minimum_peers=MINIMUM_PEERS,
     )
@@ -291,21 +297,23 @@ def test_run_multiples_peer_medians_match_multiples_row_12():
     assert result["median_ev_ebitda"] == close(18.195)      # E12
     assert result["median_pe"] == close(26.85)              # F12
     assert result["median_ps"] == close(4.97)               # G12
+    assert result["median_forward_pe"] == close(14.25)      # D74
 
 
-def test_run_multiples_prices_match_multiples_h27_to_h30():
+def test_run_multiples_prices_match_multiples_h27_to_h31():
     result = run_base_case_multiples()
     assert result["price_ev_sales"] == close(333.58309927360767)     # H27
     assert result["price_ev_ebitda"] == close(420.51859564164647)    # H28
     assert result["price_pe"] == close(463.53631961259072)           # H29
     assert result["price_ps"] == close(286.03372881355932)           # H30
+    assert result["price_forward_pe"] == close(390.59250000000003)   # H31
 
 
 def test_run_multiples_median_price_and_gap_to_dcf_match_multiples_sheet():
     result = run_base_case_multiples()
-    # With four prices the middle is the average of the two in the middle: (333.58 + 420.52) / 2.
-    assert result["median_price"] == close(377.05084745762707)       # Multiples C37
-    assert result["dcf_vs_multiples"] == close(-0.18949388711682214)  # Multiples C39
+    # With five prices the middle is the third one: 286.03, 333.58, 390.59, 420.52, 463.54.
+    assert result["median_price"] == close(390.59250000000003)       # Multiples C37
+    assert result["dcf_vs_multiples"] == close(-0.21759374096484352)  # Multiples C39
 
 
 def test_the_price_to_sales_price_has_no_net_debt_step_unlike_ev_sales():
@@ -315,10 +323,26 @@ def test_the_price_to_sales_price_has_no_net_debt_step_unlike_ev_sales():
         revenue=BASE_REVENUE, ebit=ADOBE_EBIT, depreciation_and_amortisation=ADOBE_DA,
         net_income=ADOBE_NET_INCOME, net_debt_amount=-385, shares=SHARES,
         peer_ev_sales=same_multiple, peer_ev_ebitda=[None], peer_pe=[None], peer_ps=same_multiple,
+        forward_eps=None, peer_forward_pe=[None],
         dcf_price=300, minimum_peers=MINIMUM_PEERS,
     )
     assert result["price_ps"] == close(5.0 * BASE_REVENUE / SHARES)
     assert result["price_ev_sales"] == close((5.0 * BASE_REVENUE + 385) / SHARES)
+
+
+def test_the_forward_pe_price_is_just_next_years_eps_times_the_multiple():
+    # Already a price per share: no net debt step (Adobe has net cash, -385) and no division by shares.
+    result = run_base_case_multiples()
+    assert result["price_forward_pe"] == close(ADOBE_FORWARD_EPS * 14.25)
+    assert v.price_from_forward_pe(2.0, 15.0) == close(30.0)
+
+
+@pytest.mark.parametrize("no_good_estimate", [None, 0, -1.5])
+def test_no_forward_pe_price_without_a_positive_eps_estimate(no_good_estimate):
+    result = multiples_with_peers(PEER_EV_SALES, PEER_EV_EBITDA, PEER_PE, forward_eps=no_good_estimate)
+    assert result["price_forward_pe"] is None
+    assert result["median_forward_pe"] == close(14.25)          # the peers' middle is still worked out
+    assert result["median_price"] == close(377.05084745762707)  # the four other prices, as when only P/S was added
 
 
 # ---------------------------------------------------------------------------
@@ -862,9 +886,11 @@ def test_exactly_the_minimum_number_of_peers_is_enough():
     assert v.median_of_usable_multiples([10, None, 12], MINIMUM_PEERS) == close(11)
 
 
-def multiples_with_peers(ev_sales, ev_ebitda, pe, ps=PEER_PS):
-    """Run the multiples for Adobe's own figures against the given peer multiples (P/S is Adobe's own
-    column unless given)."""
+def multiples_with_peers(
+    ev_sales, ev_ebitda, pe, ps=PEER_PS, forward_pe=PEER_FORWARD_PE, forward_eps=ADOBE_FORWARD_EPS
+):
+    """Run the multiples for Adobe's own figures against the given peer multiples (P/S and forward P/E
+    are Adobe's own columns, and its forward EPS, unless given)."""
     return v.run_multiples(
         revenue=BASE_REVENUE,
         ebit=ADOBE_EBIT,
@@ -876,6 +902,8 @@ def multiples_with_peers(ev_sales, ev_ebitda, pe, ps=PEER_PS):
         peer_ev_ebitda=ev_ebitda,
         peer_pe=pe,
         peer_ps=ps,
+        forward_eps=forward_eps,
+        peer_forward_pe=forward_pe,
         dcf_price=run_base_case()["implied_share_price"],
         minimum_peers=MINIMUM_PEERS,
     )
@@ -887,28 +915,32 @@ def test_run_multiples_skips_a_multiple_that_has_too_few_peers_and_uses_the_rest
     assert result["price_ev_sales"] == close(333.58309927360767)         # unchanged (H27)
     assert result["price_ev_ebitda"] == close(420.51859564164647)        # unchanged (H28)
     assert result["price_ps"] == close(286.03372881355932)               # unchanged (H30)
-    # Three prices are left: the middle one is the median.
-    assert result["median_price"] == close(333.58309927360767)
+    assert result["price_forward_pe"] == close(390.59250000000003)       # unchanged (H31)
+    # Four prices are left (286.03, 333.58, 390.59, 420.52): the middle is the average of the two in the middle.
+    assert result["median_price"] == close((333.58309927360767 + 390.59250000000003) / 2)
     assert result["dcf_vs_multiples"] is not None
 
 
 def test_run_multiples_with_only_two_prices_left_gives_their_average():
-    result = multiples_with_peers(PEER_EV_SALES, PEER_EV_EBITDA, [26.85, None, None, None], ps=[None] * 4)
-    assert result["price_ps"] is None and result["median_ps"] is None
+    result = multiples_with_peers(
+        PEER_EV_SALES, PEER_EV_EBITDA, [26.85, None, None, None], ps=[None] * 4, forward_pe=[None] * 4
+    )
+    assert result["price_ps"] is None and result["median_ps"] is None and result["price_forward_pe"] is None
     assert result["median_price"] == close((333.58309927360767 + 420.51859564164647) / 2)
 
 
 def test_a_multiple_with_too_few_ps_peers_is_left_out_but_the_other_three_prices_stay():
     result = multiples_with_peers(PEER_EV_SALES, PEER_EV_EBITDA, PEER_PE, ps=[6.56, None, None, None])
     assert result["price_ps"] is None
-    # Prices left: 333.58, 420.52, 463.54: the middle one.
-    assert result["median_price"] == close(420.51859564164647)
+    # Prices left: 333.58, 390.59, 420.52, 463.54: the average of the two in the middle.
+    assert result["median_price"] == close((390.59250000000003 + 420.51859564164647) / 2)
 
 
 def test_run_multiples_with_no_usable_peers_at_all_gives_nothing_to_compare():
-    result = multiples_with_peers([None, None], [None, -2.0], [0, None], ps=[None, 0])
+    result = multiples_with_peers([None, None], [None, -2.0], [0, None], ps=[None, 0], forward_pe=[None, -3.0])
     assert result["median_price"] is None and result["dcf_vs_multiples"] is None
     assert result["price_ev_sales"] is None and result["price_ev_ebitda"] is None and result["price_ps"] is None
+    assert result["price_forward_pe"] is None
 
 
 def test_a_peer_dropped_from_one_multiple_still_counts_in_the_others():
@@ -1022,6 +1054,19 @@ def test_the_whole_adobe_overview_matches_the_multiples_sheet():
     assert got["net_debt_to_ebitda"] == close(-0.040424191516169675)            # C63 (net cash)
 
 
+def test_the_companys_own_forward_pe_is_the_share_price_over_next_years_eps():
+    # Not a cell in the workbook (D75 there is Yahoo's own figure at today's price), so worked out by hand.
+    with_estimate = v.stock_overview(
+        share_price=SHARE_PRICE, shares=SHARES, debt=DEBT, cash_and_investments=CASH_AND_INVESTMENTS,
+        revenue=BASE_REVENUE, prior_year_revenue=PRIOR_YEAR_REVENUE, ebit=ADOBE_EBIT,
+        depreciation_and_amortisation=ADOBE_DA, net_income=ADOBE_NET_INCOME,
+        income_tax=INCOME_TAX, income_before_tax=INCOME_BEFORE_TAX, capex=CAPEX,
+        cash_from_working_capital=CASH_FROM_WORKING_CAPITAL, forward_eps=ADOBE_FORWARD_EPS,
+    )
+    assert with_estimate["forward_pe"] == close(251.47 / 27.41)
+    assert adobe_overview()["forward_pe"] is None                 # no estimate given: nothing to divide by
+
+
 def test_ratio_or_none_gives_none_when_the_bottom_is_zero_or_negative():
     assert v.ratio_or_none(10, 4) == close(2.5)
     assert v.ratio_or_none(10, 0) is None
@@ -1106,6 +1151,7 @@ SOLAR_PEERS = {
     "peer_ev_ebitda": [14.3, 31.9, 18.0],
     "peer_pe": [19.8, 34.3, 3.9],
     "peer_ps": [3.0, 2.5, 3.5],           # made-up values, close together, so P/S flags nothing in these tests
+    "peer_forward_pe": [15.0, 14.0, 16.0],    # likewise for the forward P/E
     "peer_operating_margin": [0.186, 0.006, 0.063],
 }
 DEPRESSED_MARGIN = 0.05               # assumptions.DEPRESSED_PEER_MARGIN
@@ -1155,7 +1201,8 @@ def test_flag_peers_finds_synopsys_in_adobes_peers_and_nothing_else():
         {
             "peer_tickers": ["ADSK", "INTU", "CRM", "SNPS"], "peer_ev_sales": [6.71, 4.35, 4.85, 10.19],
             "peer_ev_ebitda": [22.94, 13.45, 12.63, 26.18], "peer_pe": [32.73, 20.72, 20.97, 82.62],
-            "peer_ps": PEER_PS, "peer_operating_margin": [0.281, 0.288, 0.215, 0.110],
+            "peer_ps": PEER_PS, "peer_forward_pe": PEER_FORWARD_PE,
+            "peer_operating_margin": [0.281, 0.288, 0.215, 0.110],
         },
         DEPRESSED_MARGIN, OUTLIER_FACTOR, 2,
     )
@@ -1173,7 +1220,8 @@ def test_a_margin_of_exactly_the_depressed_level_is_not_flagged_and_a_loss_is():
 def test_a_peer_can_be_flagged_for_several_reasons():
     peers = {
         "peer_tickers": ["A", "B", "C"], "peer_ev_sales": [2.0, 2.0, 2.0], "peer_ev_ebitda": [10.0, 10.0, 90.0],
-        "peer_pe": [20.0, 20.0, 200.0], "peer_ps": [3.0, 3.0, 3.0], "peer_operating_margin": [0.2, 0.2, 0.01],
+        "peer_pe": [20.0, 20.0, 200.0], "peer_ps": [3.0, 3.0, 3.0], "peer_forward_pe": [15.0, 15.0, 15.0],
+        "peer_operating_margin": [0.2, 0.2, 0.01],
     }
     assert v.flag_peers(peers, DEPRESSED_MARGIN, OUTLIER_FACTOR, 2)[2] == ["low_margin", "ev_ebitda", "pe"]
 
@@ -1186,6 +1234,7 @@ def test_one_extreme_peer_does_not_make_a_normal_peer_look_odd():
         "peer_tickers": ["GILD", "BMY", "AMGN", "MRK", "ABBV"], "peer_ev_sales": [7.4, 3.1, 7.2, 5.7, 8.7],
         "peer_ev_ebitda": [15.5, 8.4, 15.9, 13.0, 18.1], "peer_pe": [None, 13.2, 26.5, 139.2, 49.1],
         "peer_ps": [6.0, 3.0, 5.5, 4.5, 5.0],           # made-up values, close together
+        "peer_forward_pe": [12.0, 10.0, 14.0, 13.0, 15.0],
         "peer_operating_margin": [0.382, 0.324, 0.341, 0.352, 0.366],
     }
     flags = v.flag_peers(pfizers_peers, DEPRESSED_MARGIN, OUTLIER_FACTOR, 2)
@@ -1195,6 +1244,11 @@ def test_one_extreme_peer_does_not_make_a_normal_peer_look_odd():
 def test_a_peer_with_a_price_to_sales_far_from_the_rest_is_flagged_ps():
     peers = dict(SOLAR_PEERS, peer_ps=[3.0, 3.0, 12.0])               # 12 is 4 times the middle, 3
     assert v.flag_peers(peers, DEPRESSED_MARGIN, OUTLIER_FACTOR, 2) == [[], ["low_margin"], ["pe", "ps"]]
+
+
+def test_a_peer_with_a_forward_pe_far_from_the_rest_is_flagged_forward_pe():
+    peers = dict(SOLAR_PEERS, peer_forward_pe=[15.0, 14.0, 60.0])     # 60 is over 3 times the middle, 15
+    assert v.flag_peers(peers, DEPRESSED_MARGIN, OUTLIER_FACTOR, 2) == [[], ["low_margin"], ["pe", "forward_pe"]]
 
 
 def test_a_multiple_with_too_few_usable_peers_is_not_judged():

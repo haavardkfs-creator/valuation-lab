@@ -355,17 +355,18 @@ def is_outlier(multiple, middle_of_peers, outlier_factor):
 def flag_peers(peers, depressed_margin, outlier_factor, minimum_peers):
     """Find the peers whose figures may distort the comparison. For each peer, in order, return a
     list of reasons (empty if none): "low_margin" when its operating margin is below
-    depressed_margin (depressed earnings inflate its multiples), and "ev_sales", "ev_ebitda", "pe" or
-    "ps" when that multiple is far from the middle of all the peers' (see is_outlier), the same
-    middle the page's prices use. `peers` holds the lists peer_tickers, peer_ev_sales,
-    peer_ev_ebitda, peer_pe, peer_ps and peer_operating_margin; a multiple needs at least
-    minimum_peers usable peers to be judged.
+    depressed_margin (depressed earnings inflate its multiples), and "ev_sales", "ev_ebitda", "pe",
+    "ps" or "forward_pe" when that multiple is far from the middle of all the peers' (see is_outlier),
+    the same middle the page's prices use. `peers` holds the lists peer_tickers, peer_ev_sales,
+    peer_ev_ebitda, peer_pe, peer_ps, peer_forward_pe and peer_operating_margin; a multiple needs at
+    least minimum_peers usable peers to be judged.
     """
     columns = {
         "ev_sales": peers["peer_ev_sales"],
         "ev_ebitda": peers["peer_ev_ebitda"],
         "pe": peers["peer_pe"],
         "ps": peers["peer_ps"],
+        "forward_pe": peers["peer_forward_pe"],
     }
     middles = {name: median_of_usable_multiples(values, minimum_peers) for name, values in columns.items()}
     flags = []
@@ -581,6 +582,7 @@ def stock_overview(
     income_before_tax,
     capex,
     cash_from_working_capital,
+    forward_eps=None,
 ):
     """Work out eight numbers that give a quick picture of a company: how fast it is growing
     (revenue growth), what it earns on its sales (operating margin), how much cash it makes
@@ -610,6 +612,7 @@ def stock_overview(
         "ev_ebitda": ratio_or_none(enterprise_value_amount, ebitda_amount),
         "pe": ratio_or_none(market_value_amount, net_income),
         "ps": ratio_or_none(market_value_amount, revenue),          # workbook: Multiples C66
+        "forward_pe": ratio_or_none(share_price, forward_eps),      # price over next year's EPS; None without one
         "operating_margin": operating_margin(ebit, revenue),
         "revenue_growth": revenue_growth(revenue, prior_year_revenue),
         "free_cash_flow": free_cash_flow,
@@ -745,6 +748,14 @@ def price_from_pe(net_income, pe_multiple, shares):
     return net_income * pe_multiple / shares
 
 
+def price_from_forward_pe(forward_eps, forward_pe_multiple):
+    """Value a company from the forward price-to-earnings multiple (workbook: `Multiples` H31): analysts'
+    estimate of next year's earnings per share times the peers' forward P/E is already a price per
+    share, so there is no net debt step and no division by the shares.
+    """
+    return forward_eps * forward_pe_multiple
+
+
 def price_from_ps(revenue, ps_multiple, shares):
     """Value a company from the price-to-sales multiple (workbook: `Multiples` G30 and H30): revenue
     times the multiple is already equity value, like net income times P/E, so it only needs
@@ -841,6 +852,8 @@ def run_multiples(
     peer_ev_ebitda,
     peer_pe,
     peer_ps,
+    forward_eps,
+    peer_forward_pe,
     dcf_price,
     minimum_peers,
 ):
@@ -848,15 +861,18 @@ def run_multiples(
 
     Peers with a missing or meaningless multiple are left out of that one multiple, and a
     multiple with fewer than minimum_peers peers left is not used: its median and price come
-    back as None. Returns a dictionary holding the peer medians, the four prices (EV/Sales,
-    EV/EBITDA, P/E and P/S), the middle of the prices that exist (None if none do; with four prices
-    it is the average of the two in the middle), and how far the DCF price is above or below it, so
-    a page can show any of them.
+    back as None. `forward_eps` is analysts' estimate of next year's earnings per share, or None when
+    there is none (or it is not above zero, when a forward P/E would mean nothing); then the forward P/E
+    price is None too. Returns a dictionary holding the peer medians, the five prices (EV/Sales,
+    EV/EBITDA, P/E, P/S and forward P/E), the middle of the prices that exist (None if none do; with an
+    even number of prices it is the average of the two in the middle), and how far the DCF price is above
+    or below it, so a page can show any of them.
     """
     median_ev_sales = median_of_usable_multiples(peer_ev_sales, minimum_peers)
     median_ev_ebitda = median_of_usable_multiples(peer_ev_ebitda, minimum_peers)
     median_pe = median_of_usable_multiples(peer_pe, minimum_peers)
     median_ps = median_of_usable_multiples(peer_ps, minimum_peers)
+    median_forward_pe = median_of_usable_multiples(peer_forward_pe, minimum_peers)
 
     price_ev_sales = (
         None
@@ -872,8 +888,17 @@ def run_multiples(
     )
     price_pe = None if median_pe is None else price_from_pe(net_income, median_pe, shares)
     price_ps = None if median_ps is None else price_from_ps(revenue, median_ps, shares)
+    price_forward_pe = (
+        None
+        if median_forward_pe is None or forward_eps is None or forward_eps <= 0
+        else price_from_forward_pe(forward_eps, median_forward_pe)
+    )
 
-    prices = [price for price in (price_ev_sales, price_ev_ebitda, price_pe, price_ps) if price is not None]
+    prices = [
+        price
+        for price in (price_ev_sales, price_ev_ebitda, price_pe, price_ps, price_forward_pe)
+        if price is not None
+    ]
     median_price = peer_median(prices) if prices else None
 
     return {
@@ -881,10 +906,12 @@ def run_multiples(
         "median_ev_ebitda": median_ev_ebitda,
         "median_pe": median_pe,
         "median_ps": median_ps,
+        "median_forward_pe": median_forward_pe,
         "price_ev_sales": price_ev_sales,
         "price_ev_ebitda": price_ev_ebitda,
         "price_pe": price_pe,
         "price_ps": price_ps,
+        "price_forward_pe": price_forward_pe,
         "median_price": median_price,
         "dcf_vs_multiples": None if median_price is None else dcf_vs_multiples(dcf_price, median_price),
     }

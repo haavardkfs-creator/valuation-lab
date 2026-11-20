@@ -112,10 +112,17 @@ one outlier (Synopsys P/E of 82.6x) cannot dominate.
 - P/S (price to sales; workbook: `Multiples` G7:G13 and row 30): equity value = FY2025 revenue × peer
   median P/S, price = equity value ÷ shares. There is no net debt step, unlike EV/Sales: P/S is the
   market value of the shares over sales, so it already is an equity value, like P/E.
-- The middle price (C35:C37, lowest, highest and median) is taken over all four prices, `H27:H30`. With
-  four prices the median is the average of the two in the middle. P/S was added on 20 Nov 2026; its
-  peer figures are Yahoo's "Price/Sales (ttm)" of that day, while the other three columns are older (11 Apr
-  2026), as the workbook's note in I7 says.
+- Forward P/E (workbook: `Multiples` rows 68-77 and row 31): price = analysts' estimate of Adobe's earnings
+  per share for the next fiscal year (C77, 27.41) × the peers' median forward P/E (D74, 14.25) = $390.59
+  (H31). This is already a price per share, so there is no net debt step and no division by the shares.
+  The estimate is the analysts' adjusted (non-GAAP) EPS, which leaves out things like share-based pay (Adobe's
+  GAAP EPS is 17.91), and the peers' forward P/Es are on the same basis, so forward is only ever compared with
+  forward, never with the ordinary P/E.
+- The middle price (C35:C37, lowest, highest and median) is taken over all five prices, `H27:H31`. With an
+  odd number of prices the median is the middle one; with an even number, the average of the two in the
+  middle. P/S and forward P/E were added on 20 Nov 2026; their peer figures are Yahoo's of that day
+  ("Price/Sales (ttm)" and "Forward P/E"), while the other three columns are older (11 Apr 2026), as the
+  workbook's note in I7 says.
 - DCF vs multiples = DCF share price ÷ median multiples share price − 1
 
 Peers with a missing multiple (workbook: `Multiples` rows 41-49, a worked example with Coca-Cola's
@@ -128,9 +135,12 @@ loss-making peer has no P/E, and a negative EBITDA gives no real EV/EBITDA. The 
   and Mondelez (21.38x), 19.94x (F46, and F48 proves it: F49 = 0).
 - At least 2 peers must be left for a multiple to be used. With fewer, the middle of what remains
   is not a real peer median, so that multiple is skipped and the price from the others is shown.
-- The middle of the four prices becomes the middle of the prices that exist. Adobe's four peers
-  all have all four multiples. Adobe's median price went from $420.52 (three prices) to $377.05
-  (four), and the DCF vs multiples gap from -27.3% to -18.9%, when P/S was added.
+- The middle of the five prices becomes the middle of the prices that exist. Adobe's four peers
+  all have all five multiples. Adobe's median price went from $420.52 (three prices) to $377.05 (four, when
+  P/S was added) to $390.59 (five, with forward P/E), and the DCF vs multiples gap from -27.3% to -18.9% to
+  -21.8%.
+- A company with no analyst estimate (or one not above zero) has no forward P/E price: the page says "No
+  estimate" and the middle is taken over the other prices.
 
 Suggesting peers (not in the workbook: a screening rule, not valuation maths). For a company
 other than Adobe, the page suggests peers, which the reader can change:
@@ -154,9 +164,13 @@ other than Adobe, the page suggests peers, which the reader can change:
   that case; a company whose industry has enough peers (First Solar, with 3) is not topped up, because a
   sector list can be far off (First Solar's would give Seagate, ADP and Accenture). A company with no
   suitable peers anywhere gets none, and types its own.
-- The peers' EV/Sales, EV/EBITDA, P/E and P/S come from the same Yahoo lookup (trailing twelve months;
-  P/S is Yahoo's `priceToSalesTrailing12Months`, which is market value ÷ revenue, and Financial Modeling
-  Prep's `priceToSalesRatioTTM` when the backup is used).
+- The peers' EV/Sales, EV/EBITDA, P/E, P/S and forward P/E come from the same Yahoo lookup (the first four
+  trailing twelve months; P/S is Yahoo's `priceToSalesTrailing12Months`, which is market value ÷ revenue, and
+  Financial Modeling Prep's `priceToSalesRatioTTM` when the backup is used; forward P/E is Yahoo's `forwardPE`,
+  the share price over `forwardEps`). The company's own next-year EPS is Yahoo's `forwardEps`, in the currency
+  the share trades in (checked on Novo Nordisk and Aker), so it is converted to dollars at the share price's
+  exchange rate. Financial Modeling Prep's backup has no forward P/E and no estimate: they would cost more
+  requests of the free daily limit, so with Yahoo down the forward P/E price says "No estimate".
   A peer with no usable multiple is dealt with by the rule above.
 - On real data (19 Nov 2026): Coca-Cola gets Monster, PepsiCo and Keurig Dr Pepper; Pfizer gets Johnson &
   Johnson, Bristol-Myers, Merck, Amgen and Gilead; First Solar gets Enphase, Nextracker and Sunrun; Apple
@@ -167,7 +181,7 @@ How the page uses them (companies other than Adobe; Adobe keeps its four peers a
 - The sidebar has a "Peer tickers" box, filled in with the suggestions the first time a company
   is shown. The reader can change it: tickers are separated by commas or spaces, capitals or
   not, repeats and the company's own ticker are dropped, and at most 8 are used.
-- The page fetches each peer's four multiples and applies the rules above: a multiple needs
+- The page fetches each peer's five multiples and applies the rules above: a multiple needs
   at least 2 usable peers, otherwise its price says "Not enough peers" and the middle of the
   prices is taken over the ones that exist.
 - A table under the prices lists every peer's multiples, with a dash where a figure is missing,
@@ -198,10 +212,10 @@ How the page uses them (companies other than Adobe; Adobe keeps its four peers a
 | Enterprise value | ≈ 125,829 ($m) |
 | Equity value | ≈ 126,214 ($m) |
 | **Implied share price** | **$305.60** |
-| Peer medians EV/Sales / EV/EBITDA / P/E / P/S | 5.78x / 18.20x / 26.85x / 4.97x |
-| Multiples prices EV/Sales / EV/EBITDA / P/E / P/S | $333.58 / $420.52 / $463.54 / $286.03 |
-| Middle of the four multiples prices (`Multiples` C37) | $377.05 |
-| DCF vs multiples (`Multiples` C39) | −18.9% |
+| Peer medians EV/Sales / EV/EBITDA / P/E / P/S / forward P/E | 5.78x / 18.20x / 26.85x / 4.97x / 14.25x |
+| Multiples prices EV/Sales / EV/EBITDA / P/E / P/S / forward P/E | $333.58 / $420.52 / $463.54 / $286.03 / $390.59 |
+| Middle of the five multiples prices (`Multiples` C37) | $390.59 |
+| DCF vs multiples (`Multiples` C39) | −21.8% |
 
 ## Warnings about the peers
 
@@ -217,14 +231,14 @@ from the Peers box.
 - **Depressed earnings.** A peer whose operating margin is below 5% (a loss counts) is flagged
   "Low margin": its earnings are depressed, so its multiples look inflated (Enphase: margin 0.6%,
   EV/EBITDA 31.9x).
-- **A multiple far from the rest.** A peer whose EV/Sales, EV/EBITDA, P/E or P/S is more than 3 times
+- **A multiple far from the rest.** A peer whose EV/Sales, EV/EBITDA, P/E, P/S or forward P/E is more than 3 times
   above, or less than a third of, the middle of all the peers' (the same middle the page uses for
   the price) is flagged "outlier": often a one-off gain or loss (Sunrun's P/E of 3.9x, Merck's
   139x, Synopsys's 82.6x). The middle of all the peers is used, not of the others, because with
   few peers one outlier would drag the others' middle around and make a normal peer look odd.
   A multiple needs at least 2 usable peers to be judged.
-- **The middle price.** With four prices the page says "Middle of the four prices" (the average of the two
-  in the middle); with three, "Middle of the three prices". With two it
+- **The middle price.** With five prices the page says "Middle of the five prices"; with four, "Middle of
+  the four prices" (the average of the two in the middle); with three, "Middle of the three prices". With two it
   says "Average of two prices" and warns that two numbers have no middle; with one it says "The
   only price".
 The peers table has a "Flag" column and a line under it explains each flagged peer.
@@ -327,7 +341,9 @@ and today's share price, and every one is linked to cells that already exist.
 - EV/Sales = enterprise value ÷ revenue. EV/EBITDA = enterprise value ÷ EBITDA. P/E = market
   value ÷ net income. What the market pays per dollar of sales, operating profit and earnings.
   P/S = market value ÷ revenue (workbook: `Multiples` C66, 4.37x for Adobe on $251.47); it is used for
-  the company's own row in the peer table, not as a box in the overview.
+  the company's own row in the peer table, not as a box in the overview. The company's own forward P/E
+  (also only in the peer table) = share price ÷ next year's EPS estimate, "–" when there is no usable
+  estimate.
 - Operating margin = EBIT ÷ revenue. Revenue growth = revenue ÷ the year before's revenue − 1.
 - Free cash flow, last year = EBIT × (1 − tax rate) + D&A − capex + cash from working capital,
   the same build as the forecast's free cash flow (it ties to `Projection` G18, check cell C64 = 0).

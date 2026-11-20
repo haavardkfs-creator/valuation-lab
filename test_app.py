@@ -416,22 +416,22 @@ def test_a_low_wacc_company_gets_the_cautions_on_the_page(monkeypatch):
 # Peers for another company: suggested, editable, with the multiples that follow
 # ---------------------------------------------------------------------------
 
-def peer_info(market_cap_billions, ev_sales, ev_ebitda, pe, currency="USD", operating_margin=None, revenue_growth=None, ps=None):
+def peer_info(market_cap_billions, ev_sales, ev_ebitda, pe, currency="USD", operating_margin=None, revenue_growth=None, ps=None, forward_pe=None):
     """What Yahoo says about a made-up peer."""
     return {
         "marketCap": market_cap_billions * 1_000_000_000, "currency": currency,
         "enterpriseToRevenue": ev_sales, "enterpriseToEbitda": ev_ebitda, "trailingPE": pe,
-        "priceToSalesTrailing12Months": ps,
+        "priceToSalesTrailing12Months": ps, "forwardPE": forward_pe,
         "operatingMargins": operating_margin, "revenueGrowth": revenue_growth,
     }
 
 
 # Example Corp is worth about $94bn (price 240.74 times 389.2m shares). LOSS has no P/E and, in this
-# made-up case, no P/S either, SMALL is far too small, FOREIGN trades in pence.
+# made-up case, no P/S or forward P/E either, SMALL is far too small, FOREIGN trades in pence.
 PEERS_IN_THE_INDUSTRY = {
-    "AAA": peer_info(80, 2.0, 12.0, 20.0, operating_margin=0.30, ps=3.0),
-    "BBB": peer_info(120, 3.0, 16.0, 30.0, operating_margin=0.20, ps=4.0),
-    "CCC": peer_info(60, 4.0, 10.0, 25.0, operating_margin=0.10, ps=5.0),
+    "AAA": peer_info(80, 2.0, 12.0, 20.0, operating_margin=0.30, ps=3.0, forward_pe=12.0),
+    "BBB": peer_info(120, 3.0, 16.0, 30.0, operating_margin=0.20, ps=4.0, forward_pe=15.0),
+    "CCC": peer_info(60, 4.0, 10.0, 25.0, operating_margin=0.10, ps=5.0, forward_pe=18.0),
     "LOSS": peer_info(90, 5.0, 14.0, None, operating_margin=-0.25),
     "SMALL": peer_info(1, 1.0, 1.0, 1.0),
     "FOREIGN": peer_info(95, 9.0, 9.0, 9.0, currency="GBp"),
@@ -447,9 +447,13 @@ class FakeIndustry:
         )
 
 
-def example_with_peers():
-    """Yahoo's reply about Example Corp and its industry's peers."""
-    base = fake_statements_ticker(info=dict(ADOBE_YAHOO_INFO, longName="Example Corp", industryKey="widgets"))
+def example_with_peers(forward_eps=10.0):
+    """Yahoo's reply about Example Corp and its industry's peers. Analysts expect it to earn `forward_eps`
+    a share next year (None: no estimate)."""
+    info = dict(ADOBE_YAHOO_INFO, longName="Example Corp", industryKey="widgets")
+    if forward_eps is not None:
+        info["forwardEps"] = forward_eps
+    base = fake_statements_ticker(info=info)
 
     class Fake(base):
         def __init__(self, ticker):
@@ -460,9 +464,9 @@ def example_with_peers():
     return Fake
 
 
-def run_example_page(monkeypatch, ticker="exmp"):
+def run_example_page(monkeypatch, ticker="exmp", forward_eps=10.0):
     monkeypatch.setattr("yfinance.Industry", FakeIndustry)
-    return run_page(monkeypatch, ticker=ticker, yahoo=example_with_peers())
+    return run_page(monkeypatch, ticker=ticker, yahoo=example_with_peers(forward_eps))
 
 
 def peer_box(page):
@@ -506,9 +510,12 @@ def test_the_peer_box_starts_with_the_closest_dollar_peers_and_the_multiples_fol
     assert metrics(page)["P/E price"] == app.dollars(pe)      # LOSS has no P/E, so the median is of three
     ps = example_ps_price([None, 3.0, 4.0, 5.0])
     assert metrics(page)["P/S price"] == app.dollars(ps)      # LOSS has no P/S, so the median of 3, 4, 5 is 4
+    forward_pe = 10.0 * 15.0                                  # next year's EPS of 10 times the peers' middle, 15
+    assert metrics(page)["Forward P/E price"] == app.dollars(forward_pe)
     import statistics
-    # Four prices: the middle is the average of the two in the middle.
-    assert metrics(page)["Middle of the four prices"] == app.dollars(statistics.median([sales, ebitda, pe, ps]))
+    assert metrics(page)["Middle of the five prices"] == app.dollars(
+        statistics.median([sales, ebitda, pe, ps, forward_pe])
+    )
     assert any("Peers suggested from Yahoo's industry list" in caption for caption in texts(page.caption))
 
 
@@ -530,10 +537,12 @@ def test_the_table_has_the_company_itself_and_the_peer_medians(monkeypatch):
     assert own["Op. margin"] == "36.6%"                           # EBIT 8,706 over revenue 23,769
     # The medians of the four peers: EV/Sales of 5, 2, 3, 4 is 3.5; EV/EBITDA of 14, 12, 16, 10 is
     # 13; P/E of 20, 30, 25 (LOSS has none) is 25; P/S of 3, 4, 5 (LOSS has none) is 4; margins of
-    # -25%, 30%, 20%, 10% make 15%.
+    # -25%, 30%, 20%, 10% make 15%. Forward P/E of 12, 15, 18 (LOSS has none) is 15.
     median = table.loc["Peer median"]
-    assert median.tolist() == ["3.5x", "13.0x", "25.0x", "4.0x", "15.0%", ""]
+    assert median.tolist() == ["3.5x", "13.0x", "25.0x", "4.0x", "15.0x", "15.0%", ""]
     assert table.loc["AAA", "P/S"] == "3.0x" and table.loc["LOSS", "P/S"] == "–"
+    assert table.loc["BBB", "Forward P/E"] == "15.0x" and table.loc["LOSS", "Forward P/E"] == "–"
+    assert own["Forward P/E"] == "24.1x"                          # price 240.74 over next year's EPS of 10
 
 
 def test_the_reader_can_change_the_peers(monkeypatch):
@@ -635,15 +644,19 @@ def test_the_peer_table_shows_dashes_for_missing_zero_and_negative_multiples():
     peers = {
         "peer_tickers": ["A", "B"], "peer_ev_sales": [2.0, None],
         "peer_ev_ebitda": [-5.0, 12.34], "peer_pe": [0, float("nan")], "peer_ps": [-1.0, 2.5],
+        "peer_forward_pe": [None, 9.87],
     }
     peers["peer_operating_margin"] = [-0.1, None]
-    overview = {"ev_sales": 4.0, "ev_ebitda": None, "pe": 20.0, "ps": 1.5, "operating_margin": 0.3}
-    medians = {"median_ev_sales": None, "median_ev_ebitda": None, "median_pe": None, "median_ps": None}
+    overview = {"ev_sales": 4.0, "ev_ebitda": None, "pe": 20.0, "ps": 1.5, "forward_pe": 8.0, "operating_margin": 0.3}
+    medians = {
+        "median_ev_sales": None, "median_ev_ebitda": None, "median_pe": None, "median_ps": None,
+        "median_forward_pe": None,
+    }
     table = app.peer_table(peers, "ME (this company)", overview, medians)
-    assert table.loc["A"].tolist() == ["2.0x", "–", "–", "–", "-10.0%", "⚠ Low margin"]       # a loss: depressed earnings
-    assert table.loc["B"].tolist() == ["–", "12.3x", "–", "2.5x", "–", ""]
-    assert table.loc["ME (this company)"].tolist() == ["4.0x", "–", "20.0x", "1.5x", "30.0%", ""]
-    assert table.loc["Peer median"].tolist() == ["–", "–", "–", "–", "–", ""]         # one margin is not enough
+    assert table.loc["A"].tolist() == ["2.0x", "–", "–", "–", "–", "-10.0%", "⚠ Low margin"]       # a loss: depressed earnings
+    assert table.loc["B"].tolist() == ["–", "12.3x", "–", "2.5x", "9.9x", "–", ""]
+    assert table.loc["ME (this company)"].tolist() == ["4.0x", "–", "20.0x", "1.5x", "8.0x", "30.0%", ""]
+    assert table.loc["Peer median"].tolist() == ["–", "–", "–", "–", "–", "–", ""]         # one margin is not enough
 
 
 def test_a_price_that_could_not_be_worked_out_says_so():
@@ -930,16 +943,35 @@ SOLAR_LIKE_PEERS = {
 
 
 def test_the_middle_price_is_named_for_how_many_prices_it_is_the_middle_of():
-    def with_prices(sales, ebitda, pe, ps=None):
-        return {"price_ev_sales": sales, "price_ev_ebitda": ebitda, "price_pe": pe, "price_ps": ps}
+    def with_prices(sales, ebitda, pe, ps=None, forward_pe=None):
+        return {
+            "price_ev_sales": sales, "price_ev_ebitda": ebitda, "price_pe": pe, "price_ps": ps,
+            "price_forward_pe": forward_pe,
+        }
 
+    assert app.middle_price_label(with_prices(1, 2, 3, 4, 5)) == "Middle of the five prices"
     assert app.middle_price_label(with_prices(1, 2, 3, 4)) == "Middle of the four prices"
+    assert app.middle_price_label(with_prices(1, 2, None, 4, 5)) == "Middle of the four prices"      # forward P/E counts too
     assert app.middle_price_label(with_prices(1, 2, 3)) == "Middle of the three prices"
     assert app.middle_price_label(with_prices(1, 2, None, 4)) == "Middle of the three prices"        # P/S counts too
     assert app.middle_price_label(with_prices(None, None, 3, 4)) == "Average of two prices"
     assert app.middle_price_label(with_prices(1, None, 3)) == "Average of two prices"
     assert app.middle_price_label(with_prices(None, None, 3)) == "The only price"
     assert app.middle_price_label(with_prices(None, None, None)) == "Middle of the prices"
+
+
+def test_a_company_with_no_analyst_estimate_says_so_instead_of_a_forward_pe_price(monkeypatch):
+    page = run_example_page(monkeypatch, forward_eps=None)
+    assert_footer_and_no_crash(page)
+    assert metrics(page)["Forward P/E price"] == "No estimate"
+    assert "Middle of the four prices" in metrics(page)               # the other four prices still make a middle
+    assert page.dataframe[-1].value.loc["EXMP (this company)", "Forward P/E"] == "–"
+
+
+def test_a_forward_pe_price_needs_enough_peers_with_a_forward_pe(monkeypatch):
+    page = run_example_page(monkeypatch)
+    peer_box(page).set_value("LOSS, AAA").run()                       # only AAA has a forward P/E: no middle
+    assert metrics(page)["Forward P/E price"] == "Not enough peers"
 
 
 def test_two_prices_get_a_warning_that_they_have_no_middle(monkeypatch):
@@ -1040,7 +1072,7 @@ def test_adobes_page_flags_synopsys_for_its_pe(monkeypatch):
     import statistics
     middle = f"{statistics.median([32.73, 20.72, 20.97, 82.62]):.1f}x"       # all four peers' P/Es
     assert any(c.startswith(f"⚠ SNPS: its P/E of 82.6x is far from the peers' middle ({middle})") for c in texts(page.caption))
-    assert "Middle of the four prices" in metrics(page)                      # Adobe has all four prices
+    assert "Middle of the five prices" in metrics(page)                      # Adobe has all five prices
 
 
 def wacc_table_of(page):

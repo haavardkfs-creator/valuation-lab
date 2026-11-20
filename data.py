@@ -71,6 +71,8 @@ OPTIONAL_FIELDS = {
     "peer_ev_ebitda": "Each peer's EV/EBITDA multiple",
     "peer_pe": "Each peer's P/E multiple",
     "peer_ps": "Each peer's P/S multiple (market value over revenue)",
+    "peer_forward_pe": "Each peer's forward P/E (share price over analysts' estimate of next year's earnings per share)",
+    "forward_eps": "Analysts' estimate of the company's earnings per share for the next fiscal year, $ (adjusted: leaves out things like share-based pay)",
     "peer_operating_margin": "Each peer's operating margin, trailing twelve months, decimal (negative for a loss); None when Yahoo has none",
     "statement_currency": "Currency the company reports in, before conversion to US dollars, for example NOK",
     "price_currency": "Currency the share trades in, before conversion to US dollars, for example NOK or GBp (pence)",
@@ -138,6 +140,12 @@ ADOBE_SNAPSHOT = {
     # P/S: Yahoo Finance, Price/Sales (ttm), 20 Nov 2026 (the three multiples above are older; workbook:
     # Multiples G8:G11). Same order.
     "peer_ps": [6.56, 3.30, 3.38, 8.06],
+    # Forward P/E: Yahoo Finance, analyst estimates for the next fiscal year, 20 Nov 2026 (workbook:
+    # Multiples D70:D73). Same order.
+    "peer_forward_pe": [17.22, 10.05, 11.28, 21.20],
+    # Adobe's own next-year EPS, analysts' adjusted figure (GAAP EPS is far lower), Yahoo Finance,
+    # 20 Nov 2026 (workbook: Multiples C77).
+    "forward_eps": 27.41,
 }
 
 
@@ -320,6 +328,7 @@ def fetch_yahoo_statements(ticker):
     price_currency = info.get("currency")
     return {
         "company_name": info.get("longName") or info.get("shortName"),
+        "forward_eps": info.get("forwardEps"),          # in the price currency, like the share price
         "statement_currency": statement_currency,
         "price_currency": price_currency,
         "usd_per_statement_unit": None if statement_currency is None else _fetch_usd_per_unit(statement_currency),
@@ -449,6 +458,9 @@ def statements_source(ticker, fetch_statements, provider, busy_message):
             RISK_FREE_RATE, CREDIT_SPREAD
         )
         package["cost_of_debt_is_fallback"] = True
+    if statements.get("forward_eps") is not None:
+        # Yahoo gives it in the currency the share trades in, so it converts like the share price.
+        package["forward_eps"] = to_usd(statements["forward_eps"], statements["usd_per_price_unit"])
     package.update(
         company_name=statements["company_name"],
         ticker=ticker,
@@ -684,7 +696,7 @@ def fetch_sector_candidates(ticker, how_many):
 
 def fetch_peer_quote(ticker):
     """Ask Yahoo Finance for one peer's market value (in $ millions), the currency it trades in
-    its four multiples (EV/Sales, EV/EBITDA, P/E and P/S), its operating margin and its revenue growth
+    its five multiples (EV/Sales, EV/EBITDA, P/E, P/S and forward P/E), its operating margin and its revenue growth
     (the latest quarter against a year earlier), all as Yahoo gives them. A figure Yahoo does not
     have comes back as None. This is the only function that looks up a peer on
     the internet.
@@ -701,6 +713,7 @@ def fetch_peer_quote(ticker):
         "ev_ebitda": info.get("enterpriseToEbitda"),
         "pe": info.get("trailingPE"),
         "ps": info.get("priceToSalesTrailing12Months"),
+        "forward_pe": info.get("forwardPE"),
         "operating_margin": info.get("operatingMargins"),
         "revenue_growth": info.get("revenueGrowth"),
     }
@@ -717,6 +730,7 @@ def peer_figures(quotes):
         "peer_ev_ebitda": [quote["ev_ebitda"] for quote in quotes],
         "peer_pe": [quote["pe"] for quote in quotes],
         "peer_ps": [quote["ps"] for quote in quotes],
+        "peer_forward_pe": [quote["forward_pe"] for quote in quotes],
         "peer_operating_margin": [quote["operating_margin"] for quote in quotes],
     }
 
@@ -1058,7 +1072,7 @@ def fetch_fmp_peer_list(ticker):
 def fetch_fmp_peer_quote(symbol):
     """Get one peer's multiples and operating margin from Financial Modeling Prep (two requests), in
     the same shape as fetch_peer_quote. Its market value comes from the peer list, and the revenue
-    growth, which would cost a third request, is left out (None).
+    growth and the forward P/E, which would each cost a third request, are left out (None).
     """
     metrics = _fmp_rows("key-metrics-ttm", symbol)[0]
     ratios = _fmp_rows("ratios-ttm", symbol)[0]
@@ -1070,6 +1084,7 @@ def fetch_fmp_peer_quote(symbol):
         "ev_ebitda": metrics.get("evToEBITDATTM"),
         "pe": ratios.get("priceToEarningsRatioTTM"),
         "ps": ratios.get("priceToSalesRatioTTM"),
+        "forward_pe": None,                 # needs another request for analyst estimates; left out to save the daily limit
         "operating_margin": ratios.get("operatingProfitMarginTTM"),
         "revenue_growth": None,
     }
