@@ -109,20 +109,28 @@ one outlier (Synopsys P/E of 82.6x) cannot dominate.
 - EV/EBITDA: enterprise value = FY2025 EBITDA × peer median EV/EBITDA
 - For both: equity value = enterprise value − net debt, price = equity value ÷ shares
 - P/E: equity value = FY2025 net income × peer median P/E, price = equity value ÷ shares
+- P/S (price to sales; workbook: `Multiples` G7:G13 and row 30): equity value = FY2025 revenue × peer
+  median P/S, price = equity value ÷ shares. There is no net debt step, unlike EV/Sales: P/S is the
+  market value of the shares over sales, so it already is an equity value, like P/E.
+- The middle price (C35:C37, lowest, highest and median) is taken over all four prices, `H27:H30`. With
+  four prices the median is the average of the two in the middle. P/S was added on 20 Nov 2026; its
+  peer figures are Yahoo's "Price/Sales (ttm)" of that day, while the other three columns are older (11 Apr
+  2026), as the workbook's note in I7 says.
 - DCF vs multiples = DCF share price ÷ median multiples share price − 1
 
 Peers with a missing multiple (workbook: `Multiples` rows 41-49, a worked example with Coca-Cola's
-peers PepsiCo, Keurig Dr Pepper and Mondelez). A peer does not always have all three multiples: a
+peers PepsiCo, Keurig Dr Pepper and Mondelez). A peer does not always have all four multiples: a
 loss-making peer has no P/E, and a negative EBITDA gives no real EV/EBITDA. The rule:
 - A peer whose multiple is missing, zero or negative is left out of that one multiple only. It
-  still counts in the other two.
+  still counts in the others.
 - The peer median is the median of the peers that are left. Excel's `MEDIAN` already skips blank
   cells. In the example Keurig's P/E is blank, so the P/E median is the middle of PepsiCo (18.51x)
   and Mondelez (21.38x), 19.94x (F46, and F48 proves it: F49 = 0).
 - At least 2 peers must be left for a multiple to be used. With fewer, the middle of what remains
   is not a real peer median, so that multiple is skipped and the price from the others is shown.
-- The middle of the three prices becomes the middle of the prices that exist. Adobe's four peers
-  all have all three multiples, so nothing changes for it.
+- The middle of the four prices becomes the middle of the prices that exist. Adobe's four peers
+  all have all four multiples. Adobe's median price went from $420.52 (three prices) to $377.05
+  (four), and the DCF vs multiples gap from -27.3% to -18.9%, when P/S was added.
 
 Suggesting peers (not in the workbook: a screening rule, not valuation maths). For a company
 other than Adobe, the page suggests peers, which the reader can change:
@@ -146,7 +154,9 @@ other than Adobe, the page suggests peers, which the reader can change:
   that case; a company whose industry has enough peers (First Solar, with 3) is not topped up, because a
   sector list can be far off (First Solar's would give Seagate, ADP and Accenture). A company with no
   suitable peers anywhere gets none, and types its own.
-- The peers' EV/Sales, EV/EBITDA and P/E come from the same Yahoo lookup (trailing twelve months).
+- The peers' EV/Sales, EV/EBITDA, P/E and P/S come from the same Yahoo lookup (trailing twelve months;
+  P/S is Yahoo's `priceToSalesTrailing12Months`, which is market value ÷ revenue, and Financial Modeling
+  Prep's `priceToSalesRatioTTM` when the backup is used).
   A peer with no usable multiple is dealt with by the rule above.
 - On real data (19 Nov 2026): Coca-Cola gets Monster, PepsiCo and Keurig Dr Pepper; Pfizer gets Johnson &
   Johnson, Bristol-Myers, Merck, Amgen and Gilead; First Solar gets Enphase, Nextracker and Sunrun; Apple
@@ -157,7 +167,7 @@ How the page uses them (companies other than Adobe; Adobe keeps its four peers a
 - The sidebar has a "Peer tickers" box, filled in with the suggestions the first time a company
   is shown. The reader can change it: tickers are separated by commas or spaces, capitals or
   not, repeats and the company's own ticker are dropped, and at most 8 are used.
-- The page fetches each peer's three multiples and applies the rules above: a multiple needs
+- The page fetches each peer's four multiples and applies the rules above: a multiple needs
   at least 2 usable peers, otherwise its price says "Not enough peers" and the middle of the
   prices is taken over the ones that exist.
 - A table under the prices lists every peer's multiples, with a dash where a figure is missing,
@@ -188,8 +198,10 @@ How the page uses them (companies other than Adobe; Adobe keeps its four peers a
 | Enterprise value | ≈ 125,829 ($m) |
 | Equity value | ≈ 126,214 ($m) |
 | **Implied share price** | **$305.60** |
-| Peer medians EV/Sales / EV/EBITDA / P/E | 5.78x / 18.20x / 26.85x |
-| Multiples prices EV/Sales / EV/EBITDA / P/E | $333.58 / $420.52 / $463.54 |
+| Peer medians EV/Sales / EV/EBITDA / P/E / P/S | 5.78x / 18.20x / 26.85x / 4.97x |
+| Multiples prices EV/Sales / EV/EBITDA / P/E / P/S | $333.58 / $420.52 / $463.54 / $286.03 |
+| Middle of the four multiples prices (`Multiples` C37) | $377.05 |
+| DCF vs multiples (`Multiples` C39) | −18.9% |
 
 ## Warnings about the peers
 
@@ -205,13 +217,14 @@ from the Peers box.
 - **Depressed earnings.** A peer whose operating margin is below 5% (a loss counts) is flagged
   "Low margin": its earnings are depressed, so its multiples look inflated (Enphase: margin 0.6%,
   EV/EBITDA 31.9x).
-- **A multiple far from the rest.** A peer whose EV/Sales, EV/EBITDA or P/E is more than 3 times
+- **A multiple far from the rest.** A peer whose EV/Sales, EV/EBITDA, P/E or P/S is more than 3 times
   above, or less than a third of, the middle of all the peers' (the same middle the page uses for
   the price) is flagged "outlier": often a one-off gain or loss (Sunrun's P/E of 3.9x, Merck's
   139x, Synopsys's 82.6x). The middle of all the peers is used, not of the others, because with
   few peers one outlier would drag the others' middle around and make a normal peer look odd.
   A multiple needs at least 2 usable peers to be judged.
-- **The middle price.** With three prices the page says "Middle of the three prices". With two it
+- **The middle price.** With four prices the page says "Middle of the four prices" (the average of the two
+  in the middle); with three, "Middle of the three prices". With two it
   says "Average of two prices" and warns that two numbers have no middle; with one it says "The
   only price".
 The peers table has a "Flag" column and a line under it explains each flagged peer.
@@ -313,6 +326,8 @@ and today's share price, and every one is linked to cells that already exist.
 - Market value = share price × shares. Enterprise value = market value + net debt.
 - EV/Sales = enterprise value ÷ revenue. EV/EBITDA = enterprise value ÷ EBITDA. P/E = market
   value ÷ net income. What the market pays per dollar of sales, operating profit and earnings.
+  P/S = market value ÷ revenue (workbook: `Multiples` C66, 4.37x for Adobe on $251.47); it is used for
+  the company's own row in the peer table, not as a box in the overview.
 - Operating margin = EBIT ÷ revenue. Revenue growth = revenue ÷ the year before's revenue − 1.
 - Free cash flow, last year = EBIT × (1 − tax rate) + D&A − capex + cash from working capital,
   the same build as the forecast's free cash flow (it ties to `Projection` G18, check cell C64 = 0).

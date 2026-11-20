@@ -60,6 +60,7 @@ EXPECTED_SNAPSHOT = {
     "peer_ev_sales": [6.71, 4.35, 4.85, 10.19],         # Multiples D8:D11
     "peer_ev_ebitda": [22.94, 13.45, 12.63, 26.18],     # Multiples E8:E11
     "peer_pe": [32.73, 20.72, 20.97, 82.62],            # Multiples F8:F11
+    "peer_ps": [6.56, 3.30, 3.38, 8.06],                # Multiples G8:G11
 }
 
 
@@ -94,6 +95,7 @@ def test_peer_lists_have_one_entry_per_peer():
     assert len(package["peer_ev_sales"]) == peers
     assert len(package["peer_ev_ebitda"]) == peers
     assert len(package["peer_pe"]) == peers
+    assert len(package["peer_ps"]) == peers
 
 
 # ---------------------------------------------------------------------------
@@ -316,11 +318,13 @@ def test_data_into_the_multiples_gives_the_excel_prices():
             d["shares"],
         ),
         v.price_from_pe(d["net_income"], v.peer_median(d["peer_pe"]), d["shares"]),
+        v.price_from_ps(d["revenue"], v.peer_median(d["peer_ps"]), d["shares"]),
     ]
     assert prices == [
         base.close(333.58309927360767),     # Multiples H27
         base.close(420.51859564164647),     # H28
         base.close(463.53631961259072),     # H29
+        base.close(286.03372881355932),     # H30
     ]
 
 
@@ -691,11 +695,11 @@ def test_the_fallback_cost_of_debt_is_the_same_in_every_currency(monkeypatch):
 # Peers: suggested from Yahoo's industry list, with their multiples
 # ---------------------------------------------------------------------------
 
-def quote(ticker, market_cap, ev_sales=2.0, ev_ebitda=12.0, pe=20.0, currency="USD", operating_margin=0.20, revenue_growth=0.05):
+def quote(ticker, market_cap, ev_sales=2.0, ev_ebitda=12.0, pe=20.0, currency="USD", operating_margin=0.20, revenue_growth=0.05, ps=3.0):
     """A peer's quote as fetch_peer_quote returns it (market value in $ millions)."""
     return {
         "ticker": ticker, "market_cap": market_cap, "currency": currency,
-        "ev_sales": ev_sales, "ev_ebitda": ev_ebitda, "pe": pe, "operating_margin": operating_margin,
+        "ev_sales": ev_sales, "ev_ebitda": ev_ebitda, "pe": pe, "ps": ps, "operating_margin": operating_margin,
         "revenue_growth": revenue_growth,
     }
 
@@ -758,7 +762,7 @@ def test_only_the_first_candidates_to_check_are_looked_at():
 def test_a_company_with_no_suitable_peers_gets_empty_lists_not_an_error():
     got = suggest_for_coca_cola(company_market_value=5_000_000)      # like Apple: nothing close in size
     assert got == {
-        "peer_tickers": [], "peer_ev_sales": [], "peer_ev_ebitda": [], "peer_pe": [],
+        "peer_tickers": [], "peer_ev_sales": [], "peer_ev_ebitda": [], "peer_pe": [], "peer_ps": [],
         "peer_operating_margin": [], "peer_source": None,
     }
 
@@ -833,14 +837,14 @@ class FakeIndex:
 def test_fetch_peer_quote_turns_the_market_value_into_millions_and_picks_the_multiples(monkeypatch):
     FakeInfoTicker.infos = {"PEP": {
         "marketCap": 200_363_819_008, "currency": "USD", "enterpriseToRevenue": 2.434,
-        "enterpriseToEbitda": 12.472, "trailingPE": 18.50692, "operatingMargins": 0.16046,
-        "revenueGrowth": 0.04,
+        "enterpriseToEbitda": 12.472, "trailingPE": 18.50692, "priceToSalesTrailing12Months": 2.2,
+        "operatingMargins": 0.16046, "revenueGrowth": 0.04,
     }}
     monkeypatch.setattr("yfinance.Ticker", FakeInfoTicker)
     got = data.fetch_peer_quote("PEP")
     assert got == {
         "ticker": "PEP", "market_cap": pytest.approx(200_363.819008), "currency": "USD",
-        "ev_sales": 2.434, "ev_ebitda": 12.472, "pe": 18.50692, "operating_margin": 0.16046,
+        "ev_sales": 2.434, "ev_ebitda": 12.472, "pe": 18.50692, "ps": 2.2, "operating_margin": 0.16046,
         "revenue_growth": 0.04,
     }
 
@@ -849,7 +853,7 @@ def test_fetch_peer_quote_gives_none_for_a_figure_yahoo_does_not_have(monkeypatc
     FakeInfoTicker.infos = {"LOSS": {"marketCap": 5_000_000_000, "currency": "USD"}}
     monkeypatch.setattr("yfinance.Ticker", FakeInfoTicker)
     got = data.fetch_peer_quote("LOSS")
-    assert got["pe"] is None and got["ev_ebitda"] is None and got["ev_sales"] is None
+    assert got["pe"] is None and got["ev_ebitda"] is None and got["ev_sales"] is None and got["ps"] is None
     assert got["operating_margin"] is None and got["revenue_growth"] is None
     assert data.fetch_peer_quote("UNKNOWN")["market_cap"] is None
 
@@ -1510,7 +1514,7 @@ def fake_fmp(**replacements):
             {"symbol": "HUGE", "mktCap": 3_000_000_000_000},       # thirty times bigger: too big
         ],
         "key-metrics-ttm": [{"evToSalesTTM": 6.0, "evToEBITDATTM": 15.0}],
-        "ratios-ttm": [{"priceToEarningsRatioTTM": 25.0, "operatingProfitMarginTTM": 0.3}],
+        "ratios-ttm": [{"priceToEarningsRatioTTM": 25.0, "priceToSalesRatioTTM": 7.5, "operatingProfitMarginTTM": 0.3}],
     }
     answers.update(replacements)
     asked = []
@@ -1791,6 +1795,7 @@ def test_an_fmp_peer_quote_gives_the_multiples_and_margin(monkeypatch):
     with_fmp(monkeypatch)
     quote = data.fetch_fmp_peer_quote("AAA")
     assert (quote["ev_sales"], quote["ev_ebitda"], quote["pe"], quote["operating_margin"]) == (6.0, 15.0, 25.0, 0.3)
+    assert quote["ps"] == 7.5                                       # FMP's "priceToSalesRatioTTM"
 
 
 def test_fmp_peer_suggestions_keep_the_ones_close_in_size_and_fetch_their_multiples(monkeypatch):
@@ -1798,6 +1803,7 @@ def test_fmp_peer_suggestions_keep_the_ones_close_in_size_and_fetch_their_multip
     figures = data.suggest_peers_fmp("ADBE", 100000, 10, 5)
     assert figures["peer_tickers"] == ["AAA", "BBB"]               # HUGE is thirty times the size
     assert figures["peer_ev_sales"] == [6.0, 6.0]
+    assert figures["peer_ps"] == [7.5, 7.5]
     assert figures["peer_operating_margin"] == [0.3, 0.3]
     assert figures["peer_source"] == "industry"
 
