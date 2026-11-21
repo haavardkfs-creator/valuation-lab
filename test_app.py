@@ -15,6 +15,7 @@ from streamlit.testing.v1 import AppTest
 import app
 import assumptions
 import data
+import explanations
 import theme
 import valuation
 from test_data import (
@@ -43,6 +44,7 @@ def fresh_provider_state(monkeypatch):
     # An empty key, not a missing one: the page copies a key from the real secrets file if the setting is
     # missing, and an empty one is left alone and counts as no key.
     monkeypatch.setenv("FMP_API_KEY", "")
+    monkeypatch.setenv("FRED_API_KEY", "")          # the same for FRED: no key, so no real request
 
 
 @pytest.fixture(autouse=True)
@@ -2464,7 +2466,7 @@ def test_the_section_is_at_the_end_of_the_overview_tab_and_the_footer_is_last_on
     page = run_page(monkeypatch, yahoo=yahoo_with_news([headline("A")], []))
     subheaders = texts(page.subheader)
     overview_sections = subheaders[subheaders.index("Where the price sits"):subheaders.index("Discounted cash flow (DCF)")]
-    assert overview_sections[-1] == "News and management"            # the last section of the Overview tab
+    assert overview_sections[-2:] == ["News and management", "Macro backdrop"]       # the last two sections of the Overview tab
     assert page.main.caption[-1].value == app.FOOTER_TEXT          # the main area only: the sidebar has captions too
 
 
@@ -3117,7 +3119,7 @@ def test_the_page_has_five_tabs_in_this_order(monkeypatch):
 def test_each_section_is_in_its_own_tab(monkeypatch):
     page = run_page(monkeypatch, yahoo=yahoo_with_prices())
     assert texts(tab_named(page, "Overview").subheader) == [
-        "Where the price sits", "Analyst view", "Overview", "History", "News and management",
+        "Where the price sits", "Analyst view", "Overview", "History", "News and management", "Macro backdrop",
     ]
     assert texts(tab_named(page, "DCF").subheader) == [
         "Discounted cash flow (DCF)", "What the market price implies", "Scenarios", "What the model assumes",
@@ -3167,7 +3169,9 @@ def test_a_company_whose_dcf_cannot_be_built_gets_only_the_overview_and_the_expl
     assert_footer_and_no_crash(page)
     assert [tab.label for tab in page.tabs] == ["Overview", "Explanations"]
     assert "Could not value LOSS." in texts(tab_named(page, "Overview").error)[0]
-    assert texts(tab_named(page, "Overview").subheader) == ["Analyst view", "Overview", "History", "News and management"]
+    assert texts(tab_named(page, "Overview").subheader) == [
+        "Analyst view", "Overview", "History", "News and management", "Macro backdrop",
+    ]
 
 
 def test_a_ticker_that_cannot_be_found_has_no_tabs_at_all(monkeypatch):
@@ -3949,3 +3953,90 @@ def test_the_analyst_targets_are_converted_like_the_share_price_for_a_company_in
     assert_footer_and_no_crash(page)
     cards = analyst_cards(page)
     assert cards["Mean price target"].value == "$165.50" and cards["Target range"].value == "$140 – 210"
+
+
+# ---------------------------------------------------------------------------
+# The macro backdrop: three US numbers from FRED at the end of the Overview tab
+# ---------------------------------------------------------------------------
+
+MACRO_ROWS = [
+    {"key": "treasury_yield", "label": "10-year Treasury yield", "value": 4.123, "date": "2026-11-19", "monthly": False},
+    {"key": "fed_funds", "label": "Fed funds rate", "value": 3.64, "date": "2026-11-19", "monthly": False},
+    {"key": "inflation", "label": "US inflation, last 12 months", "value": 2.9, "date": "2026-10-01", "monthly": True},
+]
+
+
+def macro_cards(page):
+    return {metric.label: metric for metric in tab_named(page, "Overview").metric if metric.label in {r["label"] for r in MACRO_ROWS}}
+
+
+def test_the_macro_backdrop_shows_three_numbers_with_dates_and_a_question_mark_each(monkeypatch):
+    monkeypatch.setattr("data.get_macro_backdrop", lambda: MACRO_ROWS)
+    page = run_page(monkeypatch)
+    assert_footer_and_no_crash(page)
+    cards = macro_cards(page)
+    assert [(label, card.value, card.delta) for label, card in cards.items()] == [
+        ("10-year Treasury yield", "4.12%", "as of 19 Nov 2026"),
+        ("Fed funds rate", "3.64%", "as of 19 Nov 2026"),
+        ("US inflation, last 12 months", "2.90%", "as of Oct 2026"),         # monthly: no day, which would read as the 1st
+    ]
+    assert cards["10-year Treasury yield"].help == explanations.help_text("macro_treasury_yield")
+    assert cards["Fed funds rate"].help == explanations.help_text("macro_fed_funds")
+    assert cards["US inflation, last 12 months"].help == explanations.help_text("macro_inflation")
+
+
+def test_the_macro_caption_says_the_numbers_are_us_and_not_an_input(monkeypatch):
+    monkeypatch.setattr("data.get_macro_backdrop", lambda: MACRO_ROWS)
+    page = run_page(monkeypatch)
+    caption = next(c for c in texts(tab_named(page, "Overview").caption) if c.startswith("From FRED"))
+    assert "These are US numbers" in caption and "background for the valuation, not an input to it" in caption
+
+
+def test_a_number_fred_could_not_give_says_not_available_and_the_others_still_show(monkeypatch):
+    rows = [dict(MACRO_ROWS[0]), dict(MACRO_ROWS[1], value=None, date=None), dict(MACRO_ROWS[2])]
+    monkeypatch.setattr("data.get_macro_backdrop", lambda: rows)
+    cards = macro_cards(run_page(monkeypatch))
+    assert cards["Fed funds rate"].value == app.NOT_AVAILABLE and cards["Fed funds rate"].delta == ""
+    assert cards["10-year Treasury yield"].value == "4.12%"
+
+
+def test_with_no_key_the_section_says_so_and_the_page_still_works(monkeypatch):
+    page = run_page(monkeypatch)                # the autouse fixture has no FRED key
+    assert_footer_and_no_crash(page)
+    assert "Macro backdrop" in texts(tab_named(page, "Overview").subheader)
+    assert "The macro numbers are not available right now. No FRED key is set." in texts(tab_named(page, "Overview").caption)
+    assert macro_cards(page) == {}
+    assert "▲ UNDERVALUED" in header_of(page)
+
+
+def test_a_company_whose_dcf_cannot_be_built_still_gets_the_macro_backdrop(monkeypatch):
+    monkeypatch.setattr("data.get_macro_backdrop", lambda: MACRO_ROWS)
+    loss = dict(ADOBE_YAHOO_INCOME, **{"Pretax Income": (-100e6, 50e6)})
+    page = run_page(monkeypatch, ticker="loss", yahoo=yahoo_with_analysts(income=loss))
+    assert "10-year Treasury yield" in macro_cards(page)
+
+
+def test_the_fred_key_is_copied_from_streamlits_private_settings_into_the_environment(monkeypatch):
+    import os
+
+    monkeypatch.delenv("FRED_API_KEY", raising=False)
+    monkeypatch.setattr(st, "secrets", {"FRED_API_KEY": "from-secrets"})
+    app.bridge_fred_key()
+    assert os.environ["FRED_API_KEY"] == "from-secrets"
+    assert data.fred_api_key() == "from-secrets"
+
+
+def test_with_no_secrets_at_all_there_is_no_fred_key(monkeypatch):
+    class NoSecrets:
+        def __getitem__(self, name):
+            raise FileNotFoundError("no secrets file")
+
+    monkeypatch.delenv("FRED_API_KEY", raising=False)
+    monkeypatch.setattr(st, "secrets", NoSecrets())
+    app.bridge_fred_key()
+    assert data.fred_api_key() is None
+
+
+def test_the_sources_line_names_fred():
+    assert "FRED" in app.SOURCES_TEXT
+

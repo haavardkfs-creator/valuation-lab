@@ -639,6 +639,93 @@ def get_company_context(ticker, fetch_news=fetch_yahoo_news, fetch_officers=fetc
 
 
 # ---------------------------------------------------------------------------
+# The macro backdrop: three US interest-rate and inflation numbers from FRED (the Federal Reserve Bank of St. Louis)
+# ---------------------------------------------------------------------------
+
+FRED_NAME = "FRED"
+FRED_URL = "https://api.stlouisfed.org/fred/series/observations"
+FRED_TIMEOUT_SECONDS = 10
+# How many of the newest readings are asked for. FRED marks a day with no reading (a bank holiday) with a ".", so
+# a few are asked for and the newest real one is used.
+FRED_READINGS_ASKED = 10
+
+# The three numbers shown: (key, label, FRED's series name, FRED's "units" setting, whether it is one reading a month).
+# DGS10 is the 10-year US Treasury yield and DFF the Fed funds rate, both in percent a day. CPIAUCSL is the consumer price
+# index, which FRED turns into "percent change from a year ago" when asked for units "pc1": US inflation over 12 months.
+MACRO_SERIES = (
+    ("treasury_yield", "10-year Treasury yield", "DGS10", None, False),
+    ("fed_funds", "Fed funds rate", "DFF", None, False),
+    ("inflation", "US inflation, last 12 months", "CPIAUCSL", "pc1", True),
+)
+
+
+def fred_api_key():
+    """Return the FRED key from the environment (the page puts it there from Streamlit's private settings), or None if
+    there is none. The key is never written anywhere.
+    """
+    return os.environ.get("FRED_API_KEY") or None
+
+
+def fetch_fred_latest(series_id, units=None):
+    """Ask FRED for the newest real reading of one series and return {"value": a percent, "date": "YYYY-MM-DD"}. Stops
+    with a SourceUnavailable error, whose message never holds the key, if there is no key, FRED cannot be reached or
+    refuses the key, or it has no recent reading. This is the only function that talks to FRED.
+    """
+    key = fred_api_key()
+    if key is None:
+        raise SourceUnavailable("No FRED key is set.")
+    import requests         # already installed as part of yfinance; it carries the security certificates
+
+    parameters = {
+        "series_id": series_id, "api_key": key, "file_type": "json", "sort_order": "desc", "limit": FRED_READINGS_ASKED,
+    }
+    if units:
+        parameters["units"] = units
+    try:
+        response = requests.get(FRED_URL, params=parameters, timeout=FRED_TIMEOUT_SECONDS)
+        status = response.status_code
+        readings = response.json().get("observations", []) if status == 200 else []
+    except Exception as error:      # the address, which holds the key, is never put in a message
+        raise SourceUnavailable("Could not reach %s: %s" % (FRED_NAME, type(error).__name__)) from None
+    if status in (400, 401, 403):
+        raise SourceUnavailable("%s did not accept the key." % FRED_NAME)
+    if status == 429:
+        raise SourceUnavailable("%s says too many requests have been made; try again later." % FRED_NAME)
+    if status != 200:
+        raise SourceUnavailable("%s answered with an error (HTTP %d)." % (FRED_NAME, status))
+    for reading in readings:
+        try:
+            return {"value": float(reading["value"]), "date": reading["date"]}
+        except (KeyError, TypeError, ValueError):       # a "." for a day with no reading: try the one before
+            continue
+    raise SourceUnavailable("%s has no recent reading for %s." % (FRED_NAME, series_id))
+
+
+def get_macro_backdrop(fetch=fetch_fred_latest):
+    """Get the three macro numbers as a list with one {"key", "label", "value", "date", "monthly"} per number, in the order
+    of MACRO_SERIES. A number FRED could not give comes back with a value and date of None, so the page can show the others.
+    Stops with a SourceUnavailable error if none could be had. `fetch` can be swapped, which is how the tests run
+    without the internet.
+    """
+    rows, first_problem = [], None
+    for key, label, series_id, units, monthly in MACRO_SERIES:
+        try:
+            latest = fetch(series_id, units)
+        except Exception as error:      # one number failing must not hide the others
+            latest = None
+            first_problem = first_problem or error
+        rows.append({
+            "key": key, "label": label, "monthly": monthly,
+            "value": latest["value"] if latest else None, "date": latest["date"] if latest else None,
+        })
+    if all(row["value"] is None for row in rows):
+        raise SourceUnavailable(
+            str(first_problem) if isinstance(first_problem, SourceUnavailable) else "Could not get the macro numbers from FRED."
+        )
+    return rows
+
+
+# ---------------------------------------------------------------------------
 # What other analysts say: Yahoo Finance's consensus rating and price targets (opinions, not this app's advice)
 # ---------------------------------------------------------------------------
 

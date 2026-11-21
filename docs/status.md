@@ -351,7 +351,14 @@
   a company with thin coverage (Aker: 4) works, one with none (a small Oslo company) says so, and a failed lookup says so without
   stopping the page. These are other people's opinions and the section says that. `data.get_analyst_view`,
   `valuation.football_field(analyst_targets=...)`. No maths of ours, so no Excel step. 1135 tests pass (66 new).
-- Next: #11 part 2 (macro backdrop: needs a free FRED key from Haavard, never pasted in chat); the live FMP check with Yahoo switched
+- Done (in the open pull request): #11 part 2, a "Macro backdrop" at the end of the Overview tab: the 10-year Treasury yield, the
+  Fed funds rate and US inflation (12 months) from FRED, each with its date and a ? help. Context only: nothing in the valuation
+  uses it, and the page says the numbers are US ones. Needs `FRED_API_KEY` (Haavard put it in Streamlit Cloud's Secrets on
+  20 Nov 2026, not in the local file, so the real FRED answer has not been seen on this computer: the first real look is the live
+  app after the merge). One number failing leaves the other two; no key says so. `data.fetch_fred_latest`, `get_macro_backdrop`,
+  `app.draw_macro_backdrop`. No maths, so no Excel step. 1158 tests pass (23 new; three layout tests updated on purpose because
+  the Overview tab has one more section).
+- Next: check the macro numbers on the live app after the merge; the live FMP check with Yahoo switched
   off; the small items below. CLAUDE.md still needs Haavard's edits (the theme line, and rows for theme.py and test_theme.py).
 - Open:
   - Ideas from Haavard (20 Nov 2026): (1) group the overview by type of multiple: done in Phase 4a; (2) a ? help on every
@@ -381,6 +388,7 @@
     `.streamlit/secrets.toml` and in Streamlit Cloud) on 20 Nov 2026. On 20 Nov 2026 the new key worked
     against the real service (one `ratios-ttm` request for Apple answered, and its P/S matched Yahoo's). Still to do: the full live
     check with Yahoo switched off, to prove every step of the backup chain.
+  - Open idea (not built): beside the 10-year yield, show the model's own risk-free rate (typed in from Damodaran) and the gap.
   - Even after the capex fade, Microsoft's DCF price is 48% below its market price ($278 vs
     $532, 6 Nov 2026). A starting point from one year is not a forecast, and a 17.8% grower
     fading to 2.5% over five years is a conservative path for it.

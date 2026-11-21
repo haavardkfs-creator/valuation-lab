@@ -2439,3 +2439,124 @@ def test_the_real_lookup_keeps_a_failing_part_as_an_error_and_the_others_as_they
     parts = data.fetch_yahoo_analysts("ADBE")
     assert parts["info"] == ADOBE_ANALYST_INFO and parts["counts"] is ADOBE_RATING_TABLE
     assert isinstance(parts["targets"], ConnectionError)
+
+
+# ---------------------------------------------------------------------------
+# The macro backdrop: three numbers from FRED (not Excel: they are looked up, not worked out)
+# ---------------------------------------------------------------------------
+
+
+def fred_says(*readings):
+    """What FRED sends back for one series: the newest reading first, as {"date", "value"} text."""
+    return FakeResponse(200, {"observations": [{"date": date, "value": value} for date, value in readings]})
+
+
+def test_with_no_fred_key_it_stops_with_a_plain_error_and_asks_nobody(monkeypatch):
+    monkeypatch.delenv("FRED_API_KEY", raising=False)
+    monkeypatch.setattr("requests.get", lambda *args, **kwargs: pytest.fail("asked FRED"))
+    with pytest.raises(data.SourceUnavailable, match="No FRED key"):
+        data.fetch_fred_latest("DGS10")
+
+
+def test_the_newest_real_reading_is_used_and_a_dot_for_a_holiday_is_skipped(monkeypatch):
+    monkeypatch.setenv("FRED_API_KEY", "abc")
+    monkeypatch.setattr(
+        "requests.get", lambda url, params, timeout: fred_says(("2026-11-20", "."), ("2026-11-19", "4.12"), ("2026-11-18", "4.05"))
+    )
+    assert data.fetch_fred_latest("DGS10") == {"value": 4.12, "date": "2026-11-19"}
+
+
+def test_it_asks_for_the_series_newest_first_with_the_key_and_units_when_given(monkeypatch):
+    monkeypatch.setenv("FRED_API_KEY", "abc")
+    seen = {}
+
+    def fake_get(url, params, timeout):
+        seen.update(url=url, params=params, timeout=timeout)
+        return fred_says(("2026-10-01", "3.0"))
+
+    monkeypatch.setattr("requests.get", fake_get)
+    data.fetch_fred_latest("CPIAUCSL", "pc1")
+    assert seen["url"] == data.FRED_URL and seen["timeout"] == data.FRED_TIMEOUT_SECONDS
+    assert seen["params"] == {
+        "series_id": "CPIAUCSL", "api_key": "abc", "file_type": "json", "sort_order": "desc",
+        "limit": data.FRED_READINGS_ASKED, "units": "pc1",
+    }
+    data.fetch_fred_latest("DGS10")
+    assert "units" not in seen["params"]
+
+
+@pytest.mark.parametrize("status, words", [(400, "did not accept"), (403, "did not accept"), (429, "too many"), (500, "HTTP 500")])
+def test_a_refusal_or_a_failure_from_fred_gives_a_plain_error(monkeypatch, status, words):
+    monkeypatch.setenv("FRED_API_KEY", "abc")
+    monkeypatch.setattr("requests.get", lambda url, params, timeout: FakeResponse(status, {}))
+    with pytest.raises(data.SourceUnavailable, match=words):
+        data.fetch_fred_latest("DGS10")
+
+
+def test_no_reading_at_all_is_a_plain_error(monkeypatch):
+    monkeypatch.setenv("FRED_API_KEY", "abc")
+    monkeypatch.setattr("requests.get", lambda url, params, timeout: fred_says(("2026-11-20", ".")))
+    with pytest.raises(data.SourceUnavailable, match="no recent reading for DGS10"):
+        data.fetch_fred_latest("DGS10")
+
+
+def test_the_key_never_appears_in_an_error_message(monkeypatch):
+    monkeypatch.setenv("FRED_API_KEY", "secret-key-123")
+
+    def broken(url, params, timeout):
+        raise ConnectionError("failed for https://x/?api_key=secret-key-123")
+
+    monkeypatch.setattr("requests.get", broken)
+    with pytest.raises(data.SourceUnavailable) as caught:
+        data.fetch_fred_latest("DGS10")
+    assert "secret-key-123" not in str(caught.value) and "ConnectionError" in str(caught.value)
+    monkeypatch.setattr("requests.get", lambda url, params, timeout: FakeResponse(403, {}))
+    with pytest.raises(data.SourceUnavailable) as caught:
+        data.fetch_fred_latest("DGS10")
+    assert "secret-key-123" not in str(caught.value)
+
+
+def test_the_three_numbers_come_back_in_order_with_their_labels_and_dates():
+    readings = {
+        "DGS10": {"value": 4.12, "date": "2026-11-19"},
+        "DFF": {"value": 3.64, "date": "2026-11-19"},
+        "CPIAUCSL": {"value": 2.9, "date": "2026-10-01"},
+    }
+    asked = []
+
+    def fetch(series_id, units):
+        asked.append((series_id, units))
+        return readings[series_id]
+
+    rows = data.get_macro_backdrop(fetch=fetch)
+    assert asked == [("DGS10", None), ("DFF", None), ("CPIAUCSL", "pc1")]
+    assert [(row["key"], row["label"], row["value"], row["date"], row["monthly"]) for row in rows] == [
+        ("treasury_yield", "10-year Treasury yield", 4.12, "2026-11-19", False),
+        ("fed_funds", "Fed funds rate", 3.64, "2026-11-19", False),
+        ("inflation", "US inflation, last 12 months", 2.9, "2026-10-01", True),
+    ]
+
+
+def test_one_number_failing_leaves_the_other_two():
+    def fetch(series_id, units):
+        if series_id == "DFF":
+            raise data.SourceUnavailable("nope")
+        return {"value": 1.0, "date": "2026-11-19"}
+
+    rows = data.get_macro_backdrop(fetch=fetch)
+    assert [row["value"] for row in rows] == [1.0, None, 1.0]
+    assert rows[1]["date"] is None
+
+
+def test_when_no_number_can_be_had_the_reason_is_passed_on():
+    def refuses(series_id, units):
+        raise data.SourceUnavailable("No FRED key is set.")
+
+    with pytest.raises(data.SourceUnavailable, match="No FRED key is set."):
+        data.get_macro_backdrop(fetch=refuses)
+
+    def breaks(series_id, units):
+        raise KeyError("odd")
+
+    with pytest.raises(data.SourceUnavailable, match="Could not get the macro numbers"):
+        data.get_macro_backdrop(fetch=breaks)
