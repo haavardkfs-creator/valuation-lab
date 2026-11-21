@@ -828,7 +828,7 @@ def football_field(dcf_range, dcf_price, multiples, share_price_range=None):
     """
     rows = []
     if share_price_range is not None:
-        rows.append({"label": "52-week range", "kind": "trading",
+        rows.append({"label": "52-week", "kind": "trading",
                      "low": share_price_range[0], "middle": None, "high": share_price_range[1]})
     if dcf_range is not None and dcf_price is not None:
         rows.append({"label": "DCF", "kind": "dcf",

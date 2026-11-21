@@ -219,7 +219,7 @@ def draw_sliders():
     the margin shift, the terminal growth rate and the WACC the user chose (None when the
     box is unticked, meaning the model uses its own). Each starts at the base case.
     """
-    st.sidebar.header("Change the assumptions")
+    st.sidebar.header("Assumptions")
     growth_points = st.sidebar.slider(
         "Revenue growth: change every year by",
         min_value=assumptions.GROWTH_SHIFT_MIN_POINTS,
@@ -270,6 +270,41 @@ def draw_explanations(section):
     """
     with st.expander("What do these terms mean?"):
         for term in explanations.SECTION_TERMS[section]:
+            title, text = explanations.EXPLANATIONS[term]
+            st.markdown(f"**{title}**  \n{text}")
+
+
+# The Explanations tab groups the glossary by where its terms appear on the page: the heading and the section of
+# explanations.SECTION_TERMS it takes its terms from.
+EXPLANATION_TOPICS = [
+    ("The DCF", "dcf"),
+    ("Behind the number", "behind_the_number"),
+    ("Sensitivity", "sensitivity"),
+    ("Multiples", "multiples"),
+]
+
+
+def draw_explanations_tab():
+    """Draw the Explanations tab: every term in the glossary (explanations.py), in plain language, grouped by where
+    it is used on the page. A term that belongs to several sections is shown once, under the first. Any term that is
+    in no section is added at the end, so nothing in the glossary is ever left out of the tab.
+    """
+    st.subheader("Explanations")
+    st.caption("Every term the page uses, in plain language, grouped by where it appears.")
+    shown = []
+    for heading, section in EXPLANATION_TOPICS:
+        terms = [term for term in explanations.SECTION_TERMS[section] if term not in shown]
+        if not terms:
+            continue
+        st.markdown(f"##### {heading}")
+        for term in terms:
+            title, text = explanations.EXPLANATIONS[term]
+            st.markdown(f"**{title}**  \n{text}")
+            shown.append(term)
+    others = [term for term in explanations.EXPLANATIONS if term not in shown]
+    if others:
+        st.markdown("##### More terms")
+        for term in others:
             title, text = explanations.EXPLANATIONS[term]
             st.markdown(f"**{title}**  \n{text}")
 
@@ -675,27 +710,37 @@ def draw_overview(overview):
     makes for its price and how heavy its debt is, then what the market pays for it.
     """
     st.subheader("Overview")
-    growth, margin, cash_yield, leverage = st.columns(4)
-    growth.metric("Revenue growth", percent_or_note(overview["revenue_growth"]), help="Last full year's revenue compared with the year before.")
-    margin.metric("Operating margin", percent_or_note(overview["operating_margin"]), help="Operating profit (EBIT) as a share of revenue, last full year.")
-    cash_yield.metric("Free cash flow yield", percent_or_note(overview["free_cash_flow_yield"]), help="Last full year's free cash flow divided by what the market says the company is worth.")
-    leverage.metric("Net debt ÷ EBITDA", multiple_or_note(overview["net_debt_to_ebitda"], 2), help="Years of operating profit (before depreciation) needed to pay off net debt. Below 0 means more cash than debt.")
+    st.markdown("**What the market pays**")
     sales, ebitda, pe = st.columns(3)
+    ps, forward_pe, _spare = st.columns(3)
     sales.metric("EV/Sales", multiple_or_note(overview["ev_sales"]), help="Enterprise value (what the whole business is worth at today's price) divided by revenue.")
     ebitda.metric("EV/EBITDA", multiple_or_note(overview["ev_ebitda"]), help="Enterprise value divided by operating profit before depreciation and amortisation.")
     pe.metric("P/E", multiple_or_note(overview["pe"]), help="What the market pays for each dollar of the last full year's net income.")
-    roic, conversion, cover, shares_changed = st.columns(4)
+    ps.metric("P/S", multiple_or_note(overview["ps"]), help="The market value of the company divided by its revenue: what the market pays for each dollar of sales.")
+    forward_pe.metric(
+        "Forward P/E", multiple_or_note(overview["forward_pe"]),
+        help="Today's share price divided by analysts' estimate of next year's earnings per share (their adjusted figure).",
+    )
+    st.markdown("**Growth and profitability**")
+    growth, margin, roic = st.columns(3)
+    growth.metric("Revenue growth", percent_or_note(overview["revenue_growth"]), help="Last full year's revenue compared with the year before.")
+    margin.metric("Operating margin", percent_or_note(overview["operating_margin"]), help="Operating profit (EBIT) as a share of revenue, last full year.")
     roic.metric(
         "ROIC", percent_or_note(overview.get("roic")),
         help="Return on invested capital: operating profit after tax divided by the money put into the business (debt plus equity, less cash), last fiscal year.",
     )
-    conversion.metric(
-        "Cash conversion", multiple_or_note(overview.get("cash_conversion"), 2),
-        help="Free cash flow as the company reports it divided by net income, last fiscal year. Above 1.00x means more cash than profit.",
-    )
+    st.markdown("**Cash, debt and shareholders**")
+    cash_yield, leverage, cover = st.columns(3)
+    conversion, shares_changed, _spare = st.columns(3)
+    cash_yield.metric("Free cash flow yield", percent_or_note(overview["free_cash_flow_yield"]), help="Last full year's free cash flow divided by what the market says the company is worth.")
+    leverage.metric("Net debt ÷ EBITDA", multiple_or_note(overview["net_debt_to_ebitda"], 2), help="Years of operating profit (before depreciation) needed to pay off net debt. Below 0 means more cash than debt.")
     cover.metric(
         "Interest cover", interest_cover_text(overview),
         help="Operating profit (EBIT) divided by the interest expense, last fiscal year: how many times profit pays the interest.",
+    )
+    conversion.metric(
+        "Cash conversion", multiple_or_note(overview.get("cash_conversion"), 2),
+        help="Free cash flow as the company reports it divided by net income, last fiscal year. Above 1.00x means more cash than profit.",
     )
     share_value, share_note = share_count_text(overview)
     shares_changed.metric(
@@ -704,7 +749,7 @@ def draw_overview(overview):
     )
     if overview.get("ttm_period_end"):
         basis = (
-            f"EV/Sales, EV/EBITDA, P/E and the operating margin are for the last twelve months (the four "
+            f"EV/Sales, EV/EBITDA, P/E, P/S and the operating margin are for the last twelve months (the four "
             f"quarters to {overview['ttm_period_end']}), like the peers'; the others are for the last fiscal "
             "year. All use today's share price."
         )
@@ -717,9 +762,10 @@ def draw_overview(overview):
         basis = "Worked out from the last fiscal year and today's share price."
     st.caption(f"{basis} A number that would mean nothing (no P/E for a company that lost money) says so.")
     st.caption(
-        "The last row, about quality, is for the last fiscal year. Return on invested capital counts a tax "
-        "benefit as no tax, and is pushed up by buybacks that shrink equity; where equity is negative it is "
-        "not meaningful. Cash conversion uses the free cash flow the company reports."
+        "Return on invested capital, cash conversion, interest cover and the share count change are for the last "
+        "fiscal year. Return on invested capital counts a tax benefit as no tax, and is pushed up by buybacks that "
+        "shrink equity; where equity is negative it is not meaningful. Cash conversion uses the free cash flow the "
+        "company reports."
     )
 
 
@@ -2105,6 +2151,7 @@ def draw_ticker_box():
     """Draw the company ticker box at the top of the sidebar and return the ticker typed in,
     in capitals. An empty box means the default company.
     """
+    st.sidebar.header("Company")
     typed = st.sidebar.text_input(
         "Company ticker",
         value=DEFAULT_TICKER,
@@ -2355,12 +2402,17 @@ def draw_dcf_unavailable(ticker, error):
     )
 
 
+# The tabs under the header, in order: what each holds is set in draw_page.
+PAGE_TABS = ["Overview", "DCF", "Multiples", "Sensitivity", "Explanations"]
+
+
 def draw_page():
-    """Draw the whole page: ticker box, sliders, peer box (companies other than Adobe), title,
-    DCF section, a note about any one-off adjustment, what the market price implies, overview, history, assumptions, how the WACC is
-    built, charts, the two sensitivity tables, multiples and footer. If the company cannot be found, draw
-    the reason instead. If it was found but a DCF cannot be built (it lost money), draw the reason, the
-    overview and the history only.
+    """Draw the whole page: the sidebar (ticker, sliders, peers, one-off items), then the answer-first header and its
+    notes, then five tabs: Overview (the football field, the overview numbers, the history, news and management), DCF
+    (the DCF, what the market implies, scenarios, assumptions, the WACC build, the charts behind the number), Multiples,
+    Sensitivity (both heatmaps) and Explanations (the glossary), and the footer. If the company cannot be found, draw
+    the reason instead. If it was found but a DCF cannot be built (it lost money), draw the header, the reason and
+    only the Overview and Explanations tabs.
     """
     ticker = draw_ticker_box()
     growth_shift, margin_shift, terminal_growth_rate, wacc_override = draw_sliders()
@@ -2408,35 +2460,47 @@ def draw_page():
     except ValueError as error:
         history, history_error = None, str(error)
     overview = apply_quality(overview, company, history)
+    year_labels = assumptions.FORECAST_YEAR_LABELS if is_base_case(company) else assumptions.GENERIC_YEAR_LABELS
     if dcf_error is not None:
-        draw_dcf_unavailable(ticker, dcf_error)
-        draw_overview(overview)
-        draw_history(history, history_error, overview, company["company_name"])
-        draw_news_and_management(company["ticker"])
+        # No DCF to draw, so only the tabs that do not need one: the overview (with the reason on top) and the glossary.
+        overview_tab, explanations_tab = st.tabs(["Overview", "Explanations"])
+        with overview_tab:
+            draw_dcf_unavailable(ticker, dcf_error)
+            draw_overview(overview)
+            draw_history(history, history_error, overview, company["company_name"])
+            draw_news_and_management(company["ticker"])
+        with explanations_tab:
+            draw_explanations_tab()
         st.divider()
         st.caption(FOOTER_TEXT)
         return
-    draw_football_field(company, dcf, multiples, dcf_inputs, base_wacc, prices)
-    draw_dcf(company, dcf, wacc_override is not None)
-    draw_reverse_dcf(company, dcf_inputs, terminal_growth_rate, wacc_override, history)
-    draw_scenarios(company, dcf_inputs, terminal_growth_rate, wacc_override, scenario_settings)
-    draw_overview(overview)
-    draw_history(history, history_error, overview, company["company_name"])
-    year_labels = assumptions.FORECAST_YEAR_LABELS if is_base_case(company) else assumptions.GENERIC_YEAR_LABELS
-    draw_assumptions(
-        company, dcf_inputs, year_labels, dcf, terminal_growth_rate, wacc_override is not None,
-        growth_shift, margin_shift,
-    )
-    draw_wacc_build(company, dcf_inputs, source_used, dcf, wacc_override is not None)
-    draw_charts(dcf, year_labels, terminal_growth_rate, dcf_inputs["operating_margins"], history)
-    draw_heatmap(company, dcf_inputs, base_wacc)
-    draw_margin_growth_table(company, dcf_inputs, dcf, terminal_growth_rate, wacc_override)
-    draw_multiples(
-        multiples, peers, peer_notes, peers_are_suggested=not is_base_case(company),
-        own_label=f"{company['ticker']} (this company)", overview=overview,
-        company_name=company["company_name"],
-    )
-    draw_news_and_management(company["ticker"])
+    overview_tab, dcf_tab, multiples_tab, sensitivity_tab, explanations_tab = st.tabs(PAGE_TABS)
+    with overview_tab:
+        draw_football_field(company, dcf, multiples, dcf_inputs, base_wacc, prices)
+        draw_overview(overview)
+        draw_history(history, history_error, overview, company["company_name"])
+        draw_news_and_management(company["ticker"])
+    with dcf_tab:
+        draw_dcf(company, dcf, wacc_override is not None)
+        draw_reverse_dcf(company, dcf_inputs, terminal_growth_rate, wacc_override, history)
+        draw_scenarios(company, dcf_inputs, terminal_growth_rate, wacc_override, scenario_settings)
+        draw_assumptions(
+            company, dcf_inputs, year_labels, dcf, terminal_growth_rate, wacc_override is not None,
+            growth_shift, margin_shift,
+        )
+        draw_wacc_build(company, dcf_inputs, source_used, dcf, wacc_override is not None)
+        draw_charts(dcf, year_labels, terminal_growth_rate, dcf_inputs["operating_margins"], history)
+    with multiples_tab:
+        draw_multiples(
+            multiples, peers, peer_notes, peers_are_suggested=not is_base_case(company),
+            own_label=f"{company['ticker']} (this company)", overview=overview,
+            company_name=company["company_name"],
+        )
+    with sensitivity_tab:
+        draw_heatmap(company, dcf_inputs, base_wacc)
+        draw_margin_growth_table(company, dcf_inputs, dcf, terminal_growth_rate, wacc_override)
+    with explanations_tab:
+        draw_explanations_tab()
     st.divider()
     st.caption(FOOTER_TEXT)
 

@@ -298,7 +298,7 @@
   (`QUARTILE` ranges and the DCF range). `valuation.quartile_range`, `table_range`, `trading_range`, `football_field`,
   `methods_above_price` and `run_multiples`' new "price_ranges" match the cells. Haavard chose: two pull requests for Phase 3,
   the middle half of the peers for the bars, and the sensitivity table's range for the DCF bar. 897 tests pass (51 new).
-- Done (in the open pull request): redesign Phase 3b of 5, the sensitivity heatmaps and the peer charts. Both sensitivity tables are
+- Done: redesign Phase 3b of 5, the sensitivity heatmaps and the peer charts (merged, pull request 59). Both sensitivity tables are
   now Plotly heatmaps: each cell shows its price and the upside against the market price with an arrow, green above and red below, a
   dashed line where the model equals the market price, a blue frame on the base case, and the exact prices in a closed box underneath.
   The WACC axis is now 7 rows, 3 points either way (so a high-beta company like NVIDIA, at 13.3%, shows 10-16%), and a pairing with
@@ -308,15 +308,26 @@
   `blank_impossible`, plus `upside_grid`, `cells_above_price` and a `table_range` that skips blanks. Haavard chose: 7 rows 3 points each way,
   one bar chart with a switch, and operating margin for the scatter. 943 tests pass (45 new); one test of the old all-or-nothing
   low-WACC behaviour was rewritten on purpose.
-- Next: redesign Phase 4 (tabs: Overview, DCF, Multiples, Sensitivity, Explanations; sidebar sliders grouped; the ? help on every
-  multiple and chart; the overview grouped by type of multiple; phone layout), then Phase 5 (polish; removes the DCF cards that now
-  duplicate the header). #11 part 2 (macro, needs a free FRED key) and part 3 (thesis page with Haavard's reasons boxes and a Markdown
-  download) wait until the redesign is done.
+- Done (in the open pull request): redesign Phase 4a of 5, the layout. The page now has five tabs under the answer-first header:
+  Overview (the football field, the overview, the history, news and management), DCF (the DCF cards, what the market implies,
+  scenarios, assumptions, the WACC build, the charts behind the number), Multiples, Sensitivity (both heatmaps) and
+  Explanations (every term of the glossary, grouped by where it is used). The overview is grouped by what the numbers say (what
+  the market pays, growth and profitability, cash, debt and shareholders) at three cards a row, and now also shows P/S and forward
+  P/E. The sidebar has four headings (Company, Assumptions, Peers, One-off items). A company with no DCF gets only the Overview and
+  Explanations tabs. 959 tests pass (16 new). Peer table lookups in 13 tests now find the table by its columns instead of its
+  position, and two order checks were updated on purpose (the Overview tab comes before the DCF tab; news is the last section of the
+  Overview tab, not of the page).
+- Next: redesign Phase 4b, a ? help on every multiple, card and chart, all from the same glossary text, and removal of the closed
+  "What do these terms mean?" boxes (Haavard chose to remove them). Needs from Haavard: his own wording for P/S and forward P/E
+  in the glossary (the overview's help for those two is a plain placeholder from Claude until then); the "how to read this chart"
+  texts are drafted by Claude for him to review. Then Phase 5 (polish; removes the DCF cards that duplicate the header). #11 part 2
+  (macro, needs a free FRED key) and part 3 (thesis page with Haavard's reasons boxes and a Markdown download) wait until the
+  redesign is done.
 - Open:
-  - Ideas from Haavard (20 Nov 2026), for after Phase 3: (1) group the overview by type of multiple; (2) a ? help on every
-    multiple and every chart, like the overview has (his own brief lists it under Phase 4; P/S and forward P/E still need
-    his glossary wording); (3) search by company name that lists several matching tickers, like Nordnet's search (Yahoo has a
-    free search with name, ticker and exchange; price and day change would cost extra requests).
+  - Ideas from Haavard (20 Nov 2026): (1) group the overview by type of multiple: done in Phase 4a; (2) a ? help on every
+    multiple and every chart, like the overview has: Phase 4b (P/S and forward P/E still need his glossary wording); (3) search
+    by company name that lists several matching tickers, like Nordnet's search (Yahoo has a free search with name, ticker and
+    exchange; price and day change would cost extra requests): after the redesign.
   - CLAUDE.md still says "Light theme in config.toml, colours only" under "Already decided", and lists `.streamlit/config.toml`
     as "Theme settings only" with no row for `theme.py` or `test_theme.py`. Haavard changes his own rules file: the lines
     to update are given in the pull request description.

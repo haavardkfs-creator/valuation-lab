@@ -54,6 +54,8 @@ CARD_CSS = f"""
     box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
 }}
 [data-testid="stMetricLabel"] {{ color: {GREY}; }}
+/* A long label wraps onto a second line instead of being cut off with dots ("Net debt ÷ EBITDA" in a narrow card). */
+[data-testid="stMetricLabel"], [data-testid="stMetricLabel"] * {{ white-space: normal !important; overflow: visible !important; text-overflow: clip !important; }}
 
 /* Closed "What do these terms mean?" boxes and the tables get the same rounded look. */
 [data-testid="stExpander"] {{ border-radius: {CARD_RADIUS}; border: 1px solid {BORDER}; }}
