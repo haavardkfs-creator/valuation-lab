@@ -2091,7 +2091,7 @@ def football_field_for_adobe(share_price_range=(199.5, 324.19)):
 def test_the_football_field_lists_the_trading_range_then_the_dcf_then_each_multiple():
     rows = football_field_for_adobe()
     assert [row["label"] for row in rows] == [
-        "52-week range", "DCF", "EV/Sales", "EV/EBITDA", "P/E", "P/S", "Forward P/E",
+        "52-week", "DCF", "EV/Sales", "EV/EBITDA", "P/E", "P/S", "Forward P/E",
     ]
     assert [row["kind"] for row in rows] == ["trading", "dcf", "multiple", "multiple", "multiple", "multiple", "multiple"]
     assert rows[0]["middle"] is None and rows[0]["low"] == 199.5 and rows[0]["high"] == 324.19
@@ -2132,7 +2132,7 @@ def test_the_headline_counts_the_methods_whose_middle_value_is_above_the_market_
 
 
 def test_the_trading_range_is_not_counted_as_a_valuation_method():
-    rows = [{"label": "52-week range", "kind": "trading", "low": 1.0, "middle": None, "high": 9.0}]
+    rows = [{"label": "52-week", "kind": "trading", "low": 1.0, "middle": None, "high": 9.0}]
     assert v.methods_above_price(rows, 5.0) == (0, 0)
 
 

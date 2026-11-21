@@ -33,6 +33,8 @@ It needs a key, kept out of the code: on this computer in `.streamlit/secrets.to
 `FMP_API_KEY = "..."`, and on Streamlit Cloud in the app's Secrets. Without a key the page works as
 before, on Yahoo alone.
 
+- Five **tabs** under the header: Overview (the football field, the overview numbers grouped by what they say,
+  the history, news and management), DCF, Multiples, Sensitivity and Explanations (the glossary).
 - An **"answer first" header** at the top: the company's name, a verdict badge (undervalued, fairly valued or
   overvalued, from the DCF against the market price), four headline cards and a 12-month price chart.
 - **Sliders** change revenue growth, operating margin and terminal growth, and an optional

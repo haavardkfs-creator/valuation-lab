@@ -89,6 +89,16 @@ def header_of(page):
     return header
 
 
+def peer_table_of(page):
+    """The peer table of a page: the table whose columns are the multiples and a Flag column. Found by its columns,
+    not by its position, so moving sections between tabs does not break the tests that read it.
+    """
+    [table] = [
+        element.value for element in page.dataframe if {"EV/Sales", "Forward P/E", "Flag"} <= set(element.value.columns)
+    ]
+    return table
+
+
 def assert_footer_and_no_crash(page):
     assert not page.exception
     assert app.FOOTER_TEXT in texts(page.caption)
@@ -554,7 +564,7 @@ def test_the_peer_box_starts_with_the_closest_dollar_peers_and_the_multiples_fol
 
 def test_the_peer_table_shows_a_dash_for_a_multiple_that_is_left_out(monkeypatch):
     page = run_example_page(monkeypatch)
-    table = page.dataframe[-1].value                       # the heatmap comes first
+    table = peer_table_of(page)                       # the heatmap comes first
     # The company itself comes first and the peer medians last.
     assert list(table.index) == ["EXMP (this company)", "LOSS", "AAA", "BBB", "CCC", "Peer median"]
     assert table.loc["LOSS", "P/E"] == "–" and table.loc["LOSS", "EV/Sales"] == "5.0x"
@@ -565,7 +575,7 @@ def test_the_peer_table_shows_a_dash_for_a_multiple_that_is_left_out(monkeypatch
 
 def test_the_table_has_the_company_itself_and_the_peer_medians(monkeypatch):
     page = run_example_page(monkeypatch)
-    table = page.dataframe[-1].value
+    table = peer_table_of(page)
     own = table.loc["EXMP (this company)"]
     assert own["Op. margin"] == "36.6%"                           # EBIT 8,706 over revenue 23,769
     # The medians of the four peers: EV/Sales of 5, 2, 3, 4 is 3.5; EV/EBITDA of 14, 12, 16, 10 is
@@ -585,7 +595,7 @@ def test_the_reader_can_change_the_peers(monkeypatch):
     sales, ebitda, pe = example_prices([2.0, 4.0], [12.0, 10.0], [20.0, 25.0])
     assert metrics(page)["EV/Sales price"] == app.dollars(sales)
     assert metrics(page)["P/E price"] == app.dollars(pe)
-    assert list(page.dataframe[-1].value.index) == ["EXMP (this company)", "AAA", "CCC", "Peer median"]
+    assert list(peer_table_of(page).index) == ["EXMP (this company)", "AAA", "CCC", "Peer median"]
 
 
 def test_with_one_peer_the_prices_say_there_are_not_enough_peers(monkeypatch):
@@ -628,7 +638,7 @@ def test_only_the_first_eight_peers_are_used(monkeypatch):
     peer_box(page).set_value("AAA, BBB, CCC, LOSS, P5, P6, P7, P8, P9").run()
     assert not page.exception
     assert any("Only the first 8 peers are used." in caption for caption in texts(page.caption))
-    assert len(page.dataframe[-1].value) == 8 + 2                 # the 8 peers, the company and the median
+    assert len(peer_table_of(page)) == 8 + 2                 # the 8 peers, the company and the median
 
 
 def test_when_yahoos_industry_lookup_fails_the_page_warns_and_the_box_starts_empty(monkeypatch):
@@ -647,7 +657,7 @@ def test_when_yahoos_industry_lookup_fails_the_page_warns_and_the_box_starts_emp
 def test_adobe_has_no_peer_box_and_keeps_its_four_peers(monkeypatch):
     page = run_page(monkeypatch)
     assert len(page.sidebar.text_input) == 1                   # only the company ticker
-    assert list(page.dataframe[-1].value.index) == [
+    assert list(peer_table_of(page).index) == [
         "ADBE (this company)", "ADSK", "INTU", "CRM", "SNPS", "Peer median"
     ]
     assert metrics(page)["EV/Sales price"] == "$333.58"
@@ -998,7 +1008,7 @@ def test_a_company_with_no_analyst_estimate_says_so_instead_of_a_forward_pe_pric
     assert_footer_and_no_crash(page)
     assert metrics(page)["Forward P/E price"] == "No estimate"
     assert "Middle of the four prices" in metrics(page)               # the other four prices still make a middle
-    assert page.dataframe[-1].value.loc["EXMP (this company)", "Forward P/E"] == "–"
+    assert peer_table_of(page).loc["EXMP (this company)", "Forward P/E"] == "–"
 
 
 def test_a_forward_pe_price_needs_enough_peers_with_a_forward_pe(monkeypatch):
@@ -1060,7 +1070,7 @@ def test_the_flag_text_names_every_reason():
 
 def test_flagged_peers_are_marked_in_the_table_and_explained_under_it(monkeypatch):
     page = run_page_with_industry(monkeypatch, SOLAR_LIKE_PEERS)
-    table = page.dataframe[-1].value
+    table = peer_table_of(page)
     assert table.loc["AAA", "Flag"] == ""
     assert table.loc["BBB", "Flag"] == "⚠ Low margin"                       # margin of 0.6%
     assert table.loc["CCC", "Flag"] == "⚠ P/E outlier"                      # 3.9 against the peers' middle, 19.8
@@ -1076,7 +1086,7 @@ def test_flagged_peers_are_marked_in_the_table_and_explained_under_it(monkeypatc
 def test_a_flagged_peer_still_counts_in_the_median(monkeypatch):
     page = run_page_with_industry(monkeypatch, SOLAR_LIKE_PEERS)
     # Flag only: the P/E median is still over all three peers (19.8, 34.3, 3.9), which is 19.8.
-    assert page.dataframe[-1].value.loc["Peer median", "P/E"] == "19.8x"
+    assert peer_table_of(page).loc["Peer median", "P/E"] == "19.8x"
 
 
 def test_a_solar_like_company_gets_the_margin_warning_too(monkeypatch):
@@ -1092,14 +1102,14 @@ def test_no_flag_text_or_explanations_when_no_peer_is_distorted(monkeypatch):
         "CCC": peer_info(60, 4.0, 10.0, 25.0, operating_margin=0.10),
     }
     page = run_page_with_industry(monkeypatch, healthy)
-    assert set(page.dataframe[-1].value["Flag"]) == {""}
+    assert set(peer_table_of(page)["Flag"]) == {""}
     assert not any(c.startswith("⚠") for c in texts(page.caption))
     assert not any("Flagged peers still count" in c for c in texts(page.caption))
 
 
 def test_adobes_page_flags_synopsys_for_its_pe(monkeypatch):
     page = run_page(monkeypatch)
-    table = page.dataframe[-1].value
+    table = peer_table_of(page)
     assert table.loc["SNPS", "Flag"] == "⚠ P/E outlier"                      # 82.6x is 3.1 times the peers' middle
     assert table.loc["ADSK", "Flag"] == ""
     import statistics
@@ -1383,7 +1393,8 @@ def test_no_history_clause_when_the_history_has_no_figure_to_compare_with():
 def test_the_page_has_the_market_price_implies_section_under_the_dcf_numbers(monkeypatch):
     page = run_page(monkeypatch, yahoo=adobe_with_four_years())
     subheaders = texts(page.subheader)
-    assert subheaders.index("Discounted cash flow (DCF)") < subheaders.index("What the market price implies") < subheaders.index("Overview")
+    assert subheaders.index("Discounted cash flow (DCF)") < subheaders.index("What the market price implies")       # both in the DCF tab
+    assert subheaders.index("Overview") < subheaders.index("Discounted cash flow (DCF)")                          # the Overview tab comes first
     shown = metrics(page)
     assert shown["Operating margin it implies"].endswith("%") and shown["Revenue growth it implies"].endswith("%")
 
@@ -1593,7 +1604,7 @@ def test_the_dcf_itself_does_not_move_with_the_last_twelve_months(monkeypatch):
 def test_the_peers_tables_own_row_uses_the_last_twelve_months_like_the_peers(monkeypatch):
     page = run_page(monkeypatch, yahoo=adobe_with_quarters())
     expected = expected_ttm_overview(240.74)
-    own = page.dataframe[-1].value.loc["ADBE (this company)"]
+    own = peer_table_of(page).loc["ADBE (this company)"]
     assert own["EV/Sales"] == f"{expected['ev_sales']:.1f}x"
     assert own["Op. margin"] == "35.7%"
     assert any(c.startswith("Each multiple needs at least") and "last twelve months (to 31 Aug 2026)" in c for c in texts(page.caption))
@@ -1730,7 +1741,7 @@ def test_a_company_with_one_industry_peer_is_topped_up_from_its_sector_with_a_no
     [note] = [c for c in texts(page.caption) if "wider sector" in c]
     assert note.startswith("This company's industry had too few suitable peers, so some or all of these come from its wider sector.")
     assert "check that they fit" in note
-    assert page.dataframe[-1].value.index.tolist()[1:-1] == ["AAA", "SEC1", "SEC2"]      # the table shows all three
+    assert peer_table_of(page).index.tolist()[1:-1] == ["AAA", "SEC1", "SEC2"]      # the table shows all three
 
 
 def test_the_sector_note_goes_away_when_the_reader_changes_the_peers(monkeypatch):
@@ -1770,7 +1781,7 @@ def test_the_history_table_has_cash_conversion_for_each_year(monkeypatch):
 
 def test_the_page_says_what_the_quality_row_is_for(monkeypatch):
     page = run_page(monkeypatch, yahoo=adobe_with_four_years())
-    [caption] = [c for c in texts(page.caption) if c.startswith("The last row, about quality")]
+    [caption] = [c for c in texts(page.caption) if c.startswith("Return on invested capital, cash conversion")]
     assert "last fiscal year" in caption and "tax benefit as no tax" in caption and "buybacks" in caption
 
 
@@ -2441,9 +2452,11 @@ def test_the_page_shows_headlines_and_officers_for_adobe(monkeypatch):
     assert any(line.startswith("- **Mr\\. Shantanu Narayen**, Chairman") for line in shown)
 
 
-def test_the_section_is_at_the_end_of_the_page_just_above_the_footer(monkeypatch):
+def test_the_section_is_at_the_end_of_the_overview_tab_and_the_footer_is_last_on_the_page(monkeypatch):
     page = run_page(monkeypatch, yahoo=yahoo_with_news([headline("A")], []))
-    assert texts(page.subheader)[-1] == "News and management"
+    subheaders = texts(page.subheader)
+    overview_sections = subheaders[subheaders.index("Where the price sits"):subheaders.index("Discounted cash flow (DCF)")]
+    assert overview_sections[-1] == "News and management"            # the last section of the Overview tab
     assert page.main.caption[-1].value == app.FOOTER_TEXT          # the main area only: the sidebar has captions too
 
 
@@ -2640,7 +2653,7 @@ def test_a_flat_price_line_still_gets_a_sensible_range():
 # ---------------------------------------------------------------------------
 
 FIELD_ROWS = [
-    {"label": "52-week range", "kind": "trading", "low": 199.5, "middle": None, "high": 324.19},
+    {"label": "52-week", "kind": "trading", "low": 199.5, "middle": None, "high": 324.19},
     {"label": "DCF", "kind": "dcf", "low": 253.0, "middle": 305.6, "high": 390.1},
     {"label": "EV/Sales", "kind": "multiple", "low": 272.9, "middle": 333.6, "high": 437.2},
 ]
@@ -2668,7 +2681,7 @@ def test_the_football_field_headline_counts_the_methods_above_the_price():
 def test_the_football_field_has_one_bar_per_method_from_its_low_to_its_high():
     figure = app.football_field_figure(FIELD_ROWS, 217.71)
     bars = figure.data[0]
-    assert list(bars.y) == ["52-week range", "DCF", "EV/Sales"]
+    assert list(bars.y) == ["52-week", "DCF", "EV/Sales"]
     assert list(bars.base) == [199.5, 253.0, 272.9]
     assert list(bars.x) == pytest.approx([324.19 - 199.5, 390.1 - 253.0, 437.2 - 272.9])
     assert bars.orientation == "h"
@@ -3072,3 +3085,141 @@ def test_the_peer_charts_come_before_the_peer_table_and_a_company_without_peers_
     page = run_page(monkeypatch, ticker="exmp", yahoo=other_company())
     assert not [radio for radio in page.radio if radio.key == "peer_chart_multiple"]        # no switch without peers
     assert not any("EV/EBITDA of" in line for line in texts(page.markdown))
+
+
+# ---------------------------------------------------------------------------
+# The tabs, the grouped overview, the Explanations tab and the sidebar headings (redesign, Phase 4a)
+# ---------------------------------------------------------------------------
+
+def tab_named(page, label):
+    """One tab of the page, found by its label."""
+    [tab] = [tab for tab in page.tabs if tab.label == label]
+    return tab
+
+
+def test_the_page_has_five_tabs_in_this_order(monkeypatch):
+    page = run_page(monkeypatch)
+    assert_footer_and_no_crash(page)
+    assert [tab.label for tab in page.tabs] == ["Overview", "DCF", "Multiples", "Sensitivity", "Explanations"]
+    assert app.PAGE_TABS == [tab.label for tab in page.tabs]
+
+
+def test_each_section_is_in_its_own_tab(monkeypatch):
+    page = run_page(monkeypatch, yahoo=yahoo_with_prices())
+    assert texts(tab_named(page, "Overview").subheader) == ["Where the price sits", "Overview", "History", "News and management"]
+    assert texts(tab_named(page, "DCF").subheader) == [
+        "Discounted cash flow (DCF)", "What the market price implies", "Scenarios", "What the model assumes",
+        "How the WACC is built", "Behind the number",
+    ]
+    assert texts(tab_named(page, "Multiples").subheader) == ["Peer multiples"]
+    assert texts(tab_named(page, "Sensitivity").subheader) == [
+        "Sensitivity: price at different WACC and terminal growth", "Sensitivity: price at different margins and growth",
+    ]
+    assert texts(tab_named(page, "Explanations").subheader) == ["Explanations"]
+
+
+def test_the_header_and_the_footer_sit_outside_the_tabs(monkeypatch):
+    page = run_page(monkeypatch)
+    tab_html = [block.value for tab in page.tabs for block in tab.get("html")]
+    assert not any('class="vl-header"' in block for block in tab_html)           # the header is above the tabs...
+    assert header_of(page)                                                      # ...but it is on the page
+    tab_captions = [caption for tab in page.tabs for caption in texts(tab.caption)]
+    assert app.FOOTER_TEXT not in tab_captions and app.FOOTER_TEXT in texts(page.main.caption)
+
+
+def test_the_charts_are_spread_over_the_tabs(monkeypatch):
+    page = run_page(monkeypatch, yahoo=yahoo_with_prices())
+    assert len(tab_named(page, "Overview").get("plotly_chart")) == 1                # the football field
+    assert len(tab_named(page, "DCF").get("plotly_chart")) == 3                     # the waterfall, free cash flow and the ring
+    assert len(tab_named(page, "Multiples").get("plotly_chart")) == 2               # the peer bars and the scatter
+    assert len(tab_named(page, "Sensitivity").get("plotly_chart")) == 2             # the two heatmaps
+    assert len(page.get("plotly_chart")) == 9                                       # with the sparkline in the header
+
+
+def test_the_peer_table_is_in_the_multiples_tab(monkeypatch):
+    page = run_page(monkeypatch)
+    [table] = tab_named(page, "Multiples").dataframe
+    assert "Flag" in table.value.columns and "Forward P/E" in table.value.columns
+
+
+def test_the_sensitivity_tab_holds_the_two_numbers_tables(monkeypatch):
+    page = run_page(monkeypatch)
+    assert [element.value.index.name for element in tab_named(page, "Sensitivity").dataframe] == [
+        "WACC", "Average operating margin",
+    ]
+
+
+def test_a_company_whose_dcf_cannot_be_built_gets_only_the_overview_and_the_explanations_tabs(monkeypatch):
+    loss = dict(ADOBE_YAHOO_INCOME, **{"Pretax Income": (-100e6, 50e6)})
+    page = run_page(monkeypatch, ticker="loss", yahoo=fake_statements_ticker(income=loss))
+    assert_footer_and_no_crash(page)
+    assert [tab.label for tab in page.tabs] == ["Overview", "Explanations"]
+    assert "Could not value LOSS." in texts(tab_named(page, "Overview").error)[0]
+    assert texts(tab_named(page, "Overview").subheader) == ["Overview", "History", "News and management"]
+
+
+def test_a_ticker_that_cannot_be_found_has_no_tabs_at_all(monkeypatch):
+    nothing = fake_statements_ticker(income={}, cash_flow={}, balance={}, info={})
+    monkeypatch.setattr("data._start_yahoo_cooldown", lambda: None)
+    page = run_page(monkeypatch, ticker="nope", yahoo=nothing)
+    assert not page.tabs
+    assert_footer_and_no_crash(page)
+
+
+def test_the_overview_groups_its_numbers_by_what_they_say(monkeypatch):
+    page = run_page(monkeypatch)
+    overview = tab_named(page, "Overview")
+    labels = texts(overview.markdown)
+    group_positions = [labels.index(f"**{name}**") for name in ("What the market pays", "Growth and profitability", "Cash, debt and shareholders")]
+    assert group_positions == sorted(group_positions)
+    assert [metric.label for metric in overview.metric] == [
+        "EV/Sales", "EV/EBITDA", "P/E", "P/S", "Forward P/E",
+        "Revenue growth", "Operating margin", "ROIC",
+        "Free cash flow yield", "Net debt ÷ EBITDA", "Interest cover", "Cash conversion", "Share count change",
+    ]
+
+
+def test_the_overview_now_shows_price_to_sales_and_forward_pe(monkeypatch):
+    page = run_page(monkeypatch)
+    shown = {metric.label: metric.value for metric in tab_named(page, "Overview").metric}
+    assert shown["P/S"].endswith("x") and shown["Forward P/E"].endswith("x")
+    assert shown["Forward P/E"] == app.multiple_or_note(240.74 / 27.41)          # the page's price over Adobe's 27.41 EPS
+
+
+def test_a_company_with_no_analyst_estimate_has_no_forward_pe_in_the_overview(monkeypatch):
+    page = run_example_page(monkeypatch, forward_eps=None)
+    assert {metric.label: metric.value for metric in tab_named(page, "Overview").metric}["Forward P/E"] == app.NOT_MEANINGFUL
+
+
+def test_every_overview_number_still_has_its_help_mark(monkeypatch):
+    page = run_page(monkeypatch)
+    assert all(metric.help for metric in tab_named(page, "Overview").metric)
+
+
+def test_the_explanations_tab_has_every_term_of_the_glossary_exactly_once(monkeypatch):
+    page = run_page(monkeypatch)
+    text = "\n".join(texts(tab_named(page, "Explanations").markdown))
+    for title, body in app.explanations.EXPLANATIONS.values():
+        assert text.count(f"**{title}**  \n{body}") == 1
+
+
+def test_the_explanations_tab_groups_the_terms_under_the_sections_they_belong_to(monkeypatch):
+    page = run_page(monkeypatch)
+    markdown = texts(tab_named(page, "Explanations").markdown)
+    headings = [line for line in markdown if line.startswith("##### ")]
+    assert headings == ["##### The DCF", "##### Behind the number", "##### Sensitivity", "##### Multiples"]
+    assert markdown.index("**Discounted cash flow (DCF)**  \n" + app.explanations.EXPLANATIONS["dcf"][1]) < markdown.index("##### Behind the number")
+
+
+def test_a_term_that_is_in_no_section_is_added_at_the_end_of_the_explanations_tab(monkeypatch):
+    monkeypatch.setitem(app.explanations.EXPLANATIONS, "p_s", ("P/S", "Price divided by sales."))
+    page = run_page(monkeypatch)
+    markdown = texts(tab_named(page, "Explanations").markdown)
+    assert "##### More terms" in markdown and markdown[-1] == "**P/S**  \nPrice divided by sales."
+
+
+def test_the_sidebar_has_its_headings_in_order(monkeypatch):
+    page = run_page(monkeypatch)
+    assert texts(page.sidebar.header) == ["Company", "Assumptions"]                       # Adobe has no peer box
+    other = run_example_page(monkeypatch)
+    assert texts(other.sidebar.header) == ["Company", "Assumptions", "Peers", "One-off items"]
