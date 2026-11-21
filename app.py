@@ -6,7 +6,9 @@ rail 5). Run it with: streamlit run app.py
 """
 
 import datetime
+import math
 import os
+import re
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -225,6 +227,155 @@ def model_wacc(dcf_inputs):
     )["wacc"]
 
 
+# ---------------------------------------------------------------------------
+# The shareable link: the page's address holds the company and the settings, so a link opens the same view
+# ---------------------------------------------------------------------------
+
+# The keys of the sidebar boxes that the link remembers (the ticker box's key is TICKER_BOX_KEY, further down). The peers and
+# the one-off amount have one box per company, whose key is the name below with the ticker after it.
+GROWTH_KEY = "growth_shift"
+MARGIN_KEY = "margin_shift"
+TERMINAL_GROWTH_KEY = "terminal_growth"
+WACC_TICK_KEY = "wacc_tick"
+WACC_KEY = "wacc_value"
+PEERS_KEY_START = "peers_"
+ONE_OFF_KEY_START = "oneoff_"
+LINK_LOADED_KEY = "link_loaded"
+COMPARE_KEY = "compare_ticker"          # the box in the Compare tab where the second company is typed
+LIVE_RF_KEY = "live_risk_free"          # the sidebar tick box that swaps in today's 10-year Treasury yield
+
+LINK_TICKER_PATTERN = re.compile(r"[A-Za-z0-9.^=\-]+")
+LINK_PEERS_PATTERN = re.compile(r"[A-Za-z0-9.^=\-, ]+")
+
+
+def number_from_link(text, low, high, step):
+    """Read a number from the address and make it fit a slider: None when it is not a plain number or lies outside
+    low..high, otherwise the number moved to the nearest step the slider has.
+    """
+    try:
+        value = float(text)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(value) or not low - 1e-9 <= value <= high + 1e-9:
+        return None
+    return round(round(value / step) * step, 6)
+
+
+def settings_from_link(params):
+    """Turn the words after the ? in the page's address (a dictionary of text) into the settings it holds: "ticker", "compare"
+    (the second company), "live_rf" (True when today's 10-year yield is used as the risk-free rate), "growth" and "margin" (in points), "terminal_growth" and "wacc" (decimals), "oneoff" ($ millions a year) and "peers" (text). The
+    address is typed by anyone, so a setting that is missing, is not a number, lies outside what the sliders can show or has
+    odd characters in it is simply left out, and the page starts that setting at its usual value.
+    """
+    settings = {}
+    for name in ("ticker", "compare"):
+        ticker = params.get(name, "")
+        if ticker and len(ticker) <= assumptions.LINK_TICKER_MAX_CHARACTERS and LINK_TICKER_PATTERN.fullmatch(ticker):
+            settings[name] = ticker.upper()
+    for name, low, high, step in (
+        ("growth", assumptions.GROWTH_SHIFT_MIN_POINTS, assumptions.GROWTH_SHIFT_MAX_POINTS, assumptions.GROWTH_SHIFT_STEP_POINTS),
+        ("margin", assumptions.MARGIN_SHIFT_MIN_POINTS, assumptions.MARGIN_SHIFT_MAX_POINTS, assumptions.MARGIN_SHIFT_STEP_POINTS),
+    ):
+        value = number_from_link(params.get(name), low, high, step)
+        if value is not None:
+            settings[name] = value
+    for name, low, high, step in (
+        ("terminal_growth", assumptions.TERMINAL_GROWTH_MIN, assumptions.TERMINAL_GROWTH_MAX, assumptions.TERMINAL_GROWTH_STEP),
+        ("wacc", assumptions.WACC_SLIDER_MIN, assumptions.WACC_SLIDER_MAX, assumptions.WACC_SLIDER_STEP),
+    ):
+        # In the address these are percentages ("2.5"); the sliders hold decimals (0.025).
+        try:
+            decimal = float(params.get(name)) / 100
+        except (TypeError, ValueError):
+            continue
+        value = number_from_link(decimal, low, high, step)
+        if value is not None:
+            settings[name] = value
+    if params.get("live_rf") == "1":
+        settings["live_rf"] = True
+    limit = assumptions.LINK_ONE_OFF_LIMIT_MILLIONS
+    one_off = number_from_link(params.get("oneoff"), -limit, limit, 1)
+    if one_off is not None:
+        settings["oneoff"] = one_off
+    peers = params.get("peers", "")
+    if peers and len(peers) <= assumptions.LINK_PEERS_MAX_CHARACTERS and LINK_PEERS_PATTERN.fullmatch(peers):
+        settings["peers"] = peers
+    return settings
+
+
+def link_from_state(state):
+    """Write the settings in `state` (the page's boxes, by key) as the words for the address, as text. Only a setting that
+    differs from its usual value is written, so the plain page has a plain address. The peers and the one-off amount are
+    those of the company in the ticker box.
+    """
+    def number(value):
+        return f"{value:g}"
+
+    ticker = str(state.get(TICKER_BOX_KEY, "")).strip().upper() or DEFAULT_TICKER
+    params = {}
+    if ticker != DEFAULT_TICKER:
+        params["ticker"] = ticker
+    compare = str(state.get(COMPARE_KEY, "")).strip().upper()
+    if compare:
+        params["compare"] = compare
+    if state.get(LIVE_RF_KEY):
+        params["live_rf"] = "1"
+    for name, key in (("growth", GROWTH_KEY), ("margin", MARGIN_KEY)):
+        if state.get(key, 0.0) != 0.0:
+            params[name] = number(state[key])
+    if state.get(TERMINAL_GROWTH_KEY, assumptions.TERMINAL_GROWTH_RATE) != assumptions.TERMINAL_GROWTH_RATE:
+        params["terminal_growth"] = number(round(state[TERMINAL_GROWTH_KEY] * 100, 4))
+    if state.get(WACC_TICK_KEY) and WACC_KEY in state:
+        params["wacc"] = number(round(state[WACC_KEY] * 100, 4))
+    if state.get(ONE_OFF_KEY_START + ticker, 0.0) != 0.0:
+        params["oneoff"] = number(state[ONE_OFF_KEY_START + ticker])
+    if state.get(PEERS_KEY_START + ticker):
+        params["peers"] = state[PEERS_KEY_START + ticker]
+    return params
+
+
+def load_link():
+    """When a visit begins (and only then, so a reader's later changes are never undone), put the settings held in the page's
+    address into the sidebar boxes. It runs before the boxes are drawn, which is the one moment a box's value may be set.
+    """
+    if st.session_state.get(LINK_LOADED_KEY):
+        return
+    st.session_state[LINK_LOADED_KEY] = True
+    settings = settings_from_link(dict(st.query_params))
+    ticker = settings.get("ticker", DEFAULT_TICKER)
+    if "ticker" in settings:
+        st.session_state[TICKER_BOX_KEY] = ticker
+    if "compare" in settings:
+        st.session_state[COMPARE_KEY] = settings["compare"]
+    if "live_rf" in settings:
+        st.session_state[LIVE_RF_KEY] = True
+    for name, key in (
+        ("growth", GROWTH_KEY), ("margin", MARGIN_KEY), ("terminal_growth", TERMINAL_GROWTH_KEY), ("wacc", WACC_KEY),
+    ):
+        if name in settings:
+            st.session_state[key] = settings[name]
+    if "wacc" in settings:
+        st.session_state[WACC_TICK_KEY] = True
+    if "oneoff" in settings:
+        st.session_state[ONE_OFF_KEY_START + ticker] = settings["oneoff"]
+    if "peers" in settings:
+        st.session_state[PEERS_KEY_START + ticker] = settings["peers"]
+
+
+def write_link():
+    """Write the page's current settings into its address, so copying the address from the browser shares this view."""
+    params = link_from_state(st.session_state)
+    if dict(st.query_params) != params:
+        st.query_params.from_dict(params)
+
+
+def draw_link_note():
+    """Say, at the bottom of the sidebar, how to share the view: the address holds it."""
+    st.sidebar.caption(
+        "To share this view, copy the page's address from your browser: it holds the company and the settings above."
+    )
+
+
 def draw_sliders():
     """Draw the sliders in the sidebar and return what they are set to: the growth shift,
     the margin shift, the terminal growth rate and the WACC the user chose (None when the
@@ -237,6 +388,7 @@ def draw_sliders():
         max_value=assumptions.GROWTH_SHIFT_MAX_POINTS,
         value=0.0,
         step=assumptions.GROWTH_SHIFT_STEP_POINTS,
+        key=GROWTH_KEY,
         format="%+.1f pts",
         help="Adds this many percentage points to every forecast year's growth. 0 is the base case; the table 'What the model assumes' shows the result.",
     )
@@ -246,6 +398,7 @@ def draw_sliders():
         max_value=assumptions.MARGIN_SHIFT_MAX_POINTS,
         value=0.0,
         step=assumptions.MARGIN_SHIFT_STEP_POINTS,
+        key=MARGIN_KEY,
         format="%+.1f pts",
         help="Adds this many percentage points to every forecast year's operating margin. 0 is the base case; the table 'What the model assumes' shows the result.",
     )
@@ -255,12 +408,14 @@ def draw_sliders():
         max_value=assumptions.TERMINAL_GROWTH_MAX,
         value=assumptions.TERMINAL_GROWTH_RATE,
         step=assumptions.TERMINAL_GROWTH_STEP,
+        key=TERMINAL_GROWTH_KEY,
         format="percent",
         help="How fast cash flow is assumed to grow forever after year 5. The base case is 2.5%.",
     )
     wacc_override = None
     if st.sidebar.checkbox(
         "Set the WACC myself",
+        key=WACC_TICK_KEY,
         help="Unticked, the model works out its own WACC from the company's figures. Ticked, the slider sets it.",
     ):
         wacc_override = st.sidebar.slider(
@@ -269,10 +424,49 @@ def draw_sliders():
             max_value=assumptions.WACC_SLIDER_MAX,
             value=assumptions.WACC_SLIDER_START,
             step=assumptions.WACC_SLIDER_STEP,
+            key=WACC_KEY,
             format="percent",
             help="The rate that cash flows are discounted at. Higher means a lower price.",
         )
     return shift_from_points(growth_points), shift_from_points(margin_points), terminal_growth_rate, wacc_override
+
+
+def draw_live_risk_free():
+    """Draw the tick box "Use today's 10-year Treasury yield as the risk-free rate" under the WACC controls and return what to
+    use: {"rate", "date"} when it is ticked and FRED answered, otherwise None (the model's own typed-in rate stays). When ticked
+    it says what changes, and that Damodaran's equity risk premium was worked out with the older rate. When FRED cannot give
+    the yield it says so and the model's own rate is used.
+    """
+    ticked = st.sidebar.checkbox(
+        "Use today's 10-year Treasury yield as the risk-free rate", key=LIVE_RF_KEY,
+        help=explanations.help_text("live_risk_free"),
+    )
+    if not ticked:
+        return None
+    try:
+        live = data.risk_free_from_macro(load_macro_backdrop())
+    except ValueError as error:
+        st.sidebar.warning(f"Today's yield is not available ({error}) so the model's own risk-free rate is used.")
+        return None
+    st.sidebar.caption(
+        f"Risk-free rate {precise_percent(live['rate'])} (the 10-year yield on {day_text(live['date'])}, "
+        f"from FRED) instead of {precise_percent(data.RISK_FREE_RATE)} (Damodaran). His {precise_percent(data.EQUITY_RISK_PREMIUM)} equity risk "
+        "premium was worked out with the older rate, so the two do not quite fit together."
+    )
+    return live
+
+
+def apply_live_risk_free(company, live):
+    """Put today's 10-year yield into a company's figures as its risk-free rate (nothing changes when `live` is None). A company
+    whose cost of debt was estimated as the risk-free rate plus a credit spread gets that estimate redone with the new rate.
+    Marks the company so the WACC table can say where the rate came from.
+    """
+    if live is None:
+        return company
+    changed = dict(company, risk_free_rate=live["rate"], risk_free_is_live=True, risk_free_date=live["date"])
+    if company.get("cost_of_debt_is_fallback"):
+        changed["pre_tax_cost_of_debt"] = valuation.fallback_pre_tax_cost_of_debt(live["rate"], data.CREDIT_SPREAD)
+    return changed
 
 
 # The Explanations tab groups the glossary by where its terms appear on the page: the heading and the section of
@@ -876,7 +1070,10 @@ def wacc_sources(company, source_used):
     else:
         cost_of_debt = "Estimate: last year's interest expense divided by debt"
     return {
-        "risk_free_rate": f"{data.MARKET_FIGURES_SOURCE} (typed in by hand)",
+        "risk_free_rate": (
+            f"Today's 10-year US Treasury yield from FRED, {day_text(company['risk_free_date'])}"
+            if company.get("risk_free_is_live") else f"{data.MARKET_FIGURES_SOURCE} (typed in by hand)"
+        ),
         "beta": (
             f"{provider}, 5-year monthly" if live else f"{snapshot_note} (Yahoo Finance, 5-year monthly)"
         ) + ("" if is_base_case(company) else ", adjusted: two-thirds of the observed beta plus one-third of the market's beta of 1"),
@@ -2306,7 +2503,7 @@ def draw_adjustment_box(company):
             value=0.0,
             step=100.0,
             format="%.0f",
-            key=f"oneoff_{company['ticker']}",
+            key=ONE_OFF_KEY_START + company["ticker"],
             help=(
                 "Add or take off a yearly amount from operating income, in US dollars: for example -1000 "
                 "to take out a tax credit that flatters the profit. It is applied to the last fiscal year "
@@ -2368,7 +2565,7 @@ def draw_peer_box(company):
     typed = st.sidebar.text_input(
         "Peer tickers",
         value=", ".join(suggested),
-        key=f"peers_{company['ticker']}",      # one box per company, so peers are not carried over
+        key=PEERS_KEY_START + company["ticker"],      # one box per company, so peers are not carried over
         help=(
             "Companies to compare with, separated by commas. Suggested from Yahoo's industry "
             f"list, the closest in margin and growth; change them as you like (up to {assumptions.MAX_TYPED_PEERS})."
@@ -2666,13 +2863,22 @@ def draw_news_and_management(ticker):
     )
 
 
+def day_text(iso_date):
+    """Write a date from FRED ("2026-11-19") the way the page writes dates, 19 Nov 2026; "date not given" if it is not one."""
+    try:
+        day = datetime.date.fromisoformat(iso_date)
+    except (TypeError, ValueError):
+        return "date not given"
+    return f"{day.day} {day.strftime('%b %Y')}"
+
+
 def macro_date_text(row):
     """Say how fresh a macro number is: "as of 19 Nov 2026" for a daily one, "as of Oct 2026" for a monthly one."""
     try:
         day = datetime.date.fromisoformat(row["date"])
     except (TypeError, ValueError):
         return "date not given"
-    return f"as of {day.strftime('%b %Y')}" if row["monthly"] else f"as of {day.day} {day.strftime('%b %Y')}"
+    return f"as of {day.strftime('%b %Y')}" if row["monthly"] else f"as of {day_text(row['date'])}"
 
 
 def draw_macro_backdrop():
@@ -2700,7 +2906,7 @@ def draw_macro_backdrop():
     st.caption(
         "From FRED, the Federal Reserve Bank of St. Louis. These are US numbers: a company that lives on another country's "
         "rates (Aker on Norway's, for instance) is moved more by those. They are background for the valuation, not an input "
-        "to it: the WACC's risk-free rate is typed in from Damodaran."
+        "to it, unless you tick \"Use today's 10-year Treasury yield\" in the sidebar: the WACC's risk-free rate is otherwise typed in from Damodaran."
     )
 
 
@@ -2816,7 +3022,155 @@ def draw_dcf_unavailable(ticker, error):
 
 
 # The tabs under the header, in order: what each holds is set in draw_page.
-PAGE_TABS = ["Overview", "DCF", "Multiples", "Sensitivity", "Explanations"]
+# ---------------------------------------------------------------------------
+# Compare: a second company next to the one on the page
+# ---------------------------------------------------------------------------
+
+# The ways of valuing a company that the comparison chart lines up: the label, and where the price is found.
+COMPARE_METHODS = [
+    ("DCF", "dcf"), ("EV/Sales", "price_ev_sales"), ("EV/EBITDA", "price_ev_ebitda"), ("P/E", "price_pe"),
+    ("P/S", "price_ps"), ("Forward P/E", "price_forward_pe"),
+]
+
+
+def suggested_peer_figures(company):
+    """Get the multiples of the peers Yahoo suggests for a company, the way the sidebar box would fill itself in,
+    without drawing a box. Returns None when there are no suitable peers or Yahoo could not be reached.
+    """
+    market_value = round(company["share_price"] * company["shares"])
+    try:
+        tickers = load_suggested_peers(company["ticker"], market_value)["peer_tickers"][: assumptions.MAX_TYPED_PEERS]
+        return load_peer_multiples(tuple(tickers)) if tickers else None
+    except ValueError:
+        return None
+
+
+def value_for_compare(ticker, growth_shift, margin_shift, terminal_growth_rate, wacc_override, live_risk_free=None):
+    """Value a second company with the same sliders, the same typed-in WACC and the same risk-free rate as the page. Adobe uses its hand-chosen peers,
+    any other company the peers Yahoo suggests, and there is no one-off adjustment. Returns {"company", "dcf", "multiples",
+    "overview", "dcf_error"}: when a DCF cannot be built (a company that lost money) the DCF and the multiples are None and
+    "dcf_error" says why. Stops with a plain error if the company itself cannot be found.
+    """
+    company, _source = load_company(ticker)
+    peers = {key: company[key] for key in PEER_KEYS} if is_base_case(company) else suggested_peer_figures(company)
+    if peers is not None:
+        company = dict(company, **peers)
+    company = apply_live_risk_free(company, live_risk_free)
+    try:
+        dcf, multiples = run_valuation(company, build_dcf_inputs(company, growth_shift, margin_shift), terminal_growth_rate, wacc_override)
+        dcf_error = None
+    except ValueError as error:
+        dcf = multiples = None
+        dcf_error = str(error)
+    return {"company": company, "dcf": dcf, "multiples": multiples, "overview": company_overview(company), "dcf_error": dcf_error}
+
+
+def compare_column(valued):
+    """Write one company's side of the comparison table: a dictionary of row label to the text shown."""
+    company, dcf, multiples, overview = valued["company"], valued["dcf"], valued["multiples"], valued["overview"]
+    price = company["share_price"]
+    middle = None if multiples is None else multiples["median_price"]
+    upside = None if dcf is None else dcf["upside"]
+    share = None if dcf is None else valuation.terminal_value_share(dcf["pv_of_terminal_value"], dcf["enterprise_value"])
+    return {
+        "Current price": dollars(price),
+        "DCF value per share": NOT_AVAILABLE if dcf is None else dollars(dcf["implied_share_price"]),
+        "DCF upside / downside": NOT_AVAILABLE if upside is None else theme.change_text(upside),
+        "Verdict": theme.VERDICT_LOOKS[valuation.verdict(upside, assumptions.VERDICT_THRESHOLD)][0],
+        "Multiples value": NOT_AVAILABLE if middle is None else dollars(middle),
+        "Multiples upside / downside": NOT_AVAILABLE if middle is None else theme.change_text(valuation.upside(middle, price)),
+        "WACC": NOT_AVAILABLE if dcf is None else precise_percent(dcf["wacc"]),
+        "Terminal value share of the DCF": NOT_AVAILABLE if share is None else f"{share:.0%}",
+        "Market value": theme.money_short(overview["market_value"]),
+        "Operating margin (last year)": percent_or_note(overview["operating_margin"]),
+        "Revenue growth (last year)": percent_or_note(overview["revenue_growth"]),
+        "P/E": multiple_or_note(overview["pe"]),
+        "EV/EBITDA": multiple_or_note(overview["ev_ebitda"]),
+        "Free cash flow yield": percent_or_note(overview["free_cash_flow_yield"]),
+    }
+
+
+def comparison_table(first, second):
+    """Lay the two companies side by side: one row for each number, one column for each company, named by ticker."""
+    return pd.DataFrame({
+        first["company"]["ticker"]: compare_column(first),
+        second["company"]["ticker"]: compare_column(second),
+    })
+
+
+def method_upsides(valued):
+    """For each way of valuing a company in COMPARE_METHODS, how far its price is above (positive) or below (negative) the
+    market price, as (label, upside, price); upside and price are None for a method with no answer, so the chart can skip it.
+    """
+    prices = {"dcf": None if valued["dcf"] is None else valued["dcf"]["implied_share_price"]}
+    for _label, key in COMPARE_METHODS[1:]:
+        prices[key] = None if valued["multiples"] is None else valued["multiples"][key]
+    share_price = valued["company"]["share_price"]
+    return [
+        (label, None if prices[key] is None else valuation.upside(prices[key], share_price), prices[key])
+        for label, key in COMPARE_METHODS
+    ]
+
+
+def compare_figure(first, second):
+    """Draw each way of valuing the two companies as a bar of how far its price is above (right) or below (left) the
+    company's own market price. Because each bar is measured against its own company's price, a $50 stock and a $500 stock
+    can be compared. The first company is blue (the one on the page), the second off-white; the numbers are written on the
+    bars and the exact prices are in the hover, so colour is never the only signal.
+    """
+    figure = go.Figure()
+    for valued, colour in ((first, theme.ACCENT), (second, theme.TEXT)):
+        rows = [row for row in method_upsides(valued) if row[1] is not None]
+        figure.add_trace(go.Bar(
+            y=[label for label, _upside, _price in rows], x=[upside for _label, upside, _price in rows],
+            name=valued["company"]["ticker"], orientation="h", marker={"color": colour},
+            text=[theme.change_text(upside, digits=0) for _label, upside, _price in rows], textposition="outside",
+            customdata=[dollars(price) for _label, _upside, price in rows],
+            hovertemplate="<b>%{y}</b><br>" + valued["company"]["ticker"] + ": %{x:+.1%} (price %{customdata})<extra></extra>",
+        ))
+    figure.update_xaxes(tickformat="+.0%", zeroline=True, zerolinecolor=theme.GREY)
+    figure.update_yaxes(autorange="reversed")
+    theme.style_figure(figure, height=60 + 70 * len(COMPARE_METHODS))
+    figure.update_layout(barmode="group", legend={"orientation": "h", "y": 1.08, "x": 0})
+    return figure
+
+
+def draw_compare(company, dcf, multiples, growth_shift, margin_shift, terminal_growth_rate, wacc_override, live_risk_free=None):
+    """Draw the Compare tab: a box for a second company, then the two side by side in a table and in a chart of how far each
+    way of valuing them is from their own market prices. Both get the same sliders and the same typed-in WACC, each its own
+    figures and its own peers. A second company that cannot be found, or is the same as the first, says so.
+    """
+    st.subheader("Compare with another company")
+    typed = st.text_input(
+        "Second company ticker", key=COMPARE_KEY, placeholder="For example MSFT",
+        help="The company to put next to " + company["company_name"] + ". It gets the same sliders and the same typed-in WACC as this one, "
+        "its own figures and its own peers (the ones Yahoo suggests).",
+    ).strip().upper()
+    if not typed:
+        st.caption("Type a second ticker to see the two side by side.")
+        return
+    if typed == company["ticker"]:
+        st.caption(f"{typed} is the company already on the page. Type a different one.")
+        return
+    with st.spinner(f"Loading {typed}…"):
+        try:
+            second = value_for_compare(typed, growth_shift, margin_shift, terminal_growth_rate, wacc_override, live_risk_free)
+        except ValueError as error:
+            st.caption(f"Could not load {typed}. {error}")
+            return
+    first = {"company": company, "dcf": dcf, "multiples": multiples, "overview": company_overview(company), "dcf_error": None}
+    st.dataframe(comparison_table(first, second))
+    if second["dcf_error"] is not None:
+        st.caption(f"No DCF for {typed}: {second['dcf_error']}")
+    st.markdown("**How far each way of valuing them is from their own market price**", help=explanations.help_text("compare_chart"))
+    st.plotly_chart(compare_figure(first, second), width="stretch", config=CHART_CONFIG)
+    st.caption(
+        "Both companies get the same sliders, the same typed-in WACC and the same risk-free rate (if you set them), each its own figures and peers. Numbers "
+        "marked last year are from the last full fiscal year. A comparison of models' outputs, not a recommendation."
+    )
+
+
+PAGE_TABS = ["Overview", "DCF", "Multiples", "Sensitivity", "Compare", "Explanations"]
 
 
 def draw_page():
@@ -2827,9 +3181,11 @@ def draw_page():
     the reason instead. If it was found but a DCF cannot be built (it lost money), draw the header, the reason and
     only the Overview and Explanations tabs.
     """
+    load_link()
     ticker = draw_ticker_box()
     draw_name_search()
     growth_shift, margin_shift, terminal_growth_rate, wacc_override = draw_sliders()
+    live_risk_free = draw_live_risk_free()
     scenario_settings = draw_scenario_boxes()
     adjustment = 0.0
     load_error = None
@@ -2845,6 +3201,7 @@ def draw_page():
                     company = dict(company, **peers)
                 adjustment = draw_adjustment_box(company)
                 company = apply_adjustment(company, adjustment)
+            company = apply_live_risk_free(company, live_risk_free)
         except ValueError as error:
             load_error = error
     if load_error is not None:
@@ -2895,7 +3252,7 @@ def draw_page():
             draw_explanations_tab()
         draw_footer()
         return
-    overview_tab, dcf_tab, multiples_tab, sensitivity_tab, explanations_tab = st.tabs(PAGE_TABS)
+    overview_tab, dcf_tab, multiples_tab, sensitivity_tab, compare_tab, explanations_tab = st.tabs(PAGE_TABS)
     with overview_tab:
         draw_football_field(company, dcf, multiples, dcf_inputs, base_wacc, prices, analysts)
         draw_analyst_view(company, analysts, dcf["implied_share_price"])
@@ -2922,6 +3279,8 @@ def draw_page():
     with sensitivity_tab:
         draw_heatmap(company, dcf_inputs, base_wacc)
         draw_margin_growth_table(company, dcf_inputs, dcf, terminal_growth_rate, wacc_override)
+    with compare_tab:
+        draw_compare(company, dcf, multiples, growth_shift, margin_shift, terminal_growth_rate, wacc_override, live_risk_free)
     with explanations_tab:
         draw_explanations_tab()
     draw_footer()
@@ -2932,3 +3291,5 @@ theme.inject_theme()
 bridge_fmp_key()
 bridge_fred_key()
 draw_page()
+draw_link_note()
+write_link()

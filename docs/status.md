@@ -358,6 +358,26 @@
   app after the merge). One number failing leaves the other two; no key says so. `data.fetch_fred_latest`, `get_macro_backdrop`,
   `app.draw_macro_backdrop`. No maths, so no Excel step. 1158 tests pass (23 new; three layout tests updated on purpose because
   the Overview tab has one more section).
+- Done (in the open pull request "the big three", commit 1 of 3): a shareable link. The page's address now holds the company, the
+  growth and margin sliders, terminal growth, the typed-in WACC, the one-off amount and the peers, is rewritten after every
+  change and read once when a visit begins. A bad or out-of-range value in an address is ignored. Checked in a real browser
+  (opened a link, typed KO, reloaded the new address: same view). `app.settings_from_link`, `link_from_state`, `load_link`,
+  `write_link`. No maths, so no Excel step. 1195 tests pass (37 new). The scenario boxes are not in the link.
+  A linked visit logs one harmless line in the server log ("widget ... also had its value set via the Session State API").
+- Done (in the open pull request "the big three", commit 2 of 3): a Compare tab. Type a second ticker and see the two companies
+  side by side: a table (price, DCF value and upside, verdict, multiples value, WACC, terminal value share, market value,
+  margin, growth, P/E, EV/EBITDA, free cash flow yield) and a bar chart of how far each valuation method is from each company's
+  own market price. Both get the same sliders and typed-in WACC, each its own figures and peers; a second company that lost
+  money still gets a column. The second ticker is part of the shareable link. Only shown when the first company has a DCF.
+  `app.value_for_compare`, `compare_column`, `comparison_table`, `method_upsides`, `compare_figure`, `draw_compare`.
+  No maths of its own (it reuses valuation.py), so no Excel step. The tab-order test was updated on purpose.
+- Done (in the open pull request "the big three", commit 3 of 3): an optional live risk-free rate. A sidebar tick box (off by
+  default) swaps the typed-in 5.29% for today's 10-year Treasury yield from FRED, for the page's company and for the Compare
+  tab's second company; the WACC table names the source and date; the sidebar warns that Damodaran's equity risk premium was
+  worked out with his own rate. Matched to the Excel model exactly: with `WACC!C8` typed as 4.50%, WACC 10.1812% and price
+  $336.1776 (Haavard's two numbers, 20 Nov 2026), in `test_valuation.py` and on the page. Part of the shareable link.
+  `data.risk_free_from_macro`, `app.draw_live_risk_free`, `apply_live_risk_free`. The "show the gap" idea is done (the sidebar
+  note gives both rates).
 - Next: check the macro numbers on the live app after the merge; the live FMP check with Yahoo switched
   off; the small items below. CLAUDE.md still needs Haavard's edits (the theme line, and rows for theme.py and test_theme.py).
 - Open:
@@ -388,7 +408,6 @@
     `.streamlit/secrets.toml` and in Streamlit Cloud) on 20 Nov 2026. On 20 Nov 2026 the new key worked
     against the real service (one `ratios-ttm` request for Apple answered, and its P/S matched Yahoo's). Still to do: the full live
     check with Yahoo switched off, to prove every step of the backup chain.
-  - Open idea (not built): beside the 10-year yield, show the model's own risk-free rate (typed in from Damodaran) and the gap.
   - Even after the capex fade, Microsoft's DCF price is 48% below its market price ($278 vs
     $532, 6 Nov 2026). A starting point from one year is not a forecast, and a 17.8% grower
     fading to 2.5% over five years is a conservative path for it.

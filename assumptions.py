@@ -292,3 +292,11 @@ SEARCH_MIN_CHARACTERS = 2
 
 # How many matches to ask Yahoo for, more than are shown, because many of them are dropped (only company shares are kept).
 SEARCH_MATCHES_ASKED = 15
+
+# The shareable link (chosen with Haavard on 21 Nov 2026): the page's address carries the company and the settings, so a
+# link opens exactly the same view. The address can be typed by anyone, so what is read from it is checked against these
+# limits, and anything outside them is ignored.
+LINK_TICKER_MAX_CHARACTERS = 15         # the longest ticker accepted from a link (real tickers are 1 to 10 characters)
+LINK_PEERS_MAX_CHARACTERS = 200         # the longest list of peer tickers accepted (8 peers of 10 characters, with commas)
+LINK_ONE_OFF_LIMIT_MILLIONS = 1_000_000     # a one-off adjustment above $1 trillion a year is a typing slip, not a number
+

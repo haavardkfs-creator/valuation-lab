@@ -625,6 +625,60 @@ US numbers, so the page says a company living on another country's rates is move
 here), is never shown, and never appears in an error message. One number failing leaves the other two; no key or no answer
 makes the whole section say it is not available right now and leaves the rest of the page alone.
 
+## An optional live risk-free rate
+
+The workbook's risk-free rate is one typed-in cell (`WACC!C8`, 5.29%, Damodaran, 1 Nov 2026). A sidebar tick box, "Use today's
+10-year Treasury yield as the risk-free rate" (off by default), swaps it for today's 10-year US Treasury yield from FRED
+(the macro backdrop's first number, as a decimal). Nothing else in the model changes, so there is no new formula: the
+rate goes into the same cost of equity, risk-free rate + beta × equity risk premium. A company whose cost of debt was
+estimated as the risk-free rate plus a credit spread (`cost_of_debt_is_fallback`) gets that estimate redone with the new
+rate; one whose cost of debt comes from the 10-K's debt notes (Adobe) does not change.
+
+Checked against the workbook with `WACC!C8` typed as 4.50% (20 Nov 2026; 5.29% put back, file not saved): WACC C29 gives
+10.1812% (10.93% before) and valuation C26 gives $336.1776 ($305.60 before). Python gives the same, and the page, on the
+snapshot with a 4.50% yield, shows $336.18 (`test_valuation.py`, `test_app.py`).
+
+The rate applies to the page's company and to the second company in Compare, the DCF tab, scenarios and heatmaps (they all
+share the DCF inputs). A typed-in WACC still replaces the WACC outright, so with one set the risk-free rate no longer
+matters. Limits the page says: Damodaran's 4.41% equity risk premium was worked out with his own rate, so mixing it with
+another rate is a little inconsistent; and it is a US rate used for every company, as the typed-in one always was. If FRED
+cannot give the yield the sidebar says so and the model's own rate is used. The WACC table's "Where it comes from" names
+the yield and its date. The tick box is part of the shareable link (`live_rf=1`).
+
+## Compare: a second company next to the first
+
+Not a formula in the workbook: the Compare tab (after Sensitivity) takes a second ticker and puts the two companies side by
+side. It shows only for a company whose DCF can be built. The second company is valued by the same code as the first
+(`app.value_for_compare`): the same growth and margin sliders, the same terminal growth and, if the reader set one, the same
+typed-in WACC are applied to both; each company keeps its own figures, its own beta and cost of debt, and its own peers (Adobe
+its hand-chosen ones, any other company the ones Yahoo suggests; the first company's peers are the ones in the sidebar box).
+There is no one-off adjustment on the second company. A second company that lost money still gets a column, with the DCF rows
+"Not available" and the reason underneath.
+
+- **The table.** One column per company, named by ticker. Rows: current price, DCF value per share, DCF upside / downside,
+  verdict (the same 15% rule as the header badge), multiples value (the middle of the multiples prices) and its upside,
+  WACC, the terminal value's share of the DCF, market value, then operating margin, revenue growth, P/E, EV/EBITDA and
+  free cash flow yield. The last five are from the last full fiscal year (`valuation.stock_overview`), not the last twelve months.
+- **The chart.** For each way of valuing (the DCF and the five multiples) a bar for each company: how far that method's price
+  is above (right) or below (left) the company's own market price. Measured against its own price, a $60 stock and a $240
+  stock can be compared. The first company is blue, the second off-white; the figures are written on the bars and the exact
+  prices are in the hover, so colour is never the only signal.
+- **The link.** The second ticker is part of the shareable link (`compare`).
+
+## The shareable link
+
+Not a formula in the workbook: the page's address holds the view, so sending the address sends the view. The address is
+rewritten after every change (`write_link`) and read once when a visit begins (`load_link`), so a reader's later changes are
+never undone. It remembers: the company (`ticker`), the growth and margin shifts in points (`growth`, `margin`), terminal growth
+and the typed-in WACC as percentages (`terminal_growth`, `wacc`; the WACC only while its box is ticked), the one-off amount in
+$ millions (`oneoff`) and the peer tickers (`peers`), the last two being those of the company in the ticker box. It does not
+remember the scenario boxes. Only a setting that differs from its usual value is written, so the plain page has a plain address.
+
+An address can be typed by anyone, so what is read from it is checked: a value that is not a plain number, lies outside what
+its slider can show, or has odd characters (a ticker or peer list with anything but letters, digits and `. ^ = -`, over
+`LINK_TICKER_MAX_CHARACTERS` / `LINK_PEERS_MAX_CHARACTERS` characters) is ignored, and that setting starts at its usual value.
+A number between two steps of a slider moves to the nearest step. Nothing from the address is ever shown as HTML.
+
 ## The verdict badge
 
 Not a formula in the workbook: a rule that only names a number the page already shows, the DCF's upside against the market

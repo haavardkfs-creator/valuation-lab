@@ -5,6 +5,7 @@ the internet. They check what the reader would see: the notes, the warnings, whi
 are drawn, and that a company that cannot be valued gets a plain error instead of a crash.
 """
 
+import json
 from pathlib import Path
 
 import pandas as pd
@@ -28,6 +29,7 @@ from test_data import (
     fake_statements_ticker,
     FMP_PROFILE,
     no_interest_expense_company,
+    statement,
     with_fmp,
 )
 
@@ -3109,10 +3111,10 @@ def tab_named(page, label):
     return tab
 
 
-def test_the_page_has_five_tabs_in_this_order(monkeypatch):
+def test_the_page_has_six_tabs_in_this_order(monkeypatch):
     page = run_page(monkeypatch)
     assert_footer_and_no_crash(page)
-    assert [tab.label for tab in page.tabs] == ["Overview", "DCF", "Multiples", "Sensitivity", "Explanations"]
+    assert [tab.label for tab in page.tabs] == ["Overview", "DCF", "Multiples", "Sensitivity", "Compare", "Explanations"]
     assert app.PAGE_TABS == [tab.label for tab in page.tabs]
 
 
@@ -4039,4 +4041,450 @@ def test_with_no_secrets_at_all_there_is_no_fred_key(monkeypatch):
 
 def test_the_sources_line_names_fred():
     assert "FRED" in app.SOURCES_TEXT
+
+
+# ---------------------------------------------------------------------------
+# The shareable link: the page's address holds the company and the settings
+# ---------------------------------------------------------------------------
+
+
+def run_linked(monkeypatch, params, yahoo=None):
+    """Open the page the way a link does: with `params` after the ? in the address."""
+    monkeypatch.setattr("yfinance.Industry", FakeIndustry)
+    monkeypatch.setattr("yfinance.Ticker", yahoo or example_with_peers())
+    page = AppTest.from_file(APP_FILE, default_timeout=60)
+    for name, value in params.items():
+        page.query_params[name] = value
+    return page.run()
+
+
+def address_of(page):
+    """What the page wrote into its address, as plain text (the test runner keeps each value in a list)."""
+    return {name: value[0] if isinstance(value, list) else value for name, value in page.query_params.items()}
+
+
+def test_a_full_address_is_read_into_every_setting():
+    got = app.settings_from_link({
+        "ticker": "msft", "growth": "1.5", "margin": "-2", "terminal_growth": "3", "wacc": "9.5", "oneoff": "-1000",
+        "peers": "AAPL, GOOG",
+    })
+    assert got == {
+        "ticker": "MSFT", "growth": 1.5, "margin": -2.0, "terminal_growth": 0.03, "wacc": 0.095, "oneoff": -1000.0,
+        "peers": "AAPL, GOOG",
+    }
+
+
+def test_an_empty_address_holds_no_settings():
+    assert app.settings_from_link({}) == {}
+
+
+@pytest.mark.parametrize("params", [
+    {"growth": "abc"}, {"growth": "99"}, {"growth": "nan"}, {"growth": "inf"}, {"growth": ""},      # not a number, too big, odd
+    {"margin": "-5.5"}, {"terminal_growth": "9"}, {"terminal_growth": "-1"}, {"wacc": "3"}, {"wacc": "20"},
+    {"oneoff": "1e12"}, {"oneoff": "x"},
+    {"ticker": "A" * 16}, {"ticker": "AB CD"}, {"ticker": "<script>"}, {"ticker": "A;B"}, {"ticker": ""},
+    {"peers": "A" * 201}, {"peers": "AAPL;DROP"}, {"peers": "<b>x</b>"},
+])
+def test_a_setting_that_is_odd_or_outside_what_the_boxes_can_show_is_left_out(params):
+    assert app.settings_from_link(params) == {}
+
+
+def test_a_number_between_two_steps_moves_to_the_nearest_step():
+    assert app.settings_from_link({"growth": "1.3"}) == {"growth": 1.5}
+    assert app.settings_from_link({"wacc": "9.6"}) == {"wacc": 0.095}              # steps of 0.25 points: 9.6 is nearest 9.5
+
+
+def test_one_odd_setting_does_not_stop_the_others():
+    assert app.settings_from_link({"growth": "oops", "margin": "1", "ticker": "x y"}) == {"margin": 1.0}
+
+
+def test_the_plain_page_has_a_plain_address():
+    assert app.link_from_state({}) == {}
+    state = {
+        app.TICKER_BOX_KEY: app.DEFAULT_TICKER, app.GROWTH_KEY: 0.0, app.MARGIN_KEY: 0.0,
+        app.TERMINAL_GROWTH_KEY: assumptions.TERMINAL_GROWTH_RATE, app.WACC_TICK_KEY: False,
+    }
+    assert app.link_from_state(state) == {}
+
+
+def test_only_settings_that_differ_from_the_usual_are_written():
+    state = {
+        app.TICKER_BOX_KEY: " exmp ", app.GROWTH_KEY: 1.5, app.MARGIN_KEY: 0.0,
+        app.TERMINAL_GROWTH_KEY: 0.03, app.WACC_TICK_KEY: True, app.WACC_KEY: 0.095,
+        app.ONE_OFF_KEY_START + "EXMP": -1000.0, app.PEERS_KEY_START + "EXMP": "LOSS, AAA",
+    }
+    assert app.link_from_state(state) == {
+        "ticker": "EXMP", "growth": "1.5", "terminal_growth": "3", "wacc": "9.5", "oneoff": "-1000", "peers": "LOSS, AAA",
+    }
+
+
+def test_a_wacc_slider_value_is_not_written_while_the_box_is_unticked():
+    assert "wacc" not in app.link_from_state({app.WACC_TICK_KEY: False, app.WACC_KEY: 0.095})
+
+
+def test_the_peers_and_the_one_off_amount_written_are_those_of_the_company_in_the_box():
+    state = {
+        app.TICKER_BOX_KEY: "MSFT", app.PEERS_KEY_START + "EXMP": "AAA", app.ONE_OFF_KEY_START + "EXMP": 5.0,
+    }
+    assert app.link_from_state(state) == {"ticker": "MSFT"}
+
+
+def test_what_is_written_is_read_back_the_same():
+    state = {
+        app.TICKER_BOX_KEY: "EXMP", app.GROWTH_KEY: -2.5, app.MARGIN_KEY: 4.0, app.TERMINAL_GROWTH_KEY: 0.0175,
+        app.WACC_TICK_KEY: True, app.WACC_KEY: 0.0925, app.ONE_OFF_KEY_START + "EXMP": 250.0, app.PEERS_KEY_START + "EXMP": "AAA, BBB",
+    }
+    assert app.settings_from_link(app.link_from_state(state)) == {
+        "ticker": "EXMP", "growth": -2.5, "margin": 4.0, "terminal_growth": 0.0175, "wacc": 0.0925, "oneoff": 250.0,
+        "peers": "AAA, BBB",
+    }
+
+
+def test_opening_a_link_sets_the_sliders_the_wacc_and_the_company(monkeypatch):
+    page = run_linked(monkeypatch, {"ticker": "exmp", "growth": "1.5", "margin": "-2", "terminal_growth": "3", "wacc": "9.5"})
+    assert_footer_and_no_crash(page)
+    assert page.sidebar.text_input(key=app.TICKER_BOX_KEY).value == "EXMP"          # a ticker is always in capitals
+    assert "Example Corp" in header_of(page)
+    assert page.sidebar.slider(key=app.GROWTH_KEY).value == 1.5
+    assert page.sidebar.slider(key=app.MARGIN_KEY).value == -2.0
+    assert page.sidebar.slider(key=app.TERMINAL_GROWTH_KEY).value == 0.03
+    assert page.sidebar.checkbox(key=app.WACC_TICK_KEY).value is True
+    assert page.sidebar.slider(key=app.WACC_KEY).value == 0.095
+
+
+def test_opening_a_link_with_peers_and_a_one_off_amount_fills_those_boxes_for_that_company(monkeypatch):
+    page = run_linked(monkeypatch, {"ticker": "EXMP", "peers": "AAA, BBB", "oneoff": "-500"})
+    assert_footer_and_no_crash(page)
+    assert peer_box(page).value == "AAA, BBB"
+    assert page.sidebar.number_input(key=app.ONE_OFF_KEY_START + "EXMP").value == -500.0
+
+
+def test_a_linked_view_gives_the_same_price_as_setting_the_boxes_by_hand(monkeypatch):
+    linked = run_linked(monkeypatch, {"growth": "1.5", "margin": "-2"})
+    by_hand = run_page(monkeypatch)
+    by_hand.sidebar.slider[0].set_value(1.5).run()
+    by_hand.sidebar.slider[1].set_value(-2.0).run()
+    assert metrics(linked)["DCF implied price"] == metrics(by_hand)["DCF implied price"]
+    assert metrics(linked)["DCF implied price"] != metrics(run_page(monkeypatch))["DCF implied price"]
+
+
+def test_garbage_in_the_address_starts_the_usual_page(monkeypatch):
+    page = run_linked(monkeypatch, {"growth": "abc", "ticker": "<script>", "wacc": "999", "peers": "x;y"})
+    assert_footer_and_no_crash(page)
+    assert page.sidebar.text_input(key=app.TICKER_BOX_KEY).value == app.DEFAULT_TICKER
+    assert page.sidebar.slider(key=app.GROWTH_KEY).value == 0.0
+    assert page.sidebar.checkbox(key=app.WACC_TICK_KEY).value is False
+
+
+def test_the_page_with_no_link_leaves_the_address_plain(monkeypatch):
+    page = run_page(monkeypatch)
+    assert address_of(page) == {}
+    assert "To share this view, copy the page's address" in texts(page.sidebar.caption)[-1]
+
+
+def test_changing_a_box_writes_it_into_the_address_and_changing_it_back_takes_it_out(monkeypatch):
+    page = run_page(monkeypatch)
+    page.sidebar.slider(key=app.GROWTH_KEY).set_value(-1.0).run()
+    assert address_of(page) == {"growth": "-1"}
+    page.sidebar.checkbox(key=app.WACC_TICK_KEY).check().run()
+    page.sidebar.slider(key=app.WACC_KEY).set_value(0.1).run()
+    assert address_of(page) == {"growth": "-1", "wacc": "10"}
+    page.sidebar.slider(key=app.GROWTH_KEY).set_value(0.0).run()
+    page.sidebar.checkbox(key=app.WACC_TICK_KEY).uncheck().run()
+    assert address_of(page) == {}
+
+
+def test_the_link_is_read_once_so_a_readers_changes_are_never_undone(monkeypatch):
+    page = run_linked(monkeypatch, {"growth": "1.5"})
+    page.sidebar.slider(key=app.GROWTH_KEY).set_value(-3.0).run()
+    page.sidebar.slider(key=app.MARGIN_KEY).set_value(1.0).run()
+    assert page.sidebar.slider(key=app.GROWTH_KEY).value == -3.0
+    assert address_of(page) == {"growth": "-3", "margin": "1"}
+
+
+def test_typing_another_company_writes_its_ticker_into_the_address(monkeypatch):
+    page = run_example_page(monkeypatch)
+    assert address_of(page) == {"ticker": "EXMP", "peers": "LOSS, AAA, BBB, CCC"}
+
+
+# ---------------------------------------------------------------------------
+# Compare: a second company next to the one on the page
+# ---------------------------------------------------------------------------
+
+
+def two_companies(other_income=None):
+    """Yahoo's reply about Example Corp (EXMP, $240.74) and Other Corp (OTHR, $60), both with the same industry peers."""
+    base = example_with_peers()
+
+    class Fake(base):
+        def __init__(self, ticker):
+            super().__init__(ticker)
+            if ticker == "OTHR":
+                self.info = dict(self.info, longName="Other Corp", currentPrice=60.0)
+                if other_income is not None:
+                    self.income_stmt = statement(other_income)
+            if ticker == "NOPE":
+                raise ConnectionError("no such company")
+
+    return Fake
+
+
+def run_compared(monkeypatch, params=None, other_income=None):
+    """Open Example Corp with Other Corp in the Compare box (and any other settings in the address)."""
+    return run_linked(monkeypatch, dict({"ticker": "EXMP", "compare": "OTHR"}, **(params or {})), yahoo=two_companies(other_income))
+
+
+def compare_table_of(page):
+    [table] = [e.value for e in tab_named(page, "Compare").dataframe]
+    return table
+
+
+def test_the_compare_tab_sits_before_the_explanations_tab(monkeypatch):
+    page = run_compared(monkeypatch)
+    assert [tab.label for tab in page.tabs] == ["Overview", "DCF", "Multiples", "Sensitivity", "Compare", "Explanations"]
+
+
+def test_with_no_second_company_the_tab_asks_for_one_and_shows_no_table(monkeypatch):
+    page = run_linked(monkeypatch, {"ticker": "EXMP"}, yahoo=two_companies())
+    assert_footer_and_no_crash(page)
+    assert "Type a second ticker to see the two side by side." in texts(tab_named(page, "Compare").caption)
+    assert list(tab_named(page, "Compare").dataframe) == []
+
+
+def test_the_same_company_twice_is_not_compared_with_itself(monkeypatch):
+    page = run_linked(monkeypatch, {"ticker": "EXMP", "compare": "exmp"}, yahoo=two_companies())
+    assert "EXMP is the company already on the page. Type a different one." in texts(tab_named(page, "Compare").caption)
+    assert list(tab_named(page, "Compare").dataframe) == []
+
+
+def test_a_second_company_that_cannot_be_loaded_says_so_and_the_page_still_works(monkeypatch):
+    page = run_compared(monkeypatch, {"compare": "NOPE"})
+    assert_footer_and_no_crash(page)
+    assert any(c.startswith("Could not load NOPE.") for c in texts(tab_named(page, "Compare").caption))
+    assert list(tab_named(page, "Compare").dataframe) == []
+    cards = card_values(header_of(page))
+    assert "Example Corp" in header_of(page) and cards["DCF value per share"] != app.NOT_AVAILABLE     # the first company is untouched
+
+
+def test_the_table_has_one_column_per_company_and_the_agreed_rows(monkeypatch):
+    table = compare_table_of(run_compared(monkeypatch))
+    assert list(table.columns) == ["EXMP", "OTHR"]
+    assert list(table.index) == [
+        "Current price", "DCF value per share", "DCF upside / downside", "Verdict", "Multiples value",
+        "Multiples upside / downside", "WACC", "Terminal value share of the DCF", "Market value",
+        "Operating margin (last year)", "Revenue growth (last year)", "P/E", "EV/EBITDA", "Free cash flow yield",
+    ]
+    assert table.loc["Current price"].tolist() == ["$240.74", "$60.00"]
+
+
+def test_each_column_matches_the_page_that_company_gets_on_its_own(monkeypatch):
+    """The second company's column must say what the page says when that company is typed in the ordinary way."""
+    table = compare_table_of(run_compared(monkeypatch))
+    for ticker in ("EXMP", "OTHR"):
+        alone = run_linked(monkeypatch, {"ticker": ticker}, yahoo=two_companies())
+        cards = card_values(header_of(alone))
+        assert table.loc["Current price", ticker] == cards["Current price"]
+        assert table.loc["DCF value per share", ticker] == cards["DCF value per share"]
+        assert table.loc["Multiples value", ticker] == cards["Multiples value"]
+        assert table.loc["DCF upside / downside", ticker] == cards["Upside / downside"]
+
+
+def test_the_two_companies_differ_where_their_prices_differ(monkeypatch):
+    table = compare_table_of(run_compared(monkeypatch))
+    assert table.loc["DCF upside / downside", "EXMP"] != table.loc["DCF upside / downside", "OTHR"]
+    assert table.loc["Market value", "EXMP"] != table.loc["Market value", "OTHR"]
+
+
+def test_both_companies_get_the_same_sliders(monkeypatch):
+    moved = compare_table_of(run_compared(monkeypatch, {"growth": "1.5", "margin": "-2"}))
+    plain = compare_table_of(run_compared(monkeypatch))
+    for ticker in ("EXMP", "OTHR"):
+        alone = run_linked(monkeypatch, {"ticker": ticker, "growth": "1.5", "margin": "-2"}, yahoo=two_companies())
+        assert moved.loc["DCF value per share", ticker] == card_values(header_of(alone))["DCF value per share"]
+        assert moved.loc["DCF value per share", ticker] != plain.loc["DCF value per share", ticker]
+
+
+def test_a_typed_in_wacc_applies_to_both_companies(monkeypatch):
+    table = compare_table_of(run_compared(monkeypatch, {"wacc": "9.5"}))
+    assert table.loc["WACC", "EXMP"] == table.loc["WACC", "OTHR"] == "9.50%"
+
+
+def test_a_second_company_that_lost_money_has_no_dcf_rows_but_still_a_column(monkeypatch):
+    loss = dict(ADOBE_YAHOO_INCOME, **{"Pretax Income": (-100e6, 50e6)})
+    page = run_compared(monkeypatch, other_income=loss)
+    assert_footer_and_no_crash(page)
+    table = compare_table_of(page)
+    assert table.loc["DCF value per share", "OTHR"] == app.NOT_AVAILABLE
+    assert table.loc["Verdict", "OTHR"] == "NO VERDICT"
+    assert table.loc["Current price", "OTHR"] == "$60.00"
+    assert any(c.startswith("No DCF for OTHR:") for c in texts(tab_named(page, "Compare").caption))
+
+
+def test_the_chart_has_a_bar_set_for_each_company_measured_against_its_own_price(monkeypatch):
+    page = run_compared(monkeypatch)
+    [chart] = [e for e in tab_named(page, "Compare").get("plotly_chart")]
+    figure = json.loads(chart.proto.spec)
+    assert [trace["name"] for trace in figure["data"]] == ["EXMP", "OTHR"]
+    table = compare_table_of(page)
+    first_dcf = dict(zip(figure["data"][0]["y"], figure["data"][0]["x"]))["DCF"]
+    assert theme.change_text(first_dcf) == table.loc["DCF upside / downside", "EXMP"]
+
+
+def test_method_upsides_gives_none_for_a_method_with_no_answer():
+    valued = {"company": {"share_price": 100.0}, "dcf": {"implied_share_price": 150.0}, "multiples": None}
+    rows = app.method_upsides(valued)
+    assert rows[0] == ("DCF", 0.5, 150.0)
+    assert all(upside is None and price is None for _label, upside, price in rows[1:])
+    assert [label for label, _upside, _price in rows] == ["DCF", "EV/Sales", "EV/EBITDA", "P/E", "P/S", "Forward P/E"]
+
+
+def test_the_compare_chart_has_a_help_text_and_the_caption_says_what_is_shared(monkeypatch):
+    page = run_compared(monkeypatch)
+    assert any(e.help == explanations.help_text("compare_chart") for e in tab_named(page, "Compare").markdown)
+    assert any("same sliders, the same typed-in WACC and the same risk-free rate" in c for c in texts(tab_named(page, "Compare").caption))
+
+
+def test_the_second_company_is_part_of_the_link(monkeypatch):
+    assert app.settings_from_link({"compare": "othr"}) == {"compare": "OTHR"}
+    assert app.settings_from_link({"compare": "<b>"}) == {}
+    assert app.settings_from_link({"compare": "A" * 16}) == {}
+    assert app.link_from_state({app.COMPARE_KEY: " othr "}) == {"compare": "OTHR"}
+    assert app.link_from_state({app.COMPARE_KEY: ""}) == {}
+    page = run_compared(monkeypatch)
+    assert page.text_input(key=app.COMPARE_KEY).value == "OTHR"
+    assert address_of(page) == {"ticker": "EXMP", "compare": "OTHR", "peers": "LOSS, AAA, BBB, CCC"}
+
+
+# ---------------------------------------------------------------------------
+# The live risk-free rate: today's 10-year Treasury yield instead of Damodaran's typed-in rate
+# ---------------------------------------------------------------------------
+
+
+def macro_rows_with_yield(percent):
+    return [dict(row, value=percent if row["key"] == "treasury_yield" else row["value"]) for row in MACRO_ROWS]
+
+
+class BrokenYahoo:
+    """Yahoo not answering, so Adobe comes from the snapshot of the Excel model: exact numbers to compare with."""
+
+    def __init__(self, ticker):
+        raise ConnectionError("no internet")
+
+
+def run_snapshot_with_live_rate(monkeypatch, percent=4.5, tick=True):
+    monkeypatch.setattr("data.get_macro_backdrop", lambda: macro_rows_with_yield(percent))
+    page = run_page(monkeypatch, yahoo=BrokenYahoo)
+    if tick:
+        page.sidebar.checkbox(key=app.LIVE_RF_KEY).check().run()
+    return page
+
+
+def test_the_live_rate_is_off_until_it_is_ticked_and_then_the_snapshot_page_is_unchanged(monkeypatch):
+    page = run_snapshot_with_live_rate(monkeypatch, tick=False)
+    assert page.sidebar.checkbox(key=app.LIVE_RF_KEY).value is False
+    assert metrics(page)["DCF implied price"] == "$305.60"
+    assert wacc_table_of(page)["Where it comes from"].to_dict()["Risk-free rate"] == "Damodaran, 1 Nov 2026 (typed in by hand)"
+
+
+def test_ticking_it_at_4_50_percent_gives_the_excel_model_s_336_18_and_wacc_10_18(monkeypatch):
+    """The workbook with WACC!C8 typed as 4.50%: WACC 10.1812%, price $336.1776."""
+    page = run_snapshot_with_live_rate(monkeypatch, 4.5)
+    assert_footer_and_no_crash(page)
+    assert metrics(page)["DCF implied price"] == "$336.18"
+    table = wacc_table_of(page)
+    assert table.loc["Risk-free rate"].iloc[0] == "4.50%"
+    assert table.loc["WACC"].iloc[0] == "10.18%"
+    assert "▲ UNDERVALUED" in header_of(page)
+
+
+def test_the_wacc_table_says_the_rate_is_the_ten_year_yield_from_fred_with_its_date(monkeypatch):
+    page = run_snapshot_with_live_rate(monkeypatch)
+    where = wacc_table_of(page)["Where it comes from"].to_dict()
+    assert where["Risk-free rate"] == "Today's 10-year US Treasury yield from FRED, 19 Nov 2026"
+    assert where["Equity risk premium"] == "Damodaran, 1 Nov 2026 (typed in by hand)"
+
+
+def test_the_sidebar_says_which_rates_are_swapped_and_warns_about_the_risk_premium(monkeypatch):
+    page = run_snapshot_with_live_rate(monkeypatch, 4.5)
+    [note] = [c for c in texts(page.sidebar.caption) if c.startswith("Risk-free rate 4.50%")]
+    assert "the 10-year yield on 19 Nov 2026, from FRED" in note
+    assert "instead of 5.29% (Damodaran)" in note
+    assert "4.41% equity risk premium was worked out with the older rate" in note
+
+
+def test_a_yield_fred_cannot_give_leaves_the_models_own_rate_and_says_so(monkeypatch):
+    monkeypatch.setattr("data.get_macro_backdrop", lambda: (_ for _ in ()).throw(data.SourceUnavailable("No FRED key is set.")))
+    page = run_page(monkeypatch, yahoo=BrokenYahoo)
+    page.sidebar.checkbox(key=app.LIVE_RF_KEY).check().run()
+    assert_footer_and_no_crash(page)
+    assert "Today's yield is not available (No FRED key is set.) so the model's own risk-free rate is used." in texts(page.sidebar.warning)
+    assert metrics(page)["DCF implied price"] == "$305.60"
+
+
+def test_a_typed_in_wacc_still_wins_over_the_live_rate(monkeypatch):
+    """With the WACC typed in, the risk-free rate no longer matters to the price: the same 11% gives the same price either way."""
+    with_live = run_snapshot_with_live_rate(monkeypatch, 4.5)
+    with_live.sidebar.checkbox(key=app.WACC_TICK_KEY).check().run()
+    with_live.sidebar.slider(key=app.WACC_KEY).set_value(0.11).run()
+    without = run_snapshot_with_live_rate(monkeypatch, tick=False)
+    without.sidebar.checkbox(key=app.WACC_TICK_KEY).check().run()
+    without.sidebar.slider(key=app.WACC_KEY).set_value(0.11).run()
+    assert metrics(with_live)["DCF implied price"] == metrics(without)["DCF implied price"]
+    assert metrics(with_live)["DCF implied price"] != "$336.18"
+
+
+def test_the_heatmap_and_scenarios_follow_the_live_rate_because_they_share_the_dcf_inputs(monkeypatch):
+    plain = run_snapshot_with_live_rate(monkeypatch, tick=False)
+    live = run_snapshot_with_live_rate(monkeypatch, 4.5)
+    assert metrics(live)["Probability-weighted price"] != metrics(plain)["Probability-weighted price"]
+
+
+def test_a_cost_of_debt_estimated_from_the_risk_free_rate_is_redone_with_the_new_rate():
+    company = {"risk_free_rate": 0.0529, "pre_tax_cost_of_debt": 0.0529 + data.CREDIT_SPREAD, "cost_of_debt_is_fallback": True}
+    live = {"rate": 0.04, "date": "2026-11-19"}
+    changed = app.apply_live_risk_free(company, live)
+    assert changed["risk_free_rate"] == 0.04
+    assert changed["pre_tax_cost_of_debt"] == pytest.approx(0.04 + data.CREDIT_SPREAD)
+    assert company["risk_free_rate"] == 0.0529 and company["pre_tax_cost_of_debt"] == pytest.approx(0.0529 + data.CREDIT_SPREAD)   # the original is untouched
+
+
+def test_a_cost_of_debt_from_the_debt_notes_is_left_alone():
+    company = {"risk_free_rate": 0.0529, "pre_tax_cost_of_debt": 0.0416}
+    changed = app.apply_live_risk_free(company, {"rate": 0.04, "date": "2026-11-19"})
+    assert changed["pre_tax_cost_of_debt"] == 0.0416 and changed["risk_free_rate"] == 0.04
+
+
+def test_with_no_live_rate_the_company_is_returned_as_it_was():
+    company = {"risk_free_rate": 0.0529}
+    assert app.apply_live_risk_free(company, None) is company
+
+
+def test_the_second_company_in_compare_gets_the_live_rate_too(monkeypatch):
+    monkeypatch.setattr("data.get_macro_backdrop", lambda: macro_rows_with_yield(4.5))
+    both = run_compared(monkeypatch, {"live_rf": "1"})
+    table = compare_table_of(both)
+    assert table.loc["WACC", "EXMP"] != compare_table_of(run_compared(monkeypatch)).loc["WACC", "EXMP"]
+    for ticker in ("EXMP", "OTHR"):
+        alone = run_linked(monkeypatch, {"ticker": ticker, "live_rf": "1"}, yahoo=two_companies())
+        assert table.loc["DCF value per share", ticker] == card_values(header_of(alone))["DCF value per share"]
+
+
+def test_the_live_rate_is_part_of_the_link(monkeypatch):
+    assert app.settings_from_link({"live_rf": "1"}) == {"live_rf": True}
+    assert app.settings_from_link({"live_rf": "0"}) == {}
+    assert app.settings_from_link({"live_rf": "yes"}) == {}
+    assert app.link_from_state({app.LIVE_RF_KEY: True}) == {"live_rf": "1"}
+    assert app.link_from_state({app.LIVE_RF_KEY: False}) == {}
+    monkeypatch.setattr("data.get_macro_backdrop", lambda: macro_rows_with_yield(4.5))
+    page = run_linked(monkeypatch, {"live_rf": "1"}, yahoo=BrokenYahoo)
+    assert page.sidebar.checkbox(key=app.LIVE_RF_KEY).value is True
+    assert metrics(page)["DCF implied price"] == "$336.18"
+    assert address_of(page) == {"live_rf": "1"}
+
+
+def test_the_macro_caption_says_the_numbers_become_an_input_only_if_the_box_is_ticked(monkeypatch):
+    monkeypatch.setattr("data.get_macro_backdrop", lambda: MACRO_ROWS)
+    page = run_page(monkeypatch)
+    caption = next(c for c in texts(tab_named(page, "Overview").caption) if c.startswith("From FRED"))
+    assert "not an input to it, unless you tick" in caption
 
