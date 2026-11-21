@@ -279,7 +279,7 @@
   format. No valuation logic or text changed: all 756 earlier tests pass unchanged; 792 pass in all. Haavard chose: dark
   navy (replacing the earlier light-theme decision), one pull request per phase, existing number formats kept (the new
   style only in new visuals), English.
-- Done (in the open pull request): redesign Phase 2 of 5, the "answer first" header. The top of the page now shows the
+- Done: redesign Phase 2 of 5, the "answer first" header (merged, pull request 57). The top of the page now shows the
   company's name with a ticker badge and a verdict badge (UNDERVALUED / FAIRLY VALUED / OVERVALUED, from the DCF upside
   against the market price with a 15% limit; NO VERDICT when no DCF could be built), four cards (current price, DCF
   value per share, upside or downside as an arrow, a sign and a colour, and the middle of the five multiples prices),
@@ -289,15 +289,26 @@
   add Plotly now, a ticker badge instead of a logo (Yahoo has none), and the verdict from the DCF upside alone. Two old
   assertions that looked for a "Adobe Inc. (ADBE)" text line now look in the header (the old line was a duplicate and is
   gone); nothing else in the old tests changed. 846 tests pass (54 new).
-- Next: redesign Phase 3, the charts (Plotly): football field, waterfall, cash flow, peers (bars and a scatter), terminal
-  value share, and the sensitivity tables as proper heatmaps. Haavard (20 Nov 2026): "make the sensitivity charts look
-  different/better, I don't get much use for them as they are": both the WACC against terminal growth table and the
-  margin against growth table are to be redesigned there. He picked (20 Nov 2026): show the upside or downside in percent
-  in each cell, and mark where today's market price sits (what the market is pricing in); he also asked that they look
-  more professional and different. Then Phases 4
-  (tabs, layout, mobile) and 5 (polish; removes the DCF cards that now duplicate the header). #11 part 2 (macro, needs a
-  free FRED key) and part 3 (thesis page with Haavard's reasons boxes and a Markdown download) wait until the redesign is done.
+- Done (in the open pull request): redesign Phase 3a of 5, the DCF charts. A new "Where the price sits" football field (one bar
+  per method: the DCF across the WACC and growth table in the accent colour, the five multiples across the middle half of the
+  peers, and the 52-week range, with a tick at each middle value, a dashed line at the market price and a one-sentence
+  headline), and the "Behind the number" section rebuilt in Plotly: a waterfall from the DCF's parts to the equity value and
+  the price, free cash flow (reported history in grey, forecast in blue, operating margin as a line), and a ring for the
+  terminal value's share (red above 75%). Each chart has a headline sentence. Built Excel first: `Multiples` rows 80-89
+  (`QUARTILE` ranges and the DCF range). `valuation.quartile_range`, `table_range`, `trading_range`, `football_field`,
+  `methods_above_price` and `run_multiples`' new "price_ranges" match the cells. Haavard chose: two pull requests for Phase 3,
+  the middle half of the peers for the bars, and the sensitivity table's range for the DCF bar. 897 tests pass (51 new).
+- Next: redesign Phase 3b: the two sensitivity tables as heatmaps (each cell showing the upside or downside in percent, the
+  market price marked where the model equals it, a WACC axis wide enough for a high-beta company such as NVIDIA, which sits at
+  13.3%), and the peer bars with a scatter (EV/EBITDA against operating margin: peers' growth is not stored). The football
+  field's DCF bar follows the table, so a wider WACC axis widens it. Then Phase 4 (tabs, layout, mobile, tooltips) and 5 (polish;
+  removes the DCF cards that now duplicate the header). #11 part 2 (macro, needs a free FRED key) and part 3 (thesis page with
+  Haavard's reasons boxes and a Markdown download) wait until the redesign is done.
 - Open:
+  - Ideas from Haavard (20 Nov 2026), for after Phase 3: (1) group the overview by type of multiple; (2) a ? help on every
+    multiple and every chart, like the overview has (his own brief lists it under Phase 4; P/S and forward P/E still need
+    his glossary wording); (3) search by company name that lists several matching tickers, like Nordnet's search (Yahoo has a
+    free search with name, ticker and exchange; price and day change would cost extra requests).
   - CLAUDE.md still says "Light theme in config.toml, colours only" under "Already decided", and lists `.streamlit/config.toml`
     as "Theme settings only" with no row for `theme.py` or `test_theme.py`. Haavard changes his own rules file: the lines
     to update are given in the pull request description.

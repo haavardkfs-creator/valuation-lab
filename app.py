@@ -11,6 +11,7 @@ import os
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
+from plotly.subplots import make_subplots
 
 import assumptions
 import data
@@ -1039,36 +1040,238 @@ def terminal_value_cautions(dcf, terminal_growth_rate):
     return cautions
 
 
-def draw_charts(dcf, year_labels, terminal_growth_rate):
-    """Draw the two charts behind the headline price: the five-year forecast of revenue and
-    free cash flow (one label per forecast year), and the two parts that enterprise value is
-    built from, with a caution when the price rests mostly on the far future.
+def football_field_headline(company_name, above, total):
+    """Say in one sentence what the football field shows: how many valuation methods have a middle value above
+    today's market price. None when there are no methods to count.
+    """
+    if total == 0:
+        return None
+    if above == total:
+        return f"{company_name} trades below the middle value of every valuation method."
+    if above == 0:
+        return f"{company_name} trades above the middle value of every valuation method."
+    return f"{company_name} trades below the middle value of {above} of {total} valuation methods."
+
+
+def football_field_figure(rows, share_price):
+    """Draw the football field: one horizontal bar per method from its low to its high price (the DCF in the
+    accent colour, everything else in grey), a tick at its middle value, and a dashed vertical line at today's
+    market price. `rows` is what valuation.football_field gives, top row first.
+    """
+    figure = go.Figure(go.Bar(
+        y=[row["label"] for row in rows],
+        x=[row["high"] - row["low"] for row in rows],
+        base=[row["low"] for row in rows],
+        orientation="h",
+        width=0.5,
+        marker={"color": [theme.ACCENT if row["kind"] == "dcf" else theme.GREY for row in rows]},
+        customdata=[[row["low"], row["high"]] for row in rows],
+        hovertemplate="<b>%{y}</b><br>$%{customdata[0]:,.2f} to $%{customdata[1]:,.2f}<extra></extra>",
+    ))
+    with_middle = [row for row in rows if row["middle"] is not None]
+    figure.add_trace(go.Scatter(
+        x=[row["middle"] for row in with_middle],
+        y=[row["label"] for row in with_middle],
+        mode="markers",
+        marker={"symbol": "line-ns", "size": 24, "color": theme.TEXT, "line": {"width": 3, "color": theme.TEXT}},
+        hovertemplate="<b>%{y}</b><br>Middle value $%{x:,.2f}<extra></extra>",
+    ))
+    figure.add_vline(x=share_price, line={"color": theme.TEXT, "width": 2, "dash": "dash"})
+    figure.add_annotation(
+        x=share_price, y=1, yref="paper", yanchor="bottom", showarrow=False,
+        text=f"Market price ${share_price:,.2f}", font={"color": theme.TEXT, "size": 12},
+    )
+    everything = [row["low"] for row in rows] + [row["high"] for row in rows] + [share_price]
+    figure.update_xaxes(
+        range=[min(everything) * 0.9, max(everything) * 1.05], tickprefix="$", tickformat=",.0f",
+        gridcolor=theme.BORDER, zeroline=False,
+    )
+    figure.update_yaxes(autorange="reversed", showgrid=False, automargin=True)
+    theme.style_figure(figure, height=90 + 48 * len(rows))
+    figure.update_layout(margin={"l": 0, "r": 10, "t": 30, "b": 0})
+    return figure
+
+
+def draw_football_field(company, dcf, multiples, dcf_inputs, base_wacc, prices):
+    """Draw the football field, the main chart: every way the page has of valuing the company, as a price range,
+    against today's market price, with a sentence that says what it shows. The DCF bar covers the WACC and terminal
+    growth table (see draw_heatmap); each multiples bar covers the middle half of the peers. The 52-week range is
+    included when the price history is there.
+    """
+    try:
+        table = valuation.sensitivity_table(
+            dcf_inputs, base_wacc, assumptions.HEATMAP_WACC_OFFSETS, assumptions.HEATMAP_TERMINAL_GROWTH_RATES
+        )
+        dcf_range = valuation.table_range(table["prices"])
+    except ValueError:
+        dcf_range = None            # a very low WACC sits within a point of the terminal growth rates: see draw_heatmap
+    trading = None if prices is None else valuation.trading_range([price["close"] for price in prices])
+    rows = valuation.football_field(dcf_range, dcf["implied_share_price"], multiples, trading)
+    if not rows:
+        return
+    st.subheader("Where the price sits")
+    if dcf_range is None:
+        st.caption(
+            f"The DCF bar is left out: this company's WACC ({percent(base_wacc)}) is too close to the terminal growth "
+            "rates in the table for its range to be worked out."
+        )
+    headline = football_field_headline(company["company_name"], *valuation.methods_above_price(rows, company["share_price"]))
+    if headline:
+        st.markdown(f"**{headline}**")
+    st.plotly_chart(football_field_figure(rows, company["share_price"]), width="stretch", config=CHART_CONFIG)
+    st.caption(
+        "Each bar is a way of valuing the company: the blue bar is the DCF across the WACC and terminal growth table, "
+        "the grey bars cover the middle half of the peers' multiples (25th to 75th percentile), and the first grey "
+        "bar is the share's own 52-week range. The white tick is the middle value, and the dashed line is today's "
+        "market price."
+    )
+
+
+def waterfall_headline(dcf):
+    """Say in one sentence how the enterprise value becomes a price per share: the net debt (or net cash) comes
+    off (or on), and what is left is split across the shares.
+    """
+    net_debt = dcf["net_debt"]
+    sentence = (
+        f"{theme.money_short(dcf['enterprise_value'])} of enterprise value "
+        f"{'plus' if net_debt < 0 else 'less'} {theme.money_short(abs(net_debt))} of net "
+        f"{'cash' if net_debt < 0 else 'debt'} is {theme.money_short(dcf['equity_value'])} of equity, "
+        f"or {dollars(dcf['implied_share_price'])} a share."
+    )
+    return sentence
+
+
+def valuation_waterfall(dcf):
+    """Draw how the DCF value is built: the present value of the five forecast years and of the terminal value
+    add up to the enterprise value, net cash adds (or net debt takes away) and what is left is the equity value.
+    Bars are in $ billions; the blue steps add, the red one subtracts, and the white bars are the totals.
+    """
+    net_debt = dcf["net_debt"]
+    steps = [
+        ("Years 1-5", dcf["pv_of_forecast"], "relative"),
+        ("Terminal value", dcf["pv_of_terminal_value"], "relative"),
+        ("Enterprise value", dcf["enterprise_value"], "total"),
+        ("Net cash" if net_debt < 0 else "Net debt", -net_debt, "relative"),
+        ("Equity value", dcf["equity_value"], "total"),
+    ]
+    figure = go.Figure(go.Waterfall(
+        x=[label for label, _amount, _kind in steps],
+        y=[amount / 1000 for _label, amount, _kind in steps],
+        measure=[kind for _label, _amount, kind in steps],
+        text=[theme.money_short(amount) for _label, amount, _kind in steps],
+        textposition="outside",
+        textfont={"color": theme.TEXT},
+        increasing={"marker": {"color": theme.ACCENT}},
+        decreasing={"marker": {"color": theme.DOWN}},
+        totals={"marker": {"color": theme.TEXT}},
+        connector={"line": {"color": theme.GREY, "width": 1}},
+        hovertemplate="<b>%{x}</b><br>$%{y:,.1f} billion<extra></extra>",
+    ))
+    figure.update_yaxes(tickprefix="$", ticksuffix="B", tickformat=",.0f", gridcolor=theme.BORDER, zeroline=False)
+    figure.update_xaxes(showgrid=False)
+    theme.style_figure(figure, height=320)
+    figure.update_layout(margin={"l": 0, "r": 0, "t": 20, "b": 0})
+    return figure
+
+
+def cash_flow_headline(dcf, history):
+    """Say in one sentence where free cash flow is forecast to go: from the last year the company reported (when
+    the history is there and has it) to the fifth forecast year.
+    """
+    last_reported = None if history is None else history["free_cash_flow"][-1]
+    final = theme.money_short(dcf["free_cash_flows"][-1])
+    if last_reported is None:
+        return f"Free cash flow is forecast to reach {final} in year 5."
+    direction = "grow" if dcf["free_cash_flows"][-1] > last_reported else "fall"
+    return (
+        f"Free cash flow is forecast to {direction} from {theme.money_short(last_reported)} "
+        f"(last reported year) to {final} in year 5."
+    )
+
+
+def cash_flow_figure(year_labels, dcf, operating_margins, history):
+    """Draw free cash flow year by year: the company's reported figures in grey, the model's forecast in the
+    accent colour (bars, in $ billions), and the operating margin as a line on the right-hand axis. With no
+    history only the forecast is drawn.
+    """
+    figure = make_subplots(specs=[[{"secondary_y": True}]])
+    history_labels = [] if history is None else list(history["years"])
+    if history is not None:
+        figure.add_trace(go.Bar(
+            x=history_labels,
+            y=[None if value is None else value / 1000 for value in history["free_cash_flow"]],
+            name="Reported free cash flow", marker={"color": theme.GREY},
+            hovertemplate="<b>%{x}</b><br>Reported free cash flow $%{y:,.1f} billion<extra></extra>",
+        ), secondary_y=False)
+    figure.add_trace(go.Bar(
+        x=list(year_labels), y=[value / 1000 for value in dcf["free_cash_flows"]],
+        name="Forecast free cash flow", marker={"color": theme.ACCENT},
+        hovertemplate="<b>%{x}</b><br>Forecast free cash flow $%{y:,.1f} billion<extra></extra>",
+    ), secondary_y=False)
+    margins = ([] if history is None else history_ratios(history)["operating_margin"]) + list(operating_margins)
+    figure.add_trace(go.Scatter(
+        x=history_labels + list(year_labels), y=margins, mode="lines+markers", name="Operating margin",
+        line={"color": theme.TEXT, "width": 2}, marker={"size": 6},
+        hovertemplate="<b>%{x}</b><br>Operating margin %{y:.1%}<extra></extra>",
+    ), secondary_y=True)
+    figure.update_yaxes(tickprefix="$", ticksuffix="B", tickformat=",.0f", gridcolor=theme.BORDER, zeroline=False,
+                        secondary_y=False)
+    figure.update_yaxes(tickformat=".0%", showgrid=False, secondary_y=True)
+    figure.update_xaxes(showgrid=False)
+    theme.style_figure(figure, height=320)
+    figure.update_layout(
+        showlegend=True, legend={"orientation": "h", "y": 1.15, "x": 0}, margin={"l": 0, "r": 0, "t": 30, "b": 0},
+        barmode="group",
+    )
+    return figure
+
+
+def terminal_value_donut(dcf):
+    """Draw how much of the enterprise value comes from the terminal value (everything after year 5) against the
+    five forecast years: a ring with the percentage in the middle. The terminal slice turns red above
+    TERMINAL_VALUE_SHARE_WARNING, the same limit the caution under the charts uses.
+    """
+    share = valuation.terminal_value_share(dcf["pv_of_terminal_value"], dcf["enterprise_value"])
+    figure = go.Figure(go.Pie(
+        labels=["Years 1-5", "Terminal value"],
+        values=[dcf["pv_of_forecast"], dcf["pv_of_terminal_value"]],
+        hole=0.65,
+        sort=False,
+        direction="clockwise",
+        marker={"colors": [theme.GREY, theme.DOWN if share > assumptions.TERMINAL_VALUE_SHARE_WARNING else theme.ACCENT],
+                "line": {"color": theme.NAVY, "width": 2}},
+        textinfo="none",
+        hovertemplate="<b>%{label}</b><br>$%{value:,.0f} million (%{percent})<extra></extra>",
+    ))
+    figure.add_annotation(
+        text=f"<b>{share:.0%}</b><br>terminal value", x=0.5, y=0.5, showarrow=False,
+        font={"color": theme.TEXT, "size": 16},
+    )
+    theme.style_figure(figure, height=320)
+    figure.update_layout(showlegend=True, legend={"orientation": "h", "y": -0.05, "x": 0.1})
+    return figure
+
+
+def draw_charts(dcf, year_labels, terminal_growth_rate, operating_margins, history):
+    """Draw the charts behind the headline price, each under a sentence that says what it shows: how the DCF value
+    is built (a waterfall from the five forecast years and the terminal value to the equity value), how free cash
+    flow is forecast to move from the reported years, and how much of the value is the terminal value, with a
+    caution when the price rests mostly on the far future.
     """
     st.subheader("Behind the number")
-    forecast_column, build_column = st.columns([3, 2])
-
-    forecast = pd.DataFrame(
-        {"Revenue": dcf["revenues"], "Free cash flow": dcf["free_cash_flows"]},
-        index=year_labels,
+    st.markdown(f"**{dollar_text_for_markdown(waterfall_headline(dcf))}**")
+    st.plotly_chart(valuation_waterfall(dcf), width="stretch", config=CHART_CONFIG)
+    cash_flow_column, donut_column = st.columns([3, 2])
+    cash_flow_column.markdown(f"**{dollar_text_for_markdown(cash_flow_headline(dcf, history))}**")
+    cash_flow_column.plotly_chart(
+        cash_flow_figure(year_labels, dcf, operating_margins, history), width="stretch", config=CHART_CONFIG
     )
-    forecast_column.markdown("**Forecast: revenue and free cash flow**")
-    forecast_column.bar_chart(
-        forecast,
-        stack=False,
-        color=theme.CHART_COLOURS,
-        y_label="$ millions",
-    )
-
-    build = pd.DataFrame(
-        {"Present value ($ millions)": [dcf["pv_of_forecast"], dcf["pv_of_terminal_value"]]},
-        index=["Years 1-5", "Terminal"],
-    )
-    build_column.markdown("**What the company is worth today**")
-    build_column.bar_chart(
-        build,
-        sort=False,
-        color=theme.ACCENT,
-        y_label="$ millions",
+    share = valuation.terminal_value_share(dcf["pv_of_terminal_value"], dcf["enterprise_value"])
+    donut_column.markdown(f"**{share:.0%} of the value comes from after year 5.**")
+    donut_column.plotly_chart(terminal_value_donut(dcf), width="stretch", config=CHART_CONFIG)
+    st.caption(
+        "Grey bars are free cash flow as the company reports it; blue bars are the model's forecast, which starts from "
+        "operating profit, so the two are not built the same way."
     )
     # Each dollar sign is escaped with a backslash, because Streamlit reads text between two
     # unescaped dollar signs as a maths formula.
@@ -1807,6 +2010,16 @@ def draw_news_and_management(ticker):
 
 NOT_AVAILABLE = "Not available"
 
+# Plotly charts without its toolbar (zoom, download and so on): the hover is enough for a reader of this page.
+CHART_CONFIG = {"displayModeBar": False}
+
+
+def dollar_text_for_markdown(text):
+    """Escape the dollar signs in a sentence, because Streamlit reads text between two unescaped dollar signs
+    as a maths formula.
+    """
+    return text.replace("$", "\\$")
+
 
 def verdict_basis_text(verdict):
     """Say, under the company name, what the verdict badge rests on, so nobody reads it as more than it is."""
@@ -1839,12 +2052,22 @@ def price_sparkline(prices):
     return theme.style_figure(figure, height=120)
 
 
-def draw_header(company, dcf, multiples):
+def price_history_or_none(company):
+    """Get the company's share prices for the last year (see data.get_price_history), or None when Yahoo cannot
+    give them: the charts that use them are then simply left out.
+    """
+    try:
+        return load_price_history(company["ticker"], company.get("usd_per_price_unit") or 1.0)
+    except ValueError:
+        return None
+
+
+def draw_header(company, dcf, multiples, prices):
     """Draw the top of the page, the answer first: the company's name and ticker, a verdict badge, four headline
     cards (the market price, the DCF value per share, the upside or downside, and the middle of the multiples
     prices) and a small chart of the share price over the last year. When no DCF could be built (`dcf` is None)
-    the badge says so and the cards that need it say "Not available". The chart is left out if Yahoo cannot
-    give the prices; nothing else depends on it.
+    the badge says so and the cards that need it say "Not available". `prices` is the year of share prices, or
+    None, and then the chart is left out; nothing else depends on it.
     """
     upside = None if dcf is None else dcf["upside"]
     verdict = valuation.verdict(upside, assumptions.VERDICT_THRESHOLD)
@@ -1869,12 +2092,10 @@ def draw_header(company, dcf, multiples):
     st.html(theme.header_html(
         company["company_name"], company["ticker"], verdict, cards, verdict_basis_text(verdict)
     ))
-    try:
-        prices = load_price_history(company["ticker"], company.get("usd_per_price_unit") or 1.0)
-    except ValueError:
+    if prices is None:
         return
     st.caption("Share price, last 12 months")
-    st.plotly_chart(price_sparkline(prices), width="stretch", config={"displayModeBar": False})
+    st.plotly_chart(price_sparkline(prices), width="stretch", config=CHART_CONFIG)
 
 
 def draw_dcf_unavailable(ticker, error):
@@ -1924,7 +2145,8 @@ def draw_page():
         dcf_error = error
     overview = company_overview(company)
 
-    draw_header(company, dcf, multiples)
+    prices = price_history_or_none(company)
+    draw_header(company, dcf, multiples, prices)
     draw_source_note(company, source_used)
     note = adjustment_note(adjustment)
     if note:
@@ -1947,6 +2169,7 @@ def draw_page():
         st.divider()
         st.caption(FOOTER_TEXT)
         return
+    draw_football_field(company, dcf, multiples, dcf_inputs, base_wacc, prices)
     draw_dcf(company, dcf, wacc_override is not None)
     draw_reverse_dcf(company, dcf_inputs, terminal_growth_rate, wacc_override, history)
     draw_scenarios(company, dcf_inputs, terminal_growth_rate, wacc_override, scenario_settings)
@@ -1958,7 +2181,7 @@ def draw_page():
         growth_shift, margin_shift,
     )
     draw_wacc_build(company, dcf_inputs, source_used, dcf, wacc_override is not None)
-    draw_charts(dcf, year_labels, terminal_growth_rate)
+    draw_charts(dcf, year_labels, terminal_growth_rate, dcf_inputs["operating_margins"], history)
     draw_heatmap(company, dcf_inputs, base_wacc)
     draw_margin_growth_table(company, dcf_inputs, dcf, terminal_growth_rate, wacc_override)
     draw_multiples(

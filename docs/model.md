@@ -616,3 +616,36 @@ model, and the page says the verdict is the model's output, not investment advic
 on 20 Nov 2026's live data, with Adobe at $217.71 and a DCF of $307.59 (+41.3%), it is too. The header's four cards repeat
 numbers the page already works out (the market price, the DCF price, the upside, the middle of the multiples prices) and the
 verdict follows the sliders, because it is worked out from the same DCF.
+
+## The football field and the charts behind the number
+
+The football field (workbook: `Multiples` rows 80-89) puts every way the page has of valuing a company side by side, as a
+price range against today's market price. One bar per method, each from a low price to a high price, with a tick at its middle:
+- **EV/Sales, EV/EBITDA, P/E, P/S and forward P/E.** The bar covers the middle half of the peers: the 25th to the 75th
+  percentile of the peers' multiples (Excel's `QUARTILE`; in Python `statistics.quantiles` with the inclusive method, which
+  gives the same numbers). The price at each end is worked out exactly like the median price: revenue (or EBITDA) times the
+  multiple, less net debt for the two EV multiples, divided by the shares; net income or revenue times the multiple divided by the
+  shares for P/E and P/S; next year's EPS times the multiple for forward P/E. The tick is the median price (`H27:H31`). Peers
+  with a missing or non-positive multiple are left out, and fewer than 2 usable peers (the page's `MINIMUM_PEERS`) gives no bar.
+  The middle half is used instead of the lowest to highest peer because one extreme peer (Synopsys's P/E of 82.6x) would stretch
+  a bar across the chart; even so it lifts Adobe's P/E bar to $780.
+- **DCF.** The bar runs from the lowest to the highest price in the WACC and terminal growth table (`valuation` D37:H41 in
+  the workbook; the page's own table uses the exact WACC, so its corners differ a little from the workbook's rounded one). The tick
+  is the base DCF price. If the table cannot be worked out (a WACC within a point of the terminal growth rates) the DCF bar is
+  left out and the page says so.
+- **52-week range.** The lowest and highest close in the last year, from Yahoo's prices. Not a model, so not in the workbook;
+  it has no tick.
+- Adobe on the workbook's numbers (low, median, high): EV/Sales $272.87 / $333.58 / $437.18; EV/EBITDA $306.37 / $420.52 /
+  $548.62; P/E $360.95 / $463.54 / $780.37; P/S $193.37 / $286.03 / $399.12; forward P/E $300.76 / $390.59 / $499.27; DCF
+  $253.03 / $305.60 / $390.09. Check cell C89 is 1 when every low is at or below its median and every median at or below
+  its high.
+- **The headline.** "X trades below the middle value of every valuation method" (or above, or "of n of m"): it counts the DCF
+  and the multiples whose middle value is above the market price. The 52-week range is not a method and is not counted.
+
+The charts under "Behind the number" show numbers the DCF already works out; nothing new is calculated:
+- **Waterfall.** The present value of years 1-5 plus the present value of the terminal value is the enterprise value;
+  net cash adds to it (or net debt takes away); the result is the equity value, and dividing by the shares gives the price.
+- **Free cash flow.** The company's reported figures for each year of history (grey), the model's forecast (blue) and the
+  operating margin (a line, right-hand axis). Reported free cash flow and the model's are not built the same way, and the page says so.
+- **Terminal value ring.** The terminal value's share of the enterprise value; the slice turns red above
+  `TERMINAL_VALUE_SHARE_WARNING` (75%), the limit the caution under the charts already used.
