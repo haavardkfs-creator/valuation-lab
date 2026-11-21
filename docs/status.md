@@ -364,6 +364,13 @@
   (opened a link, typed KO, reloaded the new address: same view). `app.settings_from_link`, `link_from_state`, `load_link`,
   `write_link`. No maths, so no Excel step. 1195 tests pass (37 new). The scenario boxes are not in the link.
   A linked visit logs one harmless line in the server log ("widget ... also had its value set via the Session State API").
+- Done (in the open pull request "the big three", commit 2 of 3): a Compare tab. Type a second ticker and see the two companies
+  side by side: a table (price, DCF value and upside, verdict, multiples value, WACC, terminal value share, market value,
+  margin, growth, P/E, EV/EBITDA, free cash flow yield) and a bar chart of how far each valuation method is from each company's
+  own market price. Both get the same sliders and typed-in WACC, each its own figures and peers; a second company that lost
+  money still gets a column. The second ticker is part of the shareable link. Only shown when the first company has a DCF.
+  `app.value_for_compare`, `compare_column`, `comparison_table`, `method_upsides`, `compare_figure`, `draw_compare`.
+  No maths of its own (it reuses valuation.py), so no Excel step. The tab-order test was updated on purpose.
 - Next: check the macro numbers on the live app after the merge; the live FMP check with Yahoo switched
   off; the small items below. CLAUDE.md still needs Haavard's edits (the theme line, and rows for theme.py and test_theme.py).
 - Open:

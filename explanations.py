@@ -243,6 +243,13 @@ HELP_TEXTS = {
         "market price: the boundary between assumptions that imply upside and those that imply downside. The blue "
         "frame is the base case, the assumptions the DCF uses.",
     ),
+    "compare_chart": (
+        "Each way of valuing them against the price",
+        "For each of the two companies, how far a price from each method (the DCF and the five multiples) is above or below "
+        "that company's own market price. Right of the line means the method says the company is worth more than the market "
+        "pays; left means less. Because each bar is measured against its own company's price, a cheap and an expensive "
+        "stock can be compared.",
+    ),
     "macro_treasury_yield": (
         "10-year Treasury yield",
         "What the US government pays to borrow for ten years, the usual \"risk-free\" return. It is where the cost of "

@@ -5,6 +5,7 @@ the internet. They check what the reader would see: the notes, the warnings, whi
 are drawn, and that a company that cannot be valued gets a plain error instead of a crash.
 """
 
+import json
 from pathlib import Path
 
 import pandas as pd
@@ -28,6 +29,7 @@ from test_data import (
     fake_statements_ticker,
     FMP_PROFILE,
     no_interest_expense_company,
+    statement,
     with_fmp,
 )
 
@@ -3109,10 +3111,10 @@ def tab_named(page, label):
     return tab
 
 
-def test_the_page_has_five_tabs_in_this_order(monkeypatch):
+def test_the_page_has_six_tabs_in_this_order(monkeypatch):
     page = run_page(monkeypatch)
     assert_footer_and_no_crash(page)
-    assert [tab.label for tab in page.tabs] == ["Overview", "DCF", "Multiples", "Sensitivity", "Explanations"]
+    assert [tab.label for tab in page.tabs] == ["Overview", "DCF", "Multiples", "Sensitivity", "Compare", "Explanations"]
     assert app.PAGE_TABS == [tab.label for tab in page.tabs]
 
 
@@ -4203,4 +4205,152 @@ def test_the_link_is_read_once_so_a_readers_changes_are_never_undone(monkeypatch
 def test_typing_another_company_writes_its_ticker_into_the_address(monkeypatch):
     page = run_example_page(monkeypatch)
     assert address_of(page) == {"ticker": "EXMP", "peers": "LOSS, AAA, BBB, CCC"}
+
+
+# ---------------------------------------------------------------------------
+# Compare: a second company next to the one on the page
+# ---------------------------------------------------------------------------
+
+
+def two_companies(other_income=None):
+    """Yahoo's reply about Example Corp (EXMP, $240.74) and Other Corp (OTHR, $60), both with the same industry peers."""
+    base = example_with_peers()
+
+    class Fake(base):
+        def __init__(self, ticker):
+            super().__init__(ticker)
+            if ticker == "OTHR":
+                self.info = dict(self.info, longName="Other Corp", currentPrice=60.0)
+                if other_income is not None:
+                    self.income_stmt = statement(other_income)
+            if ticker == "NOPE":
+                raise ConnectionError("no such company")
+
+    return Fake
+
+
+def run_compared(monkeypatch, params=None, other_income=None):
+    """Open Example Corp with Other Corp in the Compare box (and any other settings in the address)."""
+    return run_linked(monkeypatch, dict({"ticker": "EXMP", "compare": "OTHR"}, **(params or {})), yahoo=two_companies(other_income))
+
+
+def compare_table_of(page):
+    [table] = [e.value for e in tab_named(page, "Compare").dataframe]
+    return table
+
+
+def test_the_compare_tab_sits_before_the_explanations_tab(monkeypatch):
+    page = run_compared(monkeypatch)
+    assert [tab.label for tab in page.tabs] == ["Overview", "DCF", "Multiples", "Sensitivity", "Compare", "Explanations"]
+
+
+def test_with_no_second_company_the_tab_asks_for_one_and_shows_no_table(monkeypatch):
+    page = run_linked(monkeypatch, {"ticker": "EXMP"}, yahoo=two_companies())
+    assert_footer_and_no_crash(page)
+    assert "Type a second ticker to see the two side by side." in texts(tab_named(page, "Compare").caption)
+    assert list(tab_named(page, "Compare").dataframe) == []
+
+
+def test_the_same_company_twice_is_not_compared_with_itself(monkeypatch):
+    page = run_linked(monkeypatch, {"ticker": "EXMP", "compare": "exmp"}, yahoo=two_companies())
+    assert "EXMP is the company already on the page. Type a different one." in texts(tab_named(page, "Compare").caption)
+    assert list(tab_named(page, "Compare").dataframe) == []
+
+
+def test_a_second_company_that_cannot_be_loaded_says_so_and_the_page_still_works(monkeypatch):
+    page = run_compared(monkeypatch, {"compare": "NOPE"})
+    assert_footer_and_no_crash(page)
+    assert any(c.startswith("Could not load NOPE.") for c in texts(tab_named(page, "Compare").caption))
+    assert list(tab_named(page, "Compare").dataframe) == []
+    cards = card_values(header_of(page))
+    assert "Example Corp" in header_of(page) and cards["DCF value per share"] != app.NOT_AVAILABLE     # the first company is untouched
+
+
+def test_the_table_has_one_column_per_company_and_the_agreed_rows(monkeypatch):
+    table = compare_table_of(run_compared(monkeypatch))
+    assert list(table.columns) == ["EXMP", "OTHR"]
+    assert list(table.index) == [
+        "Current price", "DCF value per share", "DCF upside / downside", "Verdict", "Multiples value",
+        "Multiples upside / downside", "WACC", "Terminal value share of the DCF", "Market value",
+        "Operating margin (last year)", "Revenue growth (last year)", "P/E", "EV/EBITDA", "Free cash flow yield",
+    ]
+    assert table.loc["Current price"].tolist() == ["$240.74", "$60.00"]
+
+
+def test_each_column_matches_the_page_that_company_gets_on_its_own(monkeypatch):
+    """The second company's column must say what the page says when that company is typed in the ordinary way."""
+    table = compare_table_of(run_compared(monkeypatch))
+    for ticker in ("EXMP", "OTHR"):
+        alone = run_linked(monkeypatch, {"ticker": ticker}, yahoo=two_companies())
+        cards = card_values(header_of(alone))
+        assert table.loc["Current price", ticker] == cards["Current price"]
+        assert table.loc["DCF value per share", ticker] == cards["DCF value per share"]
+        assert table.loc["Multiples value", ticker] == cards["Multiples value"]
+        assert table.loc["DCF upside / downside", ticker] == cards["Upside / downside"]
+
+
+def test_the_two_companies_differ_where_their_prices_differ(monkeypatch):
+    table = compare_table_of(run_compared(monkeypatch))
+    assert table.loc["DCF upside / downside", "EXMP"] != table.loc["DCF upside / downside", "OTHR"]
+    assert table.loc["Market value", "EXMP"] != table.loc["Market value", "OTHR"]
+
+
+def test_both_companies_get_the_same_sliders(monkeypatch):
+    moved = compare_table_of(run_compared(monkeypatch, {"growth": "1.5", "margin": "-2"}))
+    plain = compare_table_of(run_compared(monkeypatch))
+    for ticker in ("EXMP", "OTHR"):
+        alone = run_linked(monkeypatch, {"ticker": ticker, "growth": "1.5", "margin": "-2"}, yahoo=two_companies())
+        assert moved.loc["DCF value per share", ticker] == card_values(header_of(alone))["DCF value per share"]
+        assert moved.loc["DCF value per share", ticker] != plain.loc["DCF value per share", ticker]
+
+
+def test_a_typed_in_wacc_applies_to_both_companies(monkeypatch):
+    table = compare_table_of(run_compared(monkeypatch, {"wacc": "9.5"}))
+    assert table.loc["WACC", "EXMP"] == table.loc["WACC", "OTHR"] == "9.50%"
+
+
+def test_a_second_company_that_lost_money_has_no_dcf_rows_but_still_a_column(monkeypatch):
+    loss = dict(ADOBE_YAHOO_INCOME, **{"Pretax Income": (-100e6, 50e6)})
+    page = run_compared(monkeypatch, other_income=loss)
+    assert_footer_and_no_crash(page)
+    table = compare_table_of(page)
+    assert table.loc["DCF value per share", "OTHR"] == app.NOT_AVAILABLE
+    assert table.loc["Verdict", "OTHR"] == "NO VERDICT"
+    assert table.loc["Current price", "OTHR"] == "$60.00"
+    assert any(c.startswith("No DCF for OTHR:") for c in texts(tab_named(page, "Compare").caption))
+
+
+def test_the_chart_has_a_bar_set_for_each_company_measured_against_its_own_price(monkeypatch):
+    page = run_compared(monkeypatch)
+    [chart] = [e for e in tab_named(page, "Compare").get("plotly_chart")]
+    figure = json.loads(chart.proto.spec)
+    assert [trace["name"] for trace in figure["data"]] == ["EXMP", "OTHR"]
+    table = compare_table_of(page)
+    first_dcf = dict(zip(figure["data"][0]["y"], figure["data"][0]["x"]))["DCF"]
+    assert theme.change_text(first_dcf) == table.loc["DCF upside / downside", "EXMP"]
+
+
+def test_method_upsides_gives_none_for_a_method_with_no_answer():
+    valued = {"company": {"share_price": 100.0}, "dcf": {"implied_share_price": 150.0}, "multiples": None}
+    rows = app.method_upsides(valued)
+    assert rows[0] == ("DCF", 0.5, 150.0)
+    assert all(upside is None and price is None for _label, upside, price in rows[1:])
+    assert [label for label, _upside, _price in rows] == ["DCF", "EV/Sales", "EV/EBITDA", "P/E", "P/S", "Forward P/E"]
+
+
+def test_the_compare_chart_has_a_help_text_and_the_caption_says_what_is_shared(monkeypatch):
+    page = run_compared(monkeypatch)
+    assert any(e.help == explanations.help_text("compare_chart") for e in tab_named(page, "Compare").markdown)
+    assert any("same sliders and the same typed-in WACC" in c for c in texts(tab_named(page, "Compare").caption))
+
+
+def test_the_second_company_is_part_of_the_link(monkeypatch):
+    assert app.settings_from_link({"compare": "othr"}) == {"compare": "OTHR"}
+    assert app.settings_from_link({"compare": "<b>"}) == {}
+    assert app.settings_from_link({"compare": "A" * 16}) == {}
+    assert app.link_from_state({app.COMPARE_KEY: " othr "}) == {"compare": "OTHR"}
+    assert app.link_from_state({app.COMPARE_KEY: ""}) == {}
+    page = run_compared(monkeypatch)
+    assert page.text_input(key=app.COMPARE_KEY).value == "OTHR"
+    assert address_of(page) == {"ticker": "EXMP", "compare": "OTHR", "peers": "LOSS, AAA, BBB, CCC"}
 

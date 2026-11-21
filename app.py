@@ -241,6 +241,7 @@ WACC_KEY = "wacc_value"
 PEERS_KEY_START = "peers_"
 ONE_OFF_KEY_START = "oneoff_"
 LINK_LOADED_KEY = "link_loaded"
+COMPARE_KEY = "compare_ticker"          # the box in the Compare tab where the second company is typed
 
 LINK_TICKER_PATTERN = re.compile(r"[A-Za-z0-9.^=\-]+")
 LINK_PEERS_PATTERN = re.compile(r"[A-Za-z0-9.^=\-, ]+")
@@ -260,15 +261,16 @@ def number_from_link(text, low, high, step):
 
 
 def settings_from_link(params):
-    """Turn the words after the ? in the page's address (a dictionary of text) into the settings it holds: "ticker", "growth"
-    and "margin" (in points), "terminal_growth" and "wacc" (decimals), "oneoff" ($ millions a year) and "peers" (text). The
+    """Turn the words after the ? in the page's address (a dictionary of text) into the settings it holds: "ticker", "compare"
+    (the second company), "growth" and "margin" (in points), "terminal_growth" and "wacc" (decimals), "oneoff" ($ millions a year) and "peers" (text). The
     address is typed by anyone, so a setting that is missing, is not a number, lies outside what the sliders can show or has
     odd characters in it is simply left out, and the page starts that setting at its usual value.
     """
     settings = {}
-    ticker = params.get("ticker", "")
-    if ticker and len(ticker) <= assumptions.LINK_TICKER_MAX_CHARACTERS and LINK_TICKER_PATTERN.fullmatch(ticker):
-        settings["ticker"] = ticker.upper()
+    for name in ("ticker", "compare"):
+        ticker = params.get(name, "")
+        if ticker and len(ticker) <= assumptions.LINK_TICKER_MAX_CHARACTERS and LINK_TICKER_PATTERN.fullmatch(ticker):
+            settings[name] = ticker.upper()
     for name, low, high, step in (
         ("growth", assumptions.GROWTH_SHIFT_MIN_POINTS, assumptions.GROWTH_SHIFT_MAX_POINTS, assumptions.GROWTH_SHIFT_STEP_POINTS),
         ("margin", assumptions.MARGIN_SHIFT_MIN_POINTS, assumptions.MARGIN_SHIFT_MAX_POINTS, assumptions.MARGIN_SHIFT_STEP_POINTS),
@@ -310,6 +312,9 @@ def link_from_state(state):
     params = {}
     if ticker != DEFAULT_TICKER:
         params["ticker"] = ticker
+    compare = str(state.get(COMPARE_KEY, "")).strip().upper()
+    if compare:
+        params["compare"] = compare
     for name, key in (("growth", GROWTH_KEY), ("margin", MARGIN_KEY)):
         if state.get(key, 0.0) != 0.0:
             params[name] = number(state[key])
@@ -335,6 +340,8 @@ def load_link():
     ticker = settings.get("ticker", DEFAULT_TICKER)
     if "ticker" in settings:
         st.session_state[TICKER_BOX_KEY] = ticker
+    if "compare" in settings:
+        st.session_state[COMPARE_KEY] = settings["compare"]
     for name, key in (
         ("growth", GROWTH_KEY), ("margin", MARGIN_KEY), ("terminal_growth", TERMINAL_GROWTH_KEY), ("wacc", WACC_KEY),
     ):
@@ -2958,7 +2965,154 @@ def draw_dcf_unavailable(ticker, error):
 
 
 # The tabs under the header, in order: what each holds is set in draw_page.
-PAGE_TABS = ["Overview", "DCF", "Multiples", "Sensitivity", "Explanations"]
+# ---------------------------------------------------------------------------
+# Compare: a second company next to the one on the page
+# ---------------------------------------------------------------------------
+
+# The ways of valuing a company that the comparison chart lines up: the label, and where the price is found.
+COMPARE_METHODS = [
+    ("DCF", "dcf"), ("EV/Sales", "price_ev_sales"), ("EV/EBITDA", "price_ev_ebitda"), ("P/E", "price_pe"),
+    ("P/S", "price_ps"), ("Forward P/E", "price_forward_pe"),
+]
+
+
+def suggested_peer_figures(company):
+    """Get the multiples of the peers Yahoo suggests for a company, the way the sidebar box would fill itself in,
+    without drawing a box. Returns None when there are no suitable peers or Yahoo could not be reached.
+    """
+    market_value = round(company["share_price"] * company["shares"])
+    try:
+        tickers = load_suggested_peers(company["ticker"], market_value)["peer_tickers"][: assumptions.MAX_TYPED_PEERS]
+        return load_peer_multiples(tuple(tickers)) if tickers else None
+    except ValueError:
+        return None
+
+
+def value_for_compare(ticker, growth_shift, margin_shift, terminal_growth_rate, wacc_override):
+    """Value a second company with the same sliders and the same typed-in WACC as the page. Adobe uses its hand-chosen peers,
+    any other company the peers Yahoo suggests, and there is no one-off adjustment. Returns {"company", "dcf", "multiples",
+    "overview", "dcf_error"}: when a DCF cannot be built (a company that lost money) the DCF and the multiples are None and
+    "dcf_error" says why. Stops with a plain error if the company itself cannot be found.
+    """
+    company, _source = load_company(ticker)
+    peers = {key: company[key] for key in PEER_KEYS} if is_base_case(company) else suggested_peer_figures(company)
+    if peers is not None:
+        company = dict(company, **peers)
+    try:
+        dcf, multiples = run_valuation(company, build_dcf_inputs(company, growth_shift, margin_shift), terminal_growth_rate, wacc_override)
+        dcf_error = None
+    except ValueError as error:
+        dcf = multiples = None
+        dcf_error = str(error)
+    return {"company": company, "dcf": dcf, "multiples": multiples, "overview": company_overview(company), "dcf_error": dcf_error}
+
+
+def compare_column(valued):
+    """Write one company's side of the comparison table: a dictionary of row label to the text shown."""
+    company, dcf, multiples, overview = valued["company"], valued["dcf"], valued["multiples"], valued["overview"]
+    price = company["share_price"]
+    middle = None if multiples is None else multiples["median_price"]
+    upside = None if dcf is None else dcf["upside"]
+    share = None if dcf is None else valuation.terminal_value_share(dcf["pv_of_terminal_value"], dcf["enterprise_value"])
+    return {
+        "Current price": dollars(price),
+        "DCF value per share": NOT_AVAILABLE if dcf is None else dollars(dcf["implied_share_price"]),
+        "DCF upside / downside": NOT_AVAILABLE if upside is None else theme.change_text(upside),
+        "Verdict": theme.VERDICT_LOOKS[valuation.verdict(upside, assumptions.VERDICT_THRESHOLD)][0],
+        "Multiples value": NOT_AVAILABLE if middle is None else dollars(middle),
+        "Multiples upside / downside": NOT_AVAILABLE if middle is None else theme.change_text(valuation.upside(middle, price)),
+        "WACC": NOT_AVAILABLE if dcf is None else precise_percent(dcf["wacc"]),
+        "Terminal value share of the DCF": NOT_AVAILABLE if share is None else f"{share:.0%}",
+        "Market value": theme.money_short(overview["market_value"]),
+        "Operating margin (last year)": percent_or_note(overview["operating_margin"]),
+        "Revenue growth (last year)": percent_or_note(overview["revenue_growth"]),
+        "P/E": multiple_or_note(overview["pe"]),
+        "EV/EBITDA": multiple_or_note(overview["ev_ebitda"]),
+        "Free cash flow yield": percent_or_note(overview["free_cash_flow_yield"]),
+    }
+
+
+def comparison_table(first, second):
+    """Lay the two companies side by side: one row for each number, one column for each company, named by ticker."""
+    return pd.DataFrame({
+        first["company"]["ticker"]: compare_column(first),
+        second["company"]["ticker"]: compare_column(second),
+    })
+
+
+def method_upsides(valued):
+    """For each way of valuing a company in COMPARE_METHODS, how far its price is above (positive) or below (negative) the
+    market price, as (label, upside, price); upside and price are None for a method with no answer, so the chart can skip it.
+    """
+    prices = {"dcf": None if valued["dcf"] is None else valued["dcf"]["implied_share_price"]}
+    for _label, key in COMPARE_METHODS[1:]:
+        prices[key] = None if valued["multiples"] is None else valued["multiples"][key]
+    share_price = valued["company"]["share_price"]
+    return [
+        (label, None if prices[key] is None else valuation.upside(prices[key], share_price), prices[key])
+        for label, key in COMPARE_METHODS
+    ]
+
+
+def compare_figure(first, second):
+    """Draw each way of valuing the two companies as a bar of how far its price is above (right) or below (left) the
+    company's own market price. Because each bar is measured against its own company's price, a $50 stock and a $500 stock
+    can be compared. The first company is blue (the one on the page), the second off-white; the numbers are written on the
+    bars and the exact prices are in the hover, so colour is never the only signal.
+    """
+    figure = go.Figure()
+    for valued, colour in ((first, theme.ACCENT), (second, theme.TEXT)):
+        rows = [row for row in method_upsides(valued) if row[1] is not None]
+        figure.add_trace(go.Bar(
+            y=[label for label, _upside, _price in rows], x=[upside for _label, upside, _price in rows],
+            name=valued["company"]["ticker"], orientation="h", marker={"color": colour},
+            text=[theme.change_text(upside, digits=0) for _label, upside, _price in rows], textposition="outside",
+            customdata=[dollars(price) for _label, _upside, price in rows],
+            hovertemplate="<b>%{y}</b><br>" + valued["company"]["ticker"] + ": %{x:+.1%} (price %{customdata})<extra></extra>",
+        ))
+    figure.update_xaxes(tickformat="+.0%", zeroline=True, zerolinecolor=theme.GREY)
+    figure.update_yaxes(autorange="reversed")
+    theme.style_figure(figure, height=60 + 70 * len(COMPARE_METHODS))
+    figure.update_layout(barmode="group", legend={"orientation": "h", "y": 1.08, "x": 0})
+    return figure
+
+
+def draw_compare(company, dcf, multiples, growth_shift, margin_shift, terminal_growth_rate, wacc_override):
+    """Draw the Compare tab: a box for a second company, then the two side by side in a table and in a chart of how far each
+    way of valuing them is from their own market prices. Both get the same sliders and the same typed-in WACC, each its own
+    figures and its own peers. A second company that cannot be found, or is the same as the first, says so.
+    """
+    st.subheader("Compare with another company")
+    typed = st.text_input(
+        "Second company ticker", key=COMPARE_KEY, placeholder="For example MSFT",
+        help="The company to put next to " + company["company_name"] + ". It gets the same sliders and the same typed-in WACC as this one, "
+        "its own figures and its own peers (the ones Yahoo suggests).",
+    ).strip().upper()
+    if not typed:
+        st.caption("Type a second ticker to see the two side by side.")
+        return
+    if typed == company["ticker"]:
+        st.caption(f"{typed} is the company already on the page. Type a different one.")
+        return
+    with st.spinner(f"Loading {typed}…"):
+        try:
+            second = value_for_compare(typed, growth_shift, margin_shift, terminal_growth_rate, wacc_override)
+        except ValueError as error:
+            st.caption(f"Could not load {typed}. {error}")
+            return
+    first = {"company": company, "dcf": dcf, "multiples": multiples, "overview": company_overview(company), "dcf_error": None}
+    st.dataframe(comparison_table(first, second))
+    if second["dcf_error"] is not None:
+        st.caption(f"No DCF for {typed}: {second['dcf_error']}")
+    st.markdown("**How far each way of valuing them is from their own market price**", help=explanations.help_text("compare_chart"))
+    st.plotly_chart(compare_figure(first, second), width="stretch", config=CHART_CONFIG)
+    st.caption(
+        "Both companies get the same sliders and the same typed-in WACC (if you set one), each its own figures and peers. Numbers "
+        "marked last year are from the last full fiscal year. A comparison of models' outputs, not a recommendation."
+    )
+
+
+PAGE_TABS = ["Overview", "DCF", "Multiples", "Sensitivity", "Compare", "Explanations"]
 
 
 def draw_page():
@@ -3038,7 +3192,7 @@ def draw_page():
             draw_explanations_tab()
         draw_footer()
         return
-    overview_tab, dcf_tab, multiples_tab, sensitivity_tab, explanations_tab = st.tabs(PAGE_TABS)
+    overview_tab, dcf_tab, multiples_tab, sensitivity_tab, compare_tab, explanations_tab = st.tabs(PAGE_TABS)
     with overview_tab:
         draw_football_field(company, dcf, multiples, dcf_inputs, base_wacc, prices, analysts)
         draw_analyst_view(company, analysts, dcf["implied_share_price"])
@@ -3065,6 +3219,8 @@ def draw_page():
     with sensitivity_tab:
         draw_heatmap(company, dcf_inputs, base_wacc)
         draw_margin_growth_table(company, dcf_inputs, dcf, terminal_growth_rate, wacc_override)
+    with compare_tab:
+        draw_compare(company, dcf, multiples, growth_shift, margin_shift, terminal_growth_rate, wacc_override)
     with explanations_tab:
         draw_explanations_tab()
     draw_footer()

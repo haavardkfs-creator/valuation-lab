@@ -33,8 +33,8 @@ It needs a key, kept out of the code: on this computer in `.streamlit/secrets.to
 `FMP_API_KEY = "..."`, and on Streamlit Cloud in the app's Secrets. Without a key the page works as
 before, on Yahoo alone.
 
-- Five **tabs** under the header: Overview (the football field, the overview numbers grouped by what they say,
-  the history, news and management), DCF, Multiples, Sensitivity and Explanations (the glossary).
+- Six **tabs** under the header: Overview (the football field, the overview numbers grouped by what they say,
+  the history, news and management), DCF, Multiples, Sensitivity, Compare and Explanations (the glossary).
 - An **analyst view** on the Overview tab: Yahoo Finance's consensus rating and price targets (and a bar for them on
   the football field), as a comparison for the model.
 - **Search by company name**: type part of a name in the sidebar and click the company you mean; a ticker that is not found
@@ -48,6 +48,8 @@ before, on Yahoo alone.
 - A **peer multiples comparison** (EV/Sales, EV/EBITDA, P/E, P/S and forward P/E) sits beside the DCF.
 - **News and management** at the end of the page: the five most recent headlines (as links) and the top
   officers, from Yahoo Finance. It is context only; nothing in the valuation depends on it.
+- A **Compare tab**: type a second ticker and see the two companies side by side, in a table and in a chart of how far
+  each way of valuing them is from their own market price. Both get the same sliders and the same typed-in WACC.
 - A **shareable link**: the page's address holds the company, the sliders, the typed-in WACC, the one-off amount and the peers,
   so copying the address from the browser sends exactly your view.
 - A **macro backdrop** under the news: the 10-year Treasury yield, the Fed funds rate and US inflation, from FRED. Background
