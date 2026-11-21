@@ -1990,3 +1990,147 @@ def test_the_verdict_follows_the_limit_it_is_given():
 def test_adobes_base_case_upside_is_undervalued():
     # The workbook's base case: DCF $305.60 against its $251.47 market price is +21.5%.
     assert v.verdict(run_base_case()["upside"], VERDICT_THRESHOLD) == "undervalued"
+
+
+# ---------------------------------------------------------------------------
+# The football field (workbook: `Multiples` rows 80-89: the middle half of the peers, and the DCF range)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("peer_multiples, low, high", [
+    (PEER_EV_SALES, 4.725, 7.58),                       # D82, E82
+    (PEER_EV_EBITDA, 13.245, 23.75),                    # D83, E83
+    (PEER_PE, 20.9075, 45.2025),                        # D84, E84
+    (PEER_PS, 3.36, 6.935),                             # D85, E85
+    (PEER_FORWARD_PE, 10.9725, 18.215),                 # D86, E86
+])
+def test_the_middle_half_of_the_peers_matches_excels_quartile(peer_multiples, low, high):
+    got_low, got_high = v.quartile_range(peer_multiples, MINIMUM_PEERS)
+    assert got_low == close(low) and got_high == close(high)
+
+
+def test_the_range_leaves_out_a_peer_without_a_usable_multiple():
+    # Keurig's blank P/E: the 25th and 75th percentile of PepsiCo's and Mondelez's two P/Es (Excel skips blanks).
+    low, high = v.quartile_range(COCA_COLA_PE, MINIMUM_PEERS)
+    assert low == close(18.50692 + 0.25 * (21.381702 - 18.50692))
+    assert high == close(18.50692 + 0.75 * (21.381702 - 18.50692))
+    assert v.quartile_range([10.0, None, float("nan"), -3.0, 20.0], MINIMUM_PEERS) == (close(12.5), close(17.5))
+
+
+def test_one_extreme_peer_stretches_the_middle_half_far_less_than_the_lowest_to_highest_range():
+    low, high = v.quartile_range(PEER_PE, MINIMUM_PEERS)
+    assert high < max(PEER_PE) / 1.5 and low > min(PEER_PE)       # 45.2 against Synopsys's 82.6
+
+
+@pytest.mark.parametrize("too_few", [[], [None], [12.0], [12.0, None, -5.0], [None, None]])
+def test_no_range_without_at_least_two_usable_peers(too_few):
+    assert v.quartile_range(too_few, MINIMUM_PEERS) is None
+
+
+def test_the_price_ranges_match_the_workbooks_football_field_rows_82_to_86():
+    ranges = run_base_case_multiples()["price_ranges"]
+    assert ranges["ev_sales"] == (close(272.86567796610166), close(437.176803874092))               # F82, G82
+    assert ranges["ev_ebitda"] == (close(306.36895883777237), close(548.61985472154959))            # F83, G83
+    assert ranges["pe"] == (close(360.94546004842618), close(780.37245762711871))                   # F84, G84
+    assert ranges["ps"] == (close(193.37491525423727), close(399.12352300242128))                   # F85, G85
+    assert ranges["forward_pe"] == (close(300.75622500000003), close(499.27314999999999))           # F86, G86
+
+
+def test_every_low_is_at_or_below_its_median_and_every_median_at_or_below_its_high_like_the_workbook_check():
+    result = run_base_case_multiples()
+    for range_key, price_key in [("ev_sales", "price_ev_sales"), ("ev_ebitda", "price_ev_ebitda"),
+                                 ("pe", "price_pe"), ("ps", "price_ps"), ("forward_pe", "price_forward_pe")]:
+        low, high = result["price_ranges"][range_key]
+        assert low <= result[price_key] <= high                  # C89 = 1
+
+
+def test_a_multiple_that_cannot_be_priced_has_no_range():
+    result = multiples_with_peers(PEER_EV_SALES, PEER_EV_EBITDA, [26.85, None, None, None], forward_eps=None)
+    assert result["price_ranges"]["pe"] is None and result["price_ranges"]["forward_pe"] is None
+    assert result["price_ranges"]["ev_sales"] is not None
+
+
+@pytest.mark.parametrize("no_good_estimate", [None, 0, -1.5])
+def test_no_forward_pe_range_without_a_positive_eps_estimate(no_good_estimate):
+    assert multiples_with_peers(
+        PEER_EV_SALES, PEER_EV_EBITDA, PEER_PE, forward_eps=no_good_estimate
+    )["price_ranges"]["forward_pe"] is None
+
+
+def test_a_range_is_always_written_lowest_price_first():
+    # A negative EBITDA turns the price around (a higher multiple gives a lower price): the pair is still low, high.
+    result = v.run_multiples(
+        revenue=BASE_REVENUE, ebit=-5000, depreciation_and_amortisation=800, net_income=ADOBE_NET_INCOME,
+        net_debt_amount=-385, shares=SHARES, peer_ev_sales=PEER_EV_SALES, peer_ev_ebitda=PEER_EV_EBITDA,
+        peer_pe=PEER_PE, peer_ps=PEER_PS, forward_eps=ADOBE_FORWARD_EPS, peer_forward_pe=PEER_FORWARD_PE,
+        dcf_price=300, minimum_peers=MINIMUM_PEERS,
+    )
+    low, high = result["price_ranges"]["ev_ebitda"]
+    assert low <= high
+
+
+def test_the_dcf_range_matches_the_workbooks_lowest_and_highest_table_price():
+    table = v.sensitivity_table(BASE_DCF_INPUTS, 0.1093, WORKBOOK_WACC_OFFSETS, WORKBOOK_GROWTH_RATES)
+    low, high = v.table_range(table["prices"])
+    assert low == close(253.03070350815184) and high == close(390.09230394042595)       # F87, G87
+    assert (low, high) == (min(table["prices"][-1]), max(table["prices"][0]))             # the corners: highest WACC, lowest growth
+
+
+def test_the_trading_range_is_the_lowest_and_highest_close():
+    assert v.trading_range([210.0, 324.19, 217.71, 199.5]) == (199.5, 324.19)
+    assert v.trading_range([50.0]) == (50.0, 50.0)
+    assert v.trading_range([]) is None
+
+
+def football_field_for_adobe(share_price_range=(199.5, 324.19)):
+    table = v.sensitivity_table(BASE_DCF_INPUTS, 0.1093, WORKBOOK_WACC_OFFSETS, WORKBOOK_GROWTH_RATES)
+    return v.football_field(
+        v.table_range(table["prices"]), 305.60201673218938, run_base_case_multiples(), share_price_range
+    )
+
+
+def test_the_football_field_lists_the_trading_range_then_the_dcf_then_each_multiple():
+    rows = football_field_for_adobe()
+    assert [row["label"] for row in rows] == [
+        "52-week range", "DCF", "EV/Sales", "EV/EBITDA", "P/E", "P/S", "Forward P/E",
+    ]
+    assert [row["kind"] for row in rows] == ["trading", "dcf", "multiple", "multiple", "multiple", "multiple", "multiple"]
+    assert rows[0]["middle"] is None and rows[0]["low"] == 199.5 and rows[0]["high"] == 324.19
+    assert (rows[1]["low"], rows[1]["middle"], rows[1]["high"]) == (
+        close(253.03070350815184), close(305.60201673218938), close(390.09230394042595)
+    )
+    assert (rows[2]["low"], rows[2]["middle"], rows[2]["high"]) == (
+        close(272.86567796610166), close(333.58309927360767), close(437.176803874092)
+    )
+    assert all(row["low"] <= row["high"] for row in rows)
+    assert all(row["low"] <= row["middle"] <= row["high"] for row in rows[1:])
+
+
+def test_a_company_with_no_peers_has_only_the_dcf_and_the_trading_range():
+    rows = v.football_field((250.0, 390.0), 305.6, None, (199.5, 324.19))
+    assert [row["kind"] for row in rows] == ["trading", "dcf"]
+
+
+def test_without_a_dcf_or_a_trading_range_those_rows_are_left_out():
+    rows = v.football_field(None, None, run_base_case_multiples(), None)
+    assert [row["kind"] for row in rows] == ["multiple"] * 5
+    assert v.football_field(None, None, None, None) == []
+
+
+def test_a_multiple_without_a_range_or_a_middle_price_is_left_off_the_field():
+    result = multiples_with_peers(PEER_EV_SALES, PEER_EV_EBITDA, [26.85, None, None, None], forward_eps=None)
+    labels = [row["label"] for row in v.football_field((250.0, 390.0), 305.6, result)]
+    assert "P/E" not in labels and "Forward P/E" not in labels and "EV/Sales" in labels
+
+
+def test_the_headline_counts_the_methods_whose_middle_value_is_above_the_market_price():
+    rows = football_field_for_adobe()
+    # Adobe on 20 Nov 2026 at $217.71: every method's middle (DCF 305.6, multiples 286 to 463) is above it.
+    assert v.methods_above_price(rows, 217.71) == (6, 6)
+    assert v.methods_above_price(rows, 400.0) == (2, 6)           # only P/E (463.5) and EV/EBITDA (420.5) are above
+    assert v.methods_above_price(rows, 1000.0) == (0, 6)
+    assert v.methods_above_price([], 100.0) == (0, 0)
+
+
+def test_the_trading_range_is_not_counted_as_a_valuation_method():
+    rows = [{"label": "52-week range", "kind": "trading", "low": 1.0, "middle": None, "high": 9.0}]
+    assert v.methods_above_price(rows, 5.0) == (0, 0)

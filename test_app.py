@@ -2585,14 +2585,14 @@ def test_the_price_sparkline_is_drawn_when_yahoo_has_the_prices(monkeypatch):
     page = run_page(monkeypatch, yahoo=yahoo_with_prices())
     assert_footer_and_no_crash(page)
     assert "Share price, last 12 months" in texts(page.caption)
-    assert len(page.get("plotly_chart")) == 1
+    assert len(page.get("plotly_chart")) == 5                     # the sparkline, the football field, and the three behind the number
 
 
 def test_without_price_history_the_header_still_draws_and_just_leaves_the_chart_out(monkeypatch):
     page = run_page(monkeypatch)                                  # the usual fake has no history() at all
     assert_footer_and_no_crash(page)
     assert "Share price, last 12 months" not in texts(page.caption)
-    assert not page.get("plotly_chart")
+    assert len(page.get("plotly_chart")) == 4                     # no sparkline; the football field and the three below remain
     assert "▲ UNDERVALUED" in header_of(page)
 
 
@@ -2612,3 +2612,214 @@ def test_a_flat_price_line_still_gets_a_sensible_range():
     figure = app.price_sparkline([{"date": "2026-11-19", "close": 50.0}, {"date": "2026-11-20", "close": 50.0}])
     low, high = figure.layout.yaxis.range
     assert low < 50.0 < high
+
+
+# ---------------------------------------------------------------------------
+# The charts: football field, waterfall, free cash flow and the terminal value ring (redesign, Phase 3a)
+# ---------------------------------------------------------------------------
+
+FIELD_ROWS = [
+    {"label": "52-week range", "kind": "trading", "low": 199.5, "middle": None, "high": 324.19},
+    {"label": "DCF", "kind": "dcf", "low": 253.0, "middle": 305.6, "high": 390.1},
+    {"label": "EV/Sales", "kind": "multiple", "low": 272.9, "middle": 333.6, "high": 437.2},
+]
+
+DCF_RESULT = {
+    "pv_of_forecast": 37_767.0, "pv_of_terminal_value": 88_882.0, "enterprise_value": 126_649.0,
+    "net_debt": -385.0, "equity_value": 127_034.0, "implied_share_price": 307.59,
+    "free_cash_flows": [9_000.0, 10_000.0, 11_000.0, 12_000.0, 13_000.0],
+}
+
+HISTORY = {
+    "years": ["FY2024", "FY2025"], "revenue": [21_505.0, 23_769.0], "operating_income": [7_741.0, 8_706.0],
+    "free_cash_flow": [7_000.0, 9_852.0], "net_income": [5_560.0, 7_130.0], "diluted_shares": [450.0, 440.0],
+}
+
+
+def test_the_football_field_headline_counts_the_methods_above_the_price():
+    assert app.football_field_headline("Adobe Inc.", 6, 6) == "Adobe Inc. trades below the middle value of every valuation method."
+    assert app.football_field_headline("Adobe Inc.", 0, 6) == "Adobe Inc. trades above the middle value of every valuation method."
+    assert app.football_field_headline("Adobe Inc.", 2, 6) == "Adobe Inc. trades below the middle value of 2 of 6 valuation methods."
+    assert app.football_field_headline("Adobe Inc.", 1, 1) == "Adobe Inc. trades below the middle value of every valuation method."
+    assert app.football_field_headline("Adobe Inc.", 0, 0) is None
+
+
+def test_the_football_field_has_one_bar_per_method_from_its_low_to_its_high():
+    figure = app.football_field_figure(FIELD_ROWS, 217.71)
+    bars = figure.data[0]
+    assert list(bars.y) == ["52-week range", "DCF", "EV/Sales"]
+    assert list(bars.base) == [199.5, 253.0, 272.9]
+    assert list(bars.x) == pytest.approx([324.19 - 199.5, 390.1 - 253.0, 437.2 - 272.9])
+    assert bars.orientation == "h"
+
+
+def test_only_the_dcf_bar_is_in_the_accent_colour_and_every_other_bar_is_grey():
+    bars = app.football_field_figure(FIELD_ROWS, 217.71).data[0]
+    assert list(bars.marker.color) == [theme.GREY, theme.ACCENT, theme.GREY]
+
+
+def test_a_white_tick_marks_the_middle_of_every_method_that_has_one():
+    ticks = app.football_field_figure(FIELD_ROWS, 217.71).data[1]
+    assert list(ticks.y) == ["DCF", "EV/Sales"]                       # the 52-week range has no middle
+    assert list(ticks.x) == [305.6, 333.6]
+    assert ticks.marker.color == theme.TEXT
+
+
+def test_a_dashed_line_marks_the_market_price_and_the_axis_covers_every_bar_and_the_line():
+    figure = app.football_field_figure(FIELD_ROWS, 217.71)
+    [line] = figure.layout.shapes
+    assert line.x0 == line.x1 == 217.71 and line.line.dash == "dash"
+    assert any("Market price $217.71" in annotation.text for annotation in figure.layout.annotations)
+    low, high = figure.layout.xaxis.range
+    assert low < 199.5 and high > 437.2
+
+
+def test_a_market_price_below_every_bar_still_fits_on_the_axis():
+    low, high = app.football_field_figure(FIELD_ROWS, 50.0).layout.xaxis.range
+    assert low < 50.0 and high > 437.2
+
+
+def test_the_first_row_is_drawn_at_the_top_and_the_bars_show_the_range_on_hover():
+    figure = app.football_field_figure(FIELD_ROWS, 217.71)
+    assert figure.layout.yaxis.autorange == "reversed"
+    assert "$%{customdata[0]:,.2f} to $%{customdata[1]:,.2f}" in figure.data[0].hovertemplate
+
+
+def test_the_waterfall_adds_the_two_present_values_then_net_cash_to_reach_the_equity_value():
+    figure = app.valuation_waterfall(DCF_RESULT)
+    waterfall = figure.data[0]
+    assert list(waterfall.x) == ["Years 1-5", "Terminal value", "Enterprise value", "Net cash", "Equity value"]
+    assert list(waterfall.measure) == ["relative", "relative", "total", "relative", "total"]
+    assert list(waterfall.y) == pytest.approx([37.767, 88.882, 126.649, 0.385, 127.034])       # $ billions
+    assert list(waterfall.text) == ["$37.8B", "$88.9B", "$126.6B", "$385M", "$127.0B"]
+    assert figure.layout.yaxis.tickprefix == "$" and figure.layout.yaxis.ticksuffix == "B"
+
+
+def test_the_waterfall_takes_net_debt_away_and_says_net_debt():
+    in_debt = dict(DCF_RESULT, net_debt=8_468.0, equity_value=118_181.0)
+    waterfall = app.valuation_waterfall(in_debt).data[0]
+    assert waterfall.x[3] == "Net debt" and waterfall.y[3] == pytest.approx(-8.468)
+    assert waterfall.text[3] == "-$8.5B"
+
+
+def test_the_waterfall_colours_mean_something():
+    waterfall = app.valuation_waterfall(DCF_RESULT).data[0]
+    assert waterfall.increasing.marker.color == theme.ACCENT          # adds value
+    assert waterfall.decreasing.marker.color == theme.DOWN            # takes value away
+    assert waterfall.totals.marker.color == theme.TEXT                # the results
+
+
+def test_the_waterfall_headline_says_how_enterprise_value_becomes_a_share_price():
+    assert app.waterfall_headline(DCF_RESULT) == (
+        "$126.6B of enterprise value plus $385M of net cash is $127.0B of equity, or $307.59 a share."
+    )
+    in_debt = dict(DCF_RESULT, net_debt=8_468.0, equity_value=118_181.0, implied_share_price=100.0)
+    assert app.waterfall_headline(in_debt) == (
+        "$126.6B of enterprise value less $8.5B of net debt is $118.2B of equity, or $100.00 a share."
+    )
+
+
+def test_dollar_signs_in_a_headline_are_escaped_so_streamlit_does_not_read_a_formula():
+    assert app.dollar_text_for_markdown("$126.6B less $8.5B") == r"\$126.6B less \$8.5B"
+    assert app.dollar_text_for_markdown("no money here") == "no money here"
+
+
+def test_the_cash_flow_chart_has_grey_reported_bars_blue_forecast_bars_and_a_margin_line():
+    figure = app.cash_flow_figure(["Year 1", "Year 2", "Year 3", "Year 4", "Year 5"], DCF_RESULT, [0.37, 0.38, 0.38, 0.39, 0.39], HISTORY)
+    reported, forecast, margin = figure.data
+    assert reported.marker.color == theme.GREY and forecast.marker.color == theme.ACCENT
+    assert list(reported.x) == ["FY2024", "FY2025"] and list(reported.y) == pytest.approx([7.0, 9.852])      # $ billions
+    assert list(forecast.y) == pytest.approx([9.0, 10.0, 11.0, 12.0, 13.0])
+    assert list(margin.x) == ["FY2024", "FY2025", "Year 1", "Year 2", "Year 3", "Year 4", "Year 5"]
+    assert list(margin.y) == pytest.approx([7741 / 21505, 8706 / 23769, 0.37, 0.38, 0.38, 0.39, 0.39])
+    assert margin.yaxis == "y2"                                         # the right-hand axis
+    assert figure.layout.showlegend is True
+
+
+def test_without_history_the_cash_flow_chart_has_only_the_forecast_and_the_margin_line():
+    figure = app.cash_flow_figure(["Year 1", "Year 2", "Year 3", "Year 4", "Year 5"], DCF_RESULT, [0.4] * 5, None)
+    forecast, margin = figure.data
+    assert forecast.marker.color == theme.ACCENT and list(margin.x) == list(forecast.x)
+
+
+def test_a_year_without_a_reported_figure_is_a_gap_not_a_zero():
+    missing = dict(HISTORY, free_cash_flow=[None, 9_852.0])
+    figure = app.cash_flow_figure(["Year 1"], dict(DCF_RESULT, free_cash_flows=[9_000.0]), [0.4], missing)
+    assert list(figure.data[0].y)[0] is None
+
+
+def test_the_cash_flow_headline_says_whether_free_cash_flow_grows_or_falls_from_the_last_reported_year():
+    assert app.cash_flow_headline(DCF_RESULT, HISTORY) == (
+        "Free cash flow is forecast to grow from $9.9B (last reported year) to $13.0B in year 5."
+    )
+    shrinking = dict(DCF_RESULT, free_cash_flows=[9_000.0, 8_000.0, 7_000.0, 6_000.0, 5_000.0])
+    assert "fall from $9.9B (last reported year) to $5.0B" in app.cash_flow_headline(shrinking, HISTORY)
+    assert app.cash_flow_headline(DCF_RESULT, None) == "Free cash flow is forecast to reach $13.0B in year 5."
+    assert app.cash_flow_headline(DCF_RESULT, dict(HISTORY, free_cash_flow=[7_000.0, None])) == (
+        "Free cash flow is forecast to reach $13.0B in year 5."
+    )
+
+
+def test_the_terminal_value_ring_shows_the_share_in_the_middle_and_stays_blue_below_the_warning_limit():
+    ring = app.terminal_value_donut(DCF_RESULT)           # 88,882 of 126,649 is 70%
+    pie = ring.data[0]
+    assert list(pie.values) == [37_767.0, 88_882.0] and list(pie.labels) == ["Years 1-5", "Terminal value"]
+    assert list(pie.marker.colors) == [theme.GREY, theme.ACCENT]
+    assert "70%" in ring.layout.annotations[0].text
+
+
+def test_the_terminal_value_ring_turns_red_above_the_warning_limit():
+    top_heavy = dict(DCF_RESULT, pv_of_forecast=20_000.0, pv_of_terminal_value=80_000.0, enterprise_value=100_000.0)
+    pie = app.terminal_value_donut(top_heavy).data[0]                    # 80% is above 75%
+    assert list(pie.marker.colors) == [theme.GREY, theme.DOWN]
+    exactly_at_limit = dict(DCF_RESULT, pv_of_forecast=25_000.0, pv_of_terminal_value=75_000.0, enterprise_value=100_000.0)
+    assert list(app.terminal_value_donut(exactly_at_limit).data[0].marker.colors) == [theme.GREY, theme.ACCENT]
+
+
+def test_adobes_page_has_the_football_field_with_a_headline_and_the_charts_behind_the_number(monkeypatch):
+    page = run_page(monkeypatch, yahoo=yahoo_with_prices())
+    assert_footer_and_no_crash(page)
+    subheaders = texts(page.subheader)
+    assert subheaders.index("Where the price sits") < subheaders.index("Discounted cash flow (DCF)")
+    markdown = texts(page.markdown)
+    assert any(line.startswith("**Adobe Inc. trades ") and "valuation method" in line for line in markdown)
+    assert any(line.startswith("**") and "of enterprise value" in line for line in markdown)       # the waterfall headline
+    assert any(line.startswith("**Free cash flow is forecast to") for line in markdown)
+    assert any(line.startswith("**") and "of the value comes from after year 5." in line for line in markdown)
+    assert len(page.get("plotly_chart")) == 5
+
+
+def test_the_headline_dollar_signs_reach_the_page_escaped(monkeypatch):
+    page = run_page(monkeypatch, yahoo=yahoo_with_prices())
+    waterfall = next(line for line in texts(page.markdown) if "of enterprise value" in line)
+    assert r"\$" in waterfall and "$" not in waterfall.replace(r"\$", "")
+
+
+def test_a_company_with_no_peers_still_gets_a_football_field_with_its_dcf(monkeypatch):
+    page = run_page(monkeypatch, ticker="exmp", yahoo=other_company())
+    assert "Where the price sits" in texts(page.subheader)
+    assert any(line.startswith("**Example Corp trades ") for line in texts(page.markdown))
+
+
+def test_a_company_whose_dcf_cannot_be_built_has_no_football_field_and_no_charts_behind_the_number(monkeypatch):
+    loss = dict(ADOBE_YAHOO_INCOME, **{"Pretax Income": (-100e6, 50e6)})
+    page = run_page(monkeypatch, ticker="loss", yahoo=fake_statements_ticker(income=loss))
+    assert_footer_and_no_crash(page)
+    assert "Where the price sits" not in texts(page.subheader) and "Behind the number" not in texts(page.subheader)
+
+
+def test_a_very_low_wacc_leaves_the_dcf_bar_out_and_says_why(monkeypatch):
+    # With the share's price history there is still its 52-week range to draw, so the section appears without a DCF bar.
+    low_beta = yahoo_with_prices(info=dict(ADOBE_YAHOO_INFO, beta=-0.95))
+    page = run_page(monkeypatch, ticker="lowb", yahoo=low_beta)
+    assert_footer_and_no_crash(page)
+    assert "Where the price sits" in texts(page.subheader)
+    assert any(caption.startswith("The DCF bar is left out") for caption in texts(page.caption))
+
+
+def test_when_nothing_is_left_to_draw_the_football_field_section_is_left_out_altogether(monkeypatch):
+    # No peers, no price history and a WACC too low for the DCF range: no bars at all.
+    low_beta = fake_statements_ticker(info=dict(ADOBE_YAHOO_INFO, beta=-0.95))
+    page = run_page(monkeypatch, ticker="lowb", yahoo=low_beta)
+    assert_footer_and_no_crash(page)
+    assert "Where the price sits" not in texts(page.subheader)

@@ -646,6 +646,19 @@ def upside(implied_price, current_price):
 # Multiples (docs/model.md: "Multiples")
 # ---------------------------------------------------------------------------
 
+def quartile_range(multiples, minimum_peers):
+    """Find the middle half of the peers' multiples: the 25th and the 75th percentile of the ones that are
+    usable (workbook: `Multiples` rows 82-86, Excel's QUARTILE), as (low, high). Unlike the lowest and highest
+    peer, one extreme peer cannot stretch it far. Gives None when fewer than minimum_peers (and at least two)
+    usable peers are left, because a range from one number would mean nothing.
+    """
+    usable = usable_multiples(multiples)
+    if len(usable) < max(minimum_peers, 2):
+        return None
+    low, _middle, high = statistics.quantiles(usable, n=4, method="inclusive")
+    return low, high
+
+
 def peer_median(multiples):
     """Find the middle value of the peers' multiples, so one extreme peer cannot pull the
     answer up or down the way an average would.
@@ -764,6 +777,63 @@ def price_from_ps(revenue, ps_multiple, shares):
     return revenue * ps_multiple / shares
 
 
+def table_range(prices):
+    """Find the lowest and the highest price in a table of prices (a list of rows), as (low, high): the
+    range the DCF bar on the football field covers (workbook: `Multiples` F87 and G87).
+    """
+    flat = [price for row in prices for price in row]
+    return min(flat), max(flat)
+
+
+def trading_range(closes):
+    """Find the lowest and the highest closing price in a list of closing prices, as (low, high), or None when
+    there are none. With a year of prices this is the 52-week range.
+    """
+    return (min(closes), max(closes)) if closes else None
+
+
+# The methods on the football field, in the order they are drawn after the DCF: the label, the key in
+# run_multiples' "price_ranges", and the key of its middle price.
+FOOTBALL_FIELD_MULTIPLES = [
+    ("EV/Sales", "ev_sales", "price_ev_sales"),
+    ("EV/EBITDA", "ev_ebitda", "price_ev_ebitda"),
+    ("P/E", "pe", "price_pe"),
+    ("P/S", "ps", "price_ps"),
+    ("Forward P/E", "forward_pe", "price_forward_pe"),
+]
+
+
+def football_field(dcf_range, dcf_price, multiples, share_price_range=None):
+    """List the rows of the football field, top to bottom, each {"label", "kind", "low", "middle", "high"}: the
+    52-week trading range first (kind "trading", no middle; only when a range is given), then the DCF (kind
+    "dcf": its range and the base price as the middle), then each multiple that has both a middle price and a
+    range (kind "multiple": the middle half of the peers, and the median price). `multiples` is run_multiples'
+    result, or None for a company with no peers (then only the DCF and the trading range remain).
+    """
+    rows = []
+    if share_price_range is not None:
+        rows.append({"label": "52-week range", "kind": "trading",
+                     "low": share_price_range[0], "middle": None, "high": share_price_range[1]})
+    if dcf_range is not None and dcf_price is not None:
+        rows.append({"label": "DCF", "kind": "dcf",
+                     "low": dcf_range[0], "middle": dcf_price, "high": dcf_range[1]})
+    if multiples is not None:
+        for label, range_key, price_key in FOOTBALL_FIELD_MULTIPLES:
+            price_range = multiples["price_ranges"][range_key]
+            if price_range is not None and multiples[price_key] is not None:
+                rows.append({"label": label, "kind": "multiple",
+                             "low": price_range[0], "middle": multiples[price_key], "high": price_range[1]})
+    return rows
+
+
+def methods_above_price(rows, share_price):
+    """Count how many of the valuation methods on the football field (the DCF and the multiples, not the
+    trading range) have a middle value above the market price, as (above, total).
+    """
+    middles = [row["middle"] for row in rows if row["kind"] != "trading"]
+    return sum(1 for middle in middles if middle > share_price), len(middles)
+
+
 def verdict(upside, threshold):
     """Say in one word what the DCF price says about the market price: "undervalued" when the DCF price is
     more than `threshold` above it (an upside of 0.15 or more than 15%), "overvalued" when it is more than
@@ -880,8 +950,9 @@ def run_multiples(
     there is none (or it is not above zero, when a forward P/E would mean nothing); then the forward P/E
     price is None too. Returns a dictionary holding the peer medians, the five prices (EV/Sales,
     EV/EBITDA, P/E, P/S and forward P/E), the middle of the prices that exist (None if none do; with an
-    even number of prices it is the average of the two in the middle), and how far the DCF price is above
-    or below it, so a page can show any of them.
+    even number of prices it is the average of the two in the middle), how far the DCF price is above
+    or below it, and for each multiple the price range from the middle half of the peers ("price_ranges": a
+    (low, high) pair, or None when it cannot be worked out), so a page can show any of them.
     """
     median_ev_sales = median_of_usable_multiples(peer_ev_sales, minimum_peers)
     median_ev_ebitda = median_of_usable_multiples(peer_ev_ebitda, minimum_peers)
@@ -909,6 +980,32 @@ def run_multiples(
         else price_from_forward_pe(forward_eps, median_forward_pe)
     )
 
+    def price_range(peer_multiples, price_at):
+        """The prices at the 25th and the 75th percentile of the peers' multiples, lower one first, or None."""
+        quartiles = quartile_range(peer_multiples, minimum_peers)
+        if quartiles is None:
+            return None
+        return tuple(sorted(price_at(multiple) for multiple in quartiles))
+
+    ranges = {
+        "ev_sales": price_range(
+            peer_ev_sales, lambda multiple: price_from_ev_multiple(revenue, multiple, net_debt_amount, shares)
+        ),
+        "ev_ebitda": price_range(
+            peer_ev_ebitda,
+            lambda multiple: price_from_ev_multiple(
+                ebitda(ebit, depreciation_and_amortisation), multiple, net_debt_amount, shares
+            ),
+        ),
+        "pe": price_range(peer_pe, lambda multiple: price_from_pe(net_income, multiple, shares)),
+        "ps": price_range(peer_ps, lambda multiple: price_from_ps(revenue, multiple, shares)),
+        "forward_pe": (
+            None
+            if forward_eps is None or forward_eps <= 0
+            else price_range(peer_forward_pe, lambda multiple: price_from_forward_pe(forward_eps, multiple))
+        ),
+    }
+
     prices = [
         price
         for price in (price_ev_sales, price_ev_ebitda, price_pe, price_ps, price_forward_pe)
@@ -927,6 +1024,7 @@ def run_multiples(
         "price_pe": price_pe,
         "price_ps": price_ps,
         "price_forward_pe": price_forward_pe,
+        "price_ranges": ranges,
         "median_price": median_price,
         "dcf_vs_multiples": None if median_price is None else dcf_vs_multiples(dcf_price, median_price),
     }
