@@ -2162,3 +2162,129 @@ def test_the_price_history_leaves_yahoo_alone_while_it_is_cooling_down(monkeypat
 
     with pytest.raises(data.SourceUnavailable, match="isn't answering"):
         data.get_price_history("ADBE", fetch_prices=must_not_be_called)
+
+
+# ---------------------------------------------------------------------------
+# Searching for a company by name (Yahoo's own list, kept to company shares; not Excel: lookup and tidying)
+# ---------------------------------------------------------------------------
+
+def hit(symbol, name="A Company", kind="EQUITY", exchange="NASDAQ", long_name=None):
+    """One result as Yahoo's search gives it."""
+    return {"symbol": symbol, "shortname": name, "longname": long_name, "quoteType": kind, "exchDisp": exchange}
+
+
+# What Yahoo gave for "adobe" on 21 Nov 2026: the share, a future, a fund, and two foreign copies of the same share.
+ADOBE_HITS = [
+    hit("ADBE", "Adobe Inc."),
+    hit("SADBE=F", "Adobe Inc Stock Futures,Dec-202", kind="FUTURE", exchange="Chicago Mercantile Exchange"),
+    hit("ADBE.TO", "ADOBE CDR (CAD HEDGED)", kind="ETF", exchange="Toronto"),
+    hit("ADB.DE", "Adobe Inc.                    R", exchange="XETRA"),
+    hit("ADB.F", "Adobe Inc.                    R", exchange="Frankfurt"),
+]
+
+
+def search_with(hits, query="adobe", how_many=6, minimum=2, asked=15):
+    """Run the search against a made-up list of results, returning what the search gave and what it was asked for."""
+    asked_for = []
+
+    def fake(typed, count):
+        asked_for.append((typed, count))
+        return hits
+
+    return data.search_companies(query, how_many, minimum, asked, fetch_matches=fake), asked_for
+
+
+def test_the_search_keeps_only_company_shares_in_yahoos_order():
+    matches, _ = search_with(ADOBE_HITS)
+    assert [match["ticker"] for match in matches] == ["ADBE", "ADB.DE", "ADB.F"]          # no future, no fund
+
+
+def test_each_match_has_a_ticker_a_tidy_name_and_the_exchange():
+    matches, _ = search_with(ADOBE_HITS)
+    assert matches[0] == {"ticker": "ADBE", "name": "Adobe Inc.", "exchange": "NASDAQ"}
+    assert matches[1] == {"ticker": "ADB.DE", "name": "Adobe Inc. R", "exchange": "XETRA"}      # stray spaces squeezed
+
+
+def test_the_search_asks_yahoo_for_the_typed_text_and_the_number_it_is_told_to():
+    _, asked_for = search_with(ADOBE_HITS, query="  adobe   inc ", asked=15)
+    assert asked_for == [("adobe inc", 15)]
+
+
+def test_a_ticker_that_appears_twice_is_listed_once():
+    matches, _ = search_with([hit("AMD", "Advanced Micro Devices"), hit("MU", "Micron"), hit("AMD", "AMD again")])
+    assert [match["ticker"] for match in matches] == ["AMD", "MU"]
+    assert matches[0]["name"] == "Advanced Micro Devices"
+
+
+def test_the_search_stops_at_the_number_asked_for():
+    hits = [hit(f"T{number}", f"Company {number}") for number in range(10)]
+    matches, _ = search_with(hits, how_many=4)
+    assert [match["ticker"] for match in matches] == ["T0", "T1", "T2", "T3"]
+
+
+def test_a_missing_short_name_falls_back_to_the_long_name_and_then_to_the_ticker():
+    matches, _ = search_with([hit("AAA", name=None, long_name="Long Name Corp"), hit("BBB", name=None), hit("CCC", name="   ")])
+    assert [match["name"] for match in matches] == ["Long Name Corp", "BBB", "CCC"]
+
+
+def test_a_blank_short_name_does_not_hide_a_good_long_name():
+    matches, _ = search_with([hit("AAA", name="   ", long_name="Long Name Corp")])
+    assert matches[0]["name"] == "Long Name Corp"
+
+
+def test_a_missing_exchange_is_none_and_the_short_exchange_code_is_the_fallback():
+    matches, _ = search_with([
+        {"symbol": "AAA", "shortname": "A", "quoteType": "EQUITY"},
+        {"symbol": "BBB", "shortname": "B", "quoteType": "EQUITY", "exchange": "NMS"},
+    ])
+    assert matches[0]["exchange"] is None and matches[1]["exchange"] == "NMS"
+
+
+def test_a_result_without_a_symbol_or_a_company_share_type_is_dropped():
+    matches, _ = search_with([
+        {"shortname": "No symbol", "quoteType": "EQUITY"}, hit("", "Empty symbol"), hit("ZZZ", "No type", kind=None), hit("OK", "Fine"),
+    ])
+    assert [match["ticker"] for match in matches] == ["OK"]
+
+
+def test_no_results_or_nothing_back_gives_an_empty_list():
+    assert search_with([])[0] == [] and search_with(None)[0] == []
+    assert search_with([hit("FUT=F", kind="FUTURE")])[0] == []
+
+
+@pytest.mark.parametrize("too_short", ["", " ", "a", " a "])
+def test_too_short_a_search_asks_nobody_and_gives_nothing(too_short):
+    matches, asked_for = search_with(ADOBE_HITS, query=too_short)
+    assert matches == [] and asked_for == []
+
+
+def test_the_search_fails_with_a_plain_error_when_yahoo_cannot_be_reached():
+    def broken(query, count):
+        raise ConnectionError("no internet")
+
+    with pytest.raises(data.SourceUnavailable, match="Could not search Yahoo Finance: no internet"):
+        data.search_companies("adobe", 6, 2, 15, fetch_matches=broken)
+
+
+def test_the_search_leaves_yahoo_alone_while_it_is_cooling_down(monkeypatch):
+    monkeypatch.setattr("data._yahoo_busy_until", 10**12)
+
+    def must_not_be_called(query, count):
+        pytest.fail("asked Yahoo")
+
+    with pytest.raises(data.SourceUnavailable, match="isn't answering"):
+        data.search_companies("adobe", 6, 2, 15, fetch_matches=must_not_be_called)
+    assert data.search_companies("a", 6, 2, 15, fetch_matches=must_not_be_called) == []       # too short: nothing to ask, no error
+
+
+def test_the_real_lookup_gives_yahoos_quotes_for_the_text_and_count(monkeypatch):
+    seen = {}
+
+    class FakeSearch:
+        def __init__(self, query, max_results, news_count):
+            seen.update(query=query, max_results=max_results, news_count=news_count)
+            self.quotes = [hit("AAPL", "Apple Inc.")]
+
+    monkeypatch.setattr("yfinance.Search", FakeSearch)
+    assert data.fetch_yahoo_search("appl", 15) == [hit("AAPL", "Apple Inc.")]
+    assert seen == {"query": "appl", "max_results": 15, "news_count": 0}                  # no news wanted

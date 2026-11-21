@@ -663,7 +663,7 @@ def test_when_yahoos_industry_lookup_fails_the_page_warns_and_the_box_starts_emp
 
 def test_adobe_has_no_peer_box_and_keeps_its_four_peers(monkeypatch):
     page = run_page(monkeypatch)
-    assert len(page.sidebar.text_input) == 1                   # only the company ticker
+    assert len(page.sidebar.text_input) == 2                   # only the company ticker and the name search
     assert list(peer_table_of(page).index) == [
         "ADBE (this company)", "ADSK", "INTU", "CRM", "SNPS", "Peer median"
     ]
@@ -3582,3 +3582,158 @@ def test_without_a_history_the_section_says_so_and_draws_no_history_charts(monke
     assert_footer_and_no_crash(page)
     assert any(caption.startswith("The history is not available right now.") for caption in texts(page.caption))
     assert len(tab_named(page, "Overview").get("plotly_chart")) == 1                   # only the football field
+
+
+# ---------------------------------------------------------------------------
+# Searching for a company by name: a sidebar box, and "Did you mean" when a ticker is not found
+# ---------------------------------------------------------------------------
+
+def a_match(ticker, name, exchange="NASDAQ"):
+    return {"ticker": ticker, "name": name, "exchange": exchange}
+
+
+MICRO_MATCHES = [
+    a_match("AMD", "Advanced Micro Devices, Inc."), a_match("MU", "Micron Technology, Inc."),
+    a_match("MSFT", "Microsoft Corporation"), a_match("ENSU.OL", "ENSURGE MICROPOWER ASA", "Oslo"),
+]
+
+
+class MatchLog:
+    """A stand-in for data.search_companies that gives the answers it is told to and records what it was asked."""
+    def __init__(self, answers):
+        self.answers = answers
+        self.asked = []
+
+    def __call__(self, query, how_many, minimum_characters, matches_asked, **kwargs):
+        self.asked.append(query)
+        answer = self.answers.get(query.lower(), [])
+        if isinstance(answer, Exception):
+            raise answer
+        return answer
+
+
+def with_search(monkeypatch, answers):
+    log = MatchLog(answers)
+    monkeypatch.setattr("data.search_companies", log)
+    return log
+
+
+def test_the_sidebar_has_a_search_by_name_box_right_under_the_ticker_box(monkeypatch):
+    page = run_page(monkeypatch)
+    assert [box.label for box in page.sidebar.text_input] == ["Company ticker", "Search by company name"]
+    assert page.sidebar.text_input(key="ticker_box").value == "ADBE"
+    assert page.sidebar.text_input(key="name_search").value == ""
+    assert texts(page.sidebar.header) == ["Company", "Assumptions"]                        # no new heading
+
+
+def test_an_empty_search_box_asks_nobody(monkeypatch):
+    log = with_search(monkeypatch, {})
+    page = run_page(monkeypatch)
+    assert_footer_and_no_crash(page)
+    assert log.asked == [] and not page.sidebar.button
+
+
+def test_one_letter_asks_nobody_and_says_how_many_are_needed(monkeypatch):
+    log = with_search(monkeypatch, {})
+    page = run_page(monkeypatch)
+    page.sidebar.text_input(key="name_search").set_value("m").run()
+    assert log.asked == []
+    assert "Type at least 2 characters." in texts(page.sidebar.caption)
+
+
+def test_a_name_gives_a_button_for_each_match_with_name_ticker_and_exchange(monkeypatch):
+    with_search(monkeypatch, {"micr": MICRO_MATCHES})
+    page = run_page(monkeypatch)
+    page.sidebar.text_input(key="name_search").set_value("micr").run()
+    assert_footer_and_no_crash(page)
+    assert [button.label for button in page.sidebar.button] == [
+        "Advanced Micro Devices, Inc\\. · AMD · NASDAQ", "Micron Technology, Inc\\. · MU · NASDAQ",
+        "Microsoft Corporation · MSFT · NASDAQ", "ENSURGE MICROPOWER ASA · ENSU\\.OL · Oslo",
+    ]
+    assert [button.key for button in page.sidebar.button] == ["match_AMD", "match_MU", "match_MSFT", "match_ENSU.OL"]
+
+
+def test_a_match_without_an_exchange_shows_just_the_name_and_the_ticker():
+    assert app.match_label({"ticker": "ABC", "name": "Abc Corp", "exchange": None}) == "Abc Corp · ABC"
+
+
+def test_text_from_yahoo_in_a_match_is_made_safe_for_markdown():
+    label = app.match_label({"ticker": "X", "name": "Fast *Growth* [Co] $5 <b>", "exchange": "NASDAQ"})
+    assert label == r"Fast \*Growth\* \[Co\] \$5 \<b\> · X · NASDAQ"
+
+
+def test_clicking_a_match_puts_its_ticker_in_the_box_loads_that_company_and_clears_the_search(monkeypatch):
+    with_search(monkeypatch, {"micr": MICRO_MATCHES})
+    page = run_page(monkeypatch, yahoo=other_company())
+    page.sidebar.text_input(key="name_search").set_value("micr").run()
+    page.sidebar.button(key="match_MSFT").click().run()
+    assert_footer_and_no_crash(page)
+    assert page.sidebar.text_input(key="ticker_box").value == "MSFT"
+    assert page.sidebar.text_input(key="name_search").value == ""
+    assert not page.sidebar.button                                                       # the matches are gone
+    header = header_of(page)
+    assert "<h1>Example Corp</h1>" in header and ">MSFT</span>" in header                 # the page now shows MSFT
+
+
+def test_a_name_with_no_match_says_so(monkeypatch):
+    with_search(monkeypatch, {"xyzzyq": []})
+    page = run_page(monkeypatch)
+    page.sidebar.text_input(key="name_search").set_value("xyzzyq").run()
+    assert "No company found for xyzzyq." in texts(page.sidebar.caption)
+    assert not page.sidebar.button
+
+
+def test_when_the_search_cannot_be_made_the_sidebar_says_so_and_the_page_still_works(monkeypatch):
+    with_search(monkeypatch, {"micr": data.SourceUnavailable("busy")})
+    page = run_page(monkeypatch)
+    page.sidebar.text_input(key="name_search").set_value("micr").run()
+    assert_footer_and_no_crash(page)
+    assert "The search is not available right now. Type the ticker instead." in texts(page.sidebar.caption)
+    assert "▲ UNDERVALUED" in header_of(page)
+
+
+def test_a_company_that_cannot_be_found_offers_matches_for_what_was_typed(monkeypatch):
+    with_search(monkeypatch, {"appl": [a_match("AAPL", "Apple Inc."), a_match("APLD", "Applied Digital Corporation")]})
+    page = not_found_page(monkeypatch)
+    assert_footer_and_no_crash(page)
+    assert "Did you mean one of these?" in " ".join(texts(page.markdown)).replace("**", "")
+    assert [button.label for button in page.main.button] == ["Apple Inc\\. · AAPL · NASDAQ", "Applied Digital Corporation · APLD · NASDAQ"]
+    assert [button.key for button in page.main.button] == ["didyoumean_AAPL", "didyoumean_APLD"]
+
+
+def test_clicking_did_you_mean_loads_that_company(monkeypatch):
+    with_search(monkeypatch, {"appl": [a_match("AAPL", "Apple Inc.")]})
+    nothing = fake_statements_ticker(income={}, cash_flow={}, balance={}, info={})
+    monkeypatch.setattr("data._start_yahoo_cooldown", lambda: None)
+    page = run_page(monkeypatch, ticker="appl", yahoo=nothing)
+    page.main.button(key="didyoumean_AAPL").click().run()
+    assert page.sidebar.text_input(key="ticker_box").value == "AAPL"
+    assert not page.main.button
+
+
+def test_the_not_found_page_has_no_did_you_mean_when_nothing_matches_or_the_search_fails(monkeypatch):
+    with_search(monkeypatch, {"appl": []})
+    page = not_found_page(monkeypatch)
+    assert "Did you mean" not in " ".join(texts(page.markdown)) and not page.main.button
+    with_search(monkeypatch, {"appl": data.SourceUnavailable("busy")})
+    assert "Did you mean" not in " ".join(texts(not_found_page(monkeypatch).markdown))
+
+
+def test_when_the_data_source_is_down_the_error_page_does_not_search(monkeypatch):
+    log = with_search(monkeypatch, {"exmp": [a_match("EXMP", "Example Corp")]})
+
+    class BrokenTicker:
+        def __init__(self, ticker):
+            raise ConnectionError("no internet")
+
+    page = run_page(monkeypatch, ticker="exmp", yahoo=BrokenTicker)
+    assert "What you can do" in hints_of(page)
+    assert log.asked == [] and not page.main.button
+
+
+def test_a_search_with_html_in_it_cannot_become_page_code(monkeypatch):
+    with_search(monkeypatch, {"<b>x</b>": []})
+    page = run_page(monkeypatch)
+    page.sidebar.text_input(key="name_search").set_value("<b>x</b>").run()
+    assert_footer_and_no_crash(page)
+    assert "No company found for \\<b\\>x\\</b\\>." in texts(page.sidebar.caption)         # every angle bracket has its backslash
