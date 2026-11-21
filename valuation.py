@@ -819,9 +819,11 @@ FOOTBALL_FIELD_MULTIPLES = [
 ]
 
 
-def football_field(dcf_range, dcf_price, multiples, share_price_range=None):
+def football_field(dcf_range, dcf_price, multiples, share_price_range=None, analyst_targets=None):
     """List the rows of the football field, top to bottom, each {"label", "kind", "low", "middle", "high"}: the
-    52-week trading range first (kind "trading", no middle; only when a range is given), then the DCF (kind
+    52-week trading range first (kind "trading", no middle; only when a range is given), then the analysts' price
+    targets (kind "analysts": the lowest and highest target, with the mean as the middle; only when `analyst_targets`
+    is given as a (low, mean, high) triple), then the DCF (kind
     "dcf": its range and the base price as the middle), then each multiple that has both a middle price and a
     range (kind "multiple": the middle half of the peers, and the median price). `multiples` is run_multiples'
     result, or None for a company with no peers (then only the DCF and the trading range remain).
@@ -830,6 +832,9 @@ def football_field(dcf_range, dcf_price, multiples, share_price_range=None):
     if share_price_range is not None:
         rows.append({"label": "52-week", "kind": "trading",
                      "low": share_price_range[0], "middle": None, "high": share_price_range[1]})
+    if analyst_targets is not None:
+        low, mean, high = analyst_targets
+        rows.append({"label": "Analysts", "kind": "analysts", "low": low, "middle": mean, "high": high})
     if dcf_range is not None and dcf_price is not None:
         rows.append({"label": "DCF", "kind": "dcf",
                      "low": dcf_range[0], "middle": dcf_price, "high": dcf_range[1]})
@@ -844,9 +849,10 @@ def football_field(dcf_range, dcf_price, multiples, share_price_range=None):
 
 def methods_above_price(rows, share_price):
     """Count how many of the valuation methods on the football field (the DCF and the multiples, not the
-    trading range) have a middle value above the market price, as (above, total).
+    trading range and not the analysts' targets, which are other people's opinions) have a middle value above the
+    market price, as (above, total).
     """
-    middles = [row["middle"] for row in rows if row["kind"] != "trading"]
+    middles = [row["middle"] for row in rows if row["kind"] not in ("trading", "analysts")]
     return sum(1 for middle in middles if middle > share_price), len(middles)
 
 

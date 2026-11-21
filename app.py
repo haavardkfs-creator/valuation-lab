@@ -1314,11 +1314,12 @@ def football_field_figure(rows, share_price):
     return figure
 
 
-def draw_football_field(company, dcf, multiples, dcf_inputs, base_wacc, prices):
+def draw_football_field(company, dcf, multiples, dcf_inputs, base_wacc, prices, analysts=None):
     """Draw the football field, the main chart: every way the page has of valuing the company, as a price range,
     against today's market price, with a sentence that says what it shows. The DCF bar covers the prices that have an
     answer when the WACC is moved 1 point either way and the terminal growth runs from 1.5% to 3.5% (the workbook's table, not
-    the wider heatmap); each multiples bar covers the middle half of the peers. The 52-week range is included when the price history is there.
+    the wider heatmap); each multiples bar covers the middle half of the peers. The 52-week range is included when the price history is there,
+    and the analysts' price targets when `analysts` (see data.get_analyst_view) has them.
     """
     try:
         table = valuation.sensitivity_table(
@@ -1329,7 +1330,10 @@ def draw_football_field(company, dcf, multiples, dcf_inputs, base_wacc, prices):
     except ValueError:
         dcf_range = None            # no combination in the table has an answer at all: see draw_heatmap
     trading = None if prices is None else valuation.trading_range([price["close"] for price in prices])
-    rows = valuation.football_field(dcf_range, dcf["implied_share_price"], multiples, trading)
+    targets = None if analysts is None or analysts["targets"] is None else (
+        analysts["targets"]["low"], analysts["targets"]["mean"], analysts["targets"]["high"]
+    )
+    rows = valuation.football_field(dcf_range, dcf["implied_share_price"], multiples, trading, targets)
     if not rows:
         return
     st.subheader("Where the price sits")
@@ -1344,9 +1348,112 @@ def draw_football_field(company, dcf, multiples, dcf_inputs, base_wacc, prices):
     st.plotly_chart(football_field_figure(rows, company["share_price"]), width="stretch", config=CHART_CONFIG)
     st.caption(
         "Each bar is a way of valuing the company: the blue bar is the DCF with the WACC a point either way and terminal growth from 1.5% to 3.5%, "
-        "the grey bars cover the middle half of the peers' multiples (25th to 75th percentile), and the first grey "
-        "bar is the share's own 52-week range. The white tick is the middle value, and the dashed line is today's "
-        "market price."
+        "the grey bars cover the middle half of the peers' multiples (25th to 75th percentile), the analysts' price "
+        "targets (when Yahoo Finance has them) and the share's own 52-week range. The white tick is the middle value "
+        "(the mean, for the analysts), and the dashed line is today's market price."
+    )
+
+
+def analyst_headline(company_name, view, share_price, dcf_price):
+    """Say in one sentence what analysts think: the consensus rating and how many analysts, and where their mean price
+    target is against today's market price, then (when there is a DCF) whether the model's DCF value is above or below
+    that target. Gives only the parts Yahoo has, and None when it has neither a rating nor a target.
+    """
+    parts = []
+    rating = view["rating"]
+    if rating:
+        count = f" ({view['analysts']} analysts)" if view["analysts"] else ""
+        parts.append(f"Analysts rate {company_name} {rating.lower()}{count}")
+    targets = view["targets"]
+    if targets:
+        gap = targets["mean"] / share_price - 1
+        direction = "above" if gap > 0 else "below" if gap < 0 else "the same as"
+        target = f"their mean price target of {dollars(targets['mean'])} is {percent(abs(gap)) + ' ' if gap else ''}{direction} today's price"
+        parts.append(target if parts else f"Analysts' mean price target for {company_name} of {dollars(targets['mean'])} is {percent(abs(gap)) + ' ' if gap else ''}{direction} today's price")
+    if not parts:
+        return None
+    sentence = "; ".join(parts) + "."
+    if targets and dcf_price is not None:
+        relation = "above" if dcf_price > targets["mean"] else "below" if dcf_price < targets["mean"] else "the same as"
+        sentence += f" The model's DCF value of {dollars(dcf_price)} is {relation} that target."
+    return sentence
+
+
+def target_range_text(low, high):
+    """Write the range of the analysts' price targets in the space of a small card, for example "$140 – 373": whole dollars
+    from 100 up, cents below that (where they matter), and one dollar sign only, because Streamlit reads text between
+    two unescaped dollar signs as a maths formula.
+    """
+    decimals = 0 if high >= 100 else 2
+    return f"{dollars(low) if decimals else f'${low:,.0f}'} – {high:,.{decimals}f}"
+
+
+def analyst_split_figure(counts):
+    """Draw how analysts split as one stacked bar: Buy (strong buy and buy, green), Hold (grey) and Sell (sell and strong sell,
+    red), each labelled with its number. Hovering gives the exact counts of the five ratings. The words and the
+    numbers say it too, so the colours are never the only signal.
+    """
+    groups = [
+        ("Buy", counts["strong_buy"] + counts["buy"], theme.UP, f"Strong buy {counts['strong_buy']}, buy {counts['buy']}"),
+        ("Hold", counts["hold"], theme.GREY, f"Hold {counts['hold']}"),
+        ("Sell", counts["sell"] + counts["strong_sell"], theme.DOWN, f"Sell {counts['sell']}, strong sell {counts['strong_sell']}"),
+    ]
+    figure = go.Figure([
+        go.Bar(
+            y=[""], x=[number], name=name, orientation="h", marker={"color": colour},
+            text=[f"{name} {number}" if number else ""], textposition="inside", insidetextanchor="middle",
+            textfont={"color": theme.NAVY},
+            hovertemplate=f"<b>{name}</b><br>{detail}<extra></extra>",
+        )
+        for name, number, colour, detail in groups
+    ])
+    figure.update_xaxes(visible=False)
+    figure.update_yaxes(visible=False)
+    theme.style_figure(figure, height=90)
+    figure.update_layout(barmode="stack", showlegend=False, margin={"l": 0, "r": 0, "t": 0, "b": 0})
+    return figure
+
+
+def draw_analyst_view(company, analysts, dcf_price):
+    """Draw "Analyst view": what other analysts say, from Yahoo Finance: the consensus rating, the mean price target against
+    today's price, the range of targets, how the analysts split, and a sentence that says it, with the model's DCF value
+    beside it. A company with no coverage, or a search that could not be made, says so. These are other people's opinions,
+    and the section says that.
+    """
+    st.subheader("Analyst view")
+    if analysts is None:
+        st.caption("The analysts' view is not available right now.")
+        return
+    if not data.has_analyst_coverage(analysts):
+        st.caption(f"There is no analyst coverage of {company['company_name']} on Yahoo Finance.")
+        return
+    rating_column, target_column, range_column = st.columns(3)
+    rating_column.metric(
+        "Consensus rating", analysts["rating"] or "No consensus",
+        delta=f"{analysts['analysts']} analysts" if analysts["analysts"] else None, delta_color="off", delta_arrow="off",
+        help=explanations.help_text("analyst_rating"),
+    )
+    targets = analysts["targets"]
+    if targets:
+        target_column.metric(
+            "Mean price target", dollars(targets["mean"]),
+            delta=theme.change_text(targets["mean"] / company["share_price"] - 1),
+            delta_color="off", delta_arrow="off", help=explanations.help_text("analyst_target"),
+        )
+        range_column.metric(
+            "Target range", target_range_text(targets["low"], targets["high"]),
+            delta="lowest to highest", delta_color="off", delta_arrow="off", help=explanations.help_text("analyst_range"),
+        )
+    else:
+        target_column.metric("Mean price target", NOT_AVAILABLE, help=explanations.help_text("analyst_target"))
+    headline = analyst_headline(company["company_name"], analysts, company["share_price"], dcf_price)
+    if headline:
+        st.markdown(f"**{dollar_text_for_markdown(headline)}**", help=explanations.help_text("analyst_split"))
+    if analysts["counts"]:
+        st.plotly_chart(analyst_split_figure(analysts["counts"]), width="stretch", config=CHART_CONFIG)
+    st.caption(
+        "Other analysts' opinions, from Yahoo Finance, not this app's advice. Price targets are set for about a year ahead "
+        "and tend to run optimistic, so they are a comparison for the model, not a prediction."
     )
 
 
@@ -2103,6 +2210,14 @@ def load_adobe_peer_margins(tickers):
 
 
 @st.cache_data(ttl=LIVE_DATA_CACHE_SECONDS, show_spinner=False)
+def load_analyst_view(ticker, usd_per_unit):
+    """Fetch the analysts' consensus rating and price targets (in US dollars) and remember them for
+    LIVE_DATA_CACHE_SECONDS. Stops with a plain error if Yahoo is busy or could not be asked.
+    """
+    return data.get_analyst_view(ticker, usd_per_unit)
+
+
+@st.cache_data(ttl=LIVE_DATA_CACHE_SECONDS, show_spinner=False)
 def load_company_matches(query):
     """Search Yahoo Finance for the companies matching a name and remember the answer for LIVE_DATA_CACHE_SECONDS. Stops
     with a plain error if Yahoo is busy or cannot be reached.
@@ -2581,6 +2696,16 @@ def price_history_or_none(company):
         return None
 
 
+def analyst_view_or_none(company):
+    """Get what analysts say about the company (see data.get_analyst_view), or None when Yahoo could not be asked: the
+    section and the football-field bar that use it are then left out or say so.
+    """
+    try:
+        return load_analyst_view(company["ticker"], company.get("usd_per_price_unit") or 1.0)
+    except ValueError:
+        return None
+
+
 def draw_header(company, dcf, multiples, prices):
     """Draw the top of the page, the answer first: the company's name and ticker, a verdict badge, four headline
     cards (the market price, the DCF value per share, the upside or downside, and the middle of the multiples
@@ -2679,6 +2804,7 @@ def draw_page():
     overview = company_overview(company)
 
     prices = price_history_or_none(company)
+    analysts = analyst_view_or_none(company)
     draw_header(company, dcf, multiples, prices)
     draw_source_note(company, source_used)
     note = adjustment_note(adjustment)
@@ -2701,6 +2827,7 @@ def draw_page():
         overview_tab, explanations_tab = st.tabs(["Overview", "Explanations"])
         with overview_tab:
             draw_dcf_unavailable(ticker, dcf_error)
+            draw_analyst_view(company, analysts, None)
             draw_overview(overview)
             draw_history(history, history_error, overview, company["company_name"])
             draw_news_and_management(company["ticker"])
@@ -2710,7 +2837,8 @@ def draw_page():
         return
     overview_tab, dcf_tab, multiples_tab, sensitivity_tab, explanations_tab = st.tabs(PAGE_TABS)
     with overview_tab:
-        draw_football_field(company, dcf, multiples, dcf_inputs, base_wacc, prices)
+        draw_football_field(company, dcf, multiples, dcf_inputs, base_wacc, prices, analysts)
+        draw_analyst_view(company, analysts, dcf["implied_share_price"])
         draw_overview(overview)
         draw_history(history, history_error, overview, company["company_name"])
         draw_news_and_management(company["ticker"])

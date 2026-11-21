@@ -204,7 +204,7 @@ HELP_TEXTS = {
         "Football field",
         "Each bar is a way of valuing the company, as a range of prices per share. Blue is the DCF, with the WACC "
         "{wacc_points} point either way and terminal growth from {growth_low} to {growth_high}. Grey bars are the "
-        "peers' multiples (the middle half of the peers) and the share's own 52-week range. The white tick is the "
+        "peers' multiples (the middle half of the peers), the analysts' price targets and the share's own 52-week range. The white tick is the "
         "middle value and the dashed line is today's market price: a bar mostly to the right of the line says that "
         "method values the company above today's price.",
     ),
@@ -242,6 +242,27 @@ HELP_TEXTS = {
         "(red, down arrow) today's market price. The dashed line marks the combinations where the model equals the "
         "market price: the boundary between assumptions that imply upside and those that imply downside. The blue "
         "frame is the base case, the assumptions the DCF uses.",
+    ),
+    "analyst_rating": (
+        "Consensus rating",
+        "What the analysts who follow the company say on balance, as Yahoo Finance sums it up: strong buy, buy, hold, "
+        "underperform or sell. These are other people's opinions, not advice from this app.",
+    ),
+    "analyst_target": (
+        "Mean price target",
+        "The average of the prices analysts think one share will reach, usually about a year ahead, compared here with "
+        "today's price. Targets tend to run optimistic, so treat them as a comparison for the model, not a prediction.",
+    ),
+    "analyst_range": (
+        "Target range",
+        "The lowest and the highest price target among the analysts. A wide range means they disagree; with only a few "
+        "analysts one opinion can set either end.",
+    ),
+    "analyst_split": (
+        "How the analysts split",
+        "How many analysts say buy (strong buy and buy together, green), hold (grey) or sell (sell and strong sell "
+        "together, red). Hover for the exact counts of the five ratings. The sentence compares their mean target with "
+        "today's price and with the model's DCF value.",
     ),
     "history_amounts": (
         "Revenue and free cash flow by year",

@@ -2201,3 +2201,31 @@ def test_the_cells_above_the_market_price_are_counted_without_the_blanks():
     assert v.cells_above_price([[110.0, 80.0], [None, 100.0]], 100.0) == (1, 3)      # equal to the price is not above
     assert v.cells_above_price([[None, None]], 100.0) == (0, 0)
     assert v.cells_above_price([[120.0, 130.0]], 100.0) == (2, 2)
+
+
+# ---------------------------------------------------------------------------
+# The analysts' price targets on the football field (other people's opinions: not a cell in the workbook)
+# ---------------------------------------------------------------------------
+
+def test_the_football_field_puts_the_analysts_between_the_trading_range_and_the_dcf():
+    table = v.sensitivity_table(BASE_DCF_INPUTS, 0.1093, WORKBOOK_WACC_OFFSETS, WORKBOOK_GROWTH_RATES)
+    rows = v.football_field(
+        v.table_range(table["prices"]), 305.6, run_base_case_multiples(), (199.5, 324.19), analyst_targets=(140.0, 266.91, 373.0)
+    )
+    assert [row["label"] for row in rows[:3]] == ["52-week", "Analysts", "DCF"]
+    assert rows[1] == {"label": "Analysts", "kind": "analysts", "low": 140.0, "middle": 266.91, "high": 373.0}
+
+
+def test_without_analyst_targets_there_is_no_analysts_row():
+    rows = v.football_field((250.0, 390.0), 305.6, None, (199.5, 324.19))
+    assert [row["kind"] for row in rows] == ["trading", "dcf"]
+    assert [row["kind"] for row in v.football_field((250.0, 390.0), 305.6, None, None, analyst_targets=(1.0, 2.0, 3.0))] == ["analysts", "dcf"]
+
+
+def test_the_analysts_are_not_counted_as_a_valuation_method_in_the_headline():
+    rows = [
+        {"label": "Analysts", "kind": "analysts", "low": 100.0, "middle": 400.0, "high": 900.0},
+        {"label": "DCF", "kind": "dcf", "low": 200.0, "middle": 300.0, "high": 400.0},
+    ]
+    assert v.methods_above_price(rows, 250.0) == (1, 1)                     # only the DCF counts, though the analysts' mean is above too
+    assert v.methods_above_price(rows[:1], 250.0) == (0, 0)

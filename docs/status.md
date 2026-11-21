@@ -334,7 +334,7 @@
   charts are Plotly in the house style, each with a headline and a ?. Every page ends with a sources line and then the not-advice
   note, and the browser tab has an icon. 1038 tests pass (26 new); 11 old tests were repointed on purpose (eight read the "Market
   price" card that is now only in the header, two unpacked the old warning box, one checked the old verdict wording).
-- Done (in the open pull request): searching for a company by name (Haavard's idea, 20 Nov 2026, after the Nordnet search). A "Search by
+- Done: searching for a company by name, merged as pull request 63 (Haavard's idea, 20 Nov 2026, after the Nordnet search). A "Search by
   company name" box sits under the ticker box: typing part of a name and pressing Enter lists the matching companies as buttons
   ("Microsoft Corporation · MSFT · NASDAQ", at most 6), and one click puts the ticker in the ticker box and loads that company. When a
   ticker is not found, the page also offers "Did you mean one of these?" for what was typed (the mistyped "appl" offers Apple first).
@@ -342,9 +342,17 @@
   with their exchange shown), is remembered for 15 minutes, leaves Yahoo alone while it is cooling down, and if it cannot search says
   so and the page still works. `data.search_companies`, `assumptions.SEARCH_*`. No maths, so no Excel step. 1069 tests pass (31 new);
   two sidebar assertions were updated on purpose (the sidebar now has two text boxes, and keeps its Company heading).
-- Next: #11 part 3 (thesis page with Haavard's reasons boxes and a Markdown download, nothing saved on the server) and part 2 (macro
-  backdrop: needs a free FRED key from Haavard, never pasted in chat); the live FMP check with Yahoo switched off; the small items
-  below. CLAUDE.md still needs Haavard's edits (the theme line, and rows for theme.py and test_theme.py).
+- Done (in the open pull request): an "Analyst view", from Haavard's wish for someone else's analysis instead of writing his own thesis
+  (the thesis page was dropped before any code was kept). A section on the Overview tab, under the football field, with Yahoo
+  Finance's analyst consensus: the rating and how many analysts (Adobe: hold, 33), the mean price target against today's price
+  (+22.6%), the range of targets, a one-bar split of buy, hold and sell with a ? and a sentence that compares the target with the
+  model's DCF value; and a new grey "Analysts" bar on the football field (low to high, tick at the mean), which does not count as a
+  valuation method in its headline. Targets are converted to dollars at the share price's rate (Aker's kroner, Shell's pence);
+  a company with thin coverage (Aker: 4) works, one with none (a small Oslo company) says so, and a failed lookup says so without
+  stopping the page. These are other people's opinions and the section says that. `data.get_analyst_view`,
+  `valuation.football_field(analyst_targets=...)`. No maths of ours, so no Excel step. 1135 tests pass (66 new).
+- Next: #11 part 2 (macro backdrop: needs a free FRED key from Haavard, never pasted in chat); the live FMP check with Yahoo switched
+  off; the small items below. CLAUDE.md still needs Haavard's edits (the theme line, and rows for theme.py and test_theme.py).
 - Open:
   - Ideas from Haavard (20 Nov 2026): (1) group the overview by type of multiple: done in Phase 4a; (2) a ? help on every
     multiple and every chart, like the overview has: done in Phase 4b; (3) search
