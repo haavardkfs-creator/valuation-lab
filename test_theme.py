@@ -306,3 +306,24 @@ def test_every_chart_gets_a_transparent_page_coloured_background_and_the_off_whi
     assert figure.layout.hoverlabel.bgcolor == theme.SURFACE and figure.layout.hoverlabel.bordercolor == theme.BORDER
     assert figure.layout.showlegend is False
     assert figure.layout.margin.l == figure.layout.margin.r == figure.layout.margin.t == figure.layout.margin.b == 0
+
+
+# ---------------------------------------------------------------------------
+# Signed changes with fewer decimals (for the small cells of a heatmap)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("change, expected", [
+    (0.413, "▲ +41%"),
+    (-0.6, "▼ -60%"),
+    (0.004, "0%"),                        # rounds to nothing: no direction to show
+    (-0.004, "0%"),
+    (0.0051, "▲ +1%"),
+    (0.0, "0%"),
+])
+def test_a_change_can_be_written_without_decimals(change, expected):
+    assert theme.change_text(change, digits=0) == expected
+
+
+def test_the_default_is_still_one_decimal():
+    assert theme.change_text(0.413) == "▲ +41.3%" and theme.change_text(0.413, digits=1) == "▲ +41.3%"
+    assert theme.change_text(0.0004) == "0.0%"

@@ -243,3 +243,16 @@ def test_the_margin_and_growth_table_steps_are_the_ones_agreed_with_haavard():
 def test_the_sector_top_up_looks_at_thirty_companies():
     # 19 Nov 2026: only used when the industry gives fewer than MINIMUM_PEERS suitable peers.
     assert a.PEER_SECTOR_CANDIDATES_TO_CHECK == 30
+
+
+def test_the_football_field_dcf_bar_uses_the_workbooks_wacc_rows():
+    # valuation C37:C41 are 9.93%, 10.43%, 10.93%, 11.43% and 11.93%: the model's WACC and 0.5 and 1 point either side.
+    assert a.FOOTBALL_FIELD_WACC_OFFSETS == [-0.01, -0.005, 0.0, 0.005, 0.01]
+    assert a.HEATMAP_TERMINAL_GROWTH_RATES == [0.015, 0.02, 0.025, 0.03, 0.035]      # valuation D36:H36
+
+
+def test_the_heatmap_is_wider_than_the_football_field_but_has_the_same_base_row():
+    assert 0.0 in a.HEATMAP_WACC_OFFSETS and 0.0 in a.FOOTBALL_FIELD_WACC_OFFSETS
+    assert max(a.HEATMAP_WACC_OFFSETS) > max(a.FOOTBALL_FIELD_WACC_OFFSETS)
+    assert min(a.HEATMAP_WACC_OFFSETS) < min(a.FOOTBALL_FIELD_WACC_OFFSETS)
+    assert a.HEATMAP_WACC_OFFSETS == [-0.03, -0.02, -0.01, 0.0, 0.01, 0.02, 0.03]

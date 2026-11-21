@@ -2134,3 +2134,70 @@ def test_the_headline_counts_the_methods_whose_middle_value_is_above_the_market_
 def test_the_trading_range_is_not_counted_as_a_valuation_method():
     rows = [{"label": "52-week range", "kind": "trading", "low": 1.0, "middle": None, "high": 9.0}]
     assert v.methods_above_price(rows, 5.0) == (0, 0)
+
+
+# ---------------------------------------------------------------------------
+# Sensitivity tables with blank cells, and the upside grid behind the heatmaps (not Excel cells: the prices come
+# from the same function the workbook's table is checked against; the rest is counting)
+# ---------------------------------------------------------------------------
+
+def test_a_table_with_blank_cells_allowed_gives_the_same_prices_when_every_cell_has_an_answer():
+    plain = v.sensitivity_table(BASE_DCF_INPUTS, 0.1093, WORKBOOK_WACC_OFFSETS, WORKBOOK_GROWTH_RATES)
+    blanks_allowed = v.sensitivity_table(
+        BASE_DCF_INPUTS, 0.1093, WORKBOOK_WACC_OFFSETS, WORKBOOK_GROWTH_RATES, blank_impossible=True
+    )
+    assert blanks_allowed == plain                                  # and so still every cell of the workbook's table
+
+
+def test_by_default_a_pairing_without_an_answer_stops_the_whole_table():
+    with pytest.raises(ValueError, match="terminal growth rate must be lower"):
+        v.sensitivity_table(BASE_DCF_INPUTS, 0.04, [0.0], [0.03, 0.05])          # a WACC of 4% and a growth rate of 5%
+
+
+def test_with_blank_cells_allowed_only_the_impossible_pairings_are_blank():
+    table = v.sensitivity_table(BASE_DCF_INPUTS, 0.04, [-0.01, 0.0, 0.01], [0.02, 0.03, 0.05], blank_impossible=True)
+    prices = table["prices"]
+    # WACC 3%: growth 2% works; 3% and 5% are at or above the WACC. WACC 4%: 2% and 3% work. WACC 5%: 2% and 3% work.
+    assert [price is None for price in prices[0]] == [False, True, True]
+    assert [price is None for price in prices[1]] == [False, False, True]
+    assert [price is None for price in prices[2]] == [False, False, True]
+    assert prices[1][0] == close(
+        v.run_full_dcf(**BASE_DCF_INPUTS, terminal_growth_rate=0.02, wacc_override=0.04)["implied_share_price"]
+    )
+
+
+def test_a_growth_rate_equal_to_the_wacc_has_no_answer_either():
+    # The terminal value divides by the gap between the WACC and the growth rate, so equal is as impossible as above.
+    with pytest.raises(ValueError):
+        v.sensitivity_table(BASE_DCF_INPUTS, 0.05, [0.0], [0.05])
+    blank = v.sensitivity_table(BASE_DCF_INPUTS, 0.05, [0.0, 0.01], [0.05], blank_impossible=True)
+    assert blank["prices"][0] == [None] and blank["prices"][1][0] is not None
+
+
+def test_when_no_pairing_has_an_answer_even_a_table_with_blanks_allowed_stops():
+    with pytest.raises(ValueError, match="No pairing"):
+        v.sensitivity_table(BASE_DCF_INPUTS, 0.02, [0.0, -0.005], [0.03, 0.04], blank_impossible=True)
+
+
+def test_the_range_of_a_table_skips_blank_cells_and_is_none_when_all_are_blank():
+    assert v.table_range([[None, 120.0], [90.0, None]]) == (90.0, 120.0)
+    assert v.table_range([[None, None]]) is None
+    assert v.table_range([[105.0]]) == (105.0, 105.0)
+
+
+def test_the_upside_grid_is_each_price_against_the_market_price_with_blanks_kept():
+    grid = v.upside_grid([[110.0, 80.0], [None, 100.0]], 100.0)
+    assert grid == [[close(0.10), close(-0.20)], [None, close(0.0)]]
+    assert grid[0][0] == close(v.upside(110.0, 100.0))
+
+
+def test_the_upside_grid_of_the_workbook_table_has_the_base_case_at_the_dcf_upside():
+    table = v.sensitivity_table(BASE_DCF_INPUTS, 0.1093, WORKBOOK_WACC_OFFSETS, WORKBOOK_GROWTH_RATES)
+    grid = v.upside_grid(table["prices"], SHARE_PRICE)
+    assert grid[2][2] == close(305.47619172538987 / SHARE_PRICE - 1)           # the workbook's middle cell F39
+
+
+def test_the_cells_above_the_market_price_are_counted_without_the_blanks():
+    assert v.cells_above_price([[110.0, 80.0], [None, 100.0]], 100.0) == (1, 3)      # equal to the price is not above
+    assert v.cells_above_price([[None, None]], 100.0) == (0, 0)
+    assert v.cells_above_price([[120.0, 130.0]], 100.0) == (2, 2)

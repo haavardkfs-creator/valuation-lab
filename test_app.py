@@ -358,20 +358,41 @@ def test_the_conversion_note_names_what_was_converted():
     assert app.currency_note(pence) == "Converted to US dollars at today's exchange rates: the share price from GBp (1 GBp = $0.01335)."
 
 
-def test_a_very_low_wacc_still_shows_the_dcf_and_explains_the_missing_heatmap(monkeypatch):
-    # A negative beta pulls the WACC to about 4%: fine for the DCF, but the heatmap's lowest
-    # row (a point lower) falls below its highest terminal growth rate (3.5%). The page adjusts the beta
-    # towards 1 (two-thirds observed plus one-third of 1), so -0.95 observed is -0.30 in the model.
+def test_a_very_low_wacc_still_draws_the_heatmap_with_the_impossible_cells_left_blank(monkeypatch):
+    # A negative beta pulls the WACC to about 4%: fine for the DCF, but the heatmap's lower rows (down to 3 points
+    # lower) have a WACC at or below some of its terminal growth rates (up to 3.5%), where the formula has no
+    # answer. Those cells stay blank and the rest of the table is drawn. The page adjusts the beta towards 1
+    # (two-thirds observed plus one-third of 1), so -0.95 observed is -0.30 in the model.
     low_beta = fake_statements_ticker(info=dict(ADOBE_YAHOO_INFO, beta=-0.95))
     page = run_page(monkeypatch, ticker="lowb", yahoo=low_beta)
     assert_footer_and_no_crash(page)
     assert not page.error
     assert "DCF implied price" in metrics(page)
     assert "Sensitivity: price at different WACC and terminal growth" in texts(page.subheader)
+    captions = texts(page.caption)
+    assert not any("This table cannot be drawn" in caption for caption in captions)
+    assert any("A blank cell has no answer" in caption for caption in captions)
+    # The numbers table under the heatmap has dashes where there is no answer and a price at the base case.
+    wacc_table = next(element.value for element in page.dataframe if element.value.index.name == "WACC")
+    assert wacc_table.iloc[0].isna().all()                                  # the lowest WACC is below every growth rate
+    base_row, base_column = assumptions.HEATMAP_WACC_OFFSETS.index(0.0), assumptions.HEATMAP_TERMINAL_GROWTH_RATES.index(
+        assumptions.TERMINAL_GROWTH_RATE
+    )
+    assert wacc_table.iloc[base_row, base_column] > 0
+    assert wacc_table.iloc[-1].notna().all()                                # three points higher: every cell has an answer
+
+
+def test_when_no_combination_has_an_answer_the_table_says_it_cannot_be_drawn(monkeypatch):
+    def impossible(*args, **kwargs):
+        raise ValueError("No pairing has an answer.")
+
+    monkeypatch.setattr("valuation.sensitivity_table", impossible)
+    page = run_page(monkeypatch)
+    assert_footer_and_no_crash(page)
     assert any("This table cannot be drawn" in caption for caption in texts(page.caption))
-    # The WACC heatmap is missing: the tables on the page are "What the model assumes" and the margin and
-    # growth table, which does not vary the WACC.
-    assert [element.value.index.name for element in page.dataframe] == ["Year", "Average operating margin"]
+    # The football field still has the five multiples bars, and says its DCF bar could not be drawn.
+    assert "Where the price sits" in texts(page.subheader)
+    assert any(caption.startswith("The DCF bar is left out") for caption in texts(page.caption))
 
 
 # ---------------------------------------------------------------------------
@@ -1490,7 +1511,7 @@ def test_the_table_uses_the_wacc_the_reader_set(monkeypatch):
 def test_the_caption_gives_the_market_price_and_the_dcf_price_with_escaped_dollar_signs(monkeypatch):
     page = run_page(monkeypatch)
     [caption] = [c for c in texts(page.caption) if c.startswith("Each cell moves the operating margin")]
-    assert "market price of \\$" in caption and "The bold price, \\$" in caption
+    assert "market price of \\$" in caption and "the base case, \\$" in caption
     assert "$" not in caption.replace("\\$", "")                                  # every dollar sign has its backslash
 
 
@@ -2585,14 +2606,14 @@ def test_the_price_sparkline_is_drawn_when_yahoo_has_the_prices(monkeypatch):
     page = run_page(monkeypatch, yahoo=yahoo_with_prices())
     assert_footer_and_no_crash(page)
     assert "Share price, last 12 months" in texts(page.caption)
-    assert len(page.get("plotly_chart")) == 5                     # the sparkline, the football field, and the three behind the number
+    assert len(page.get("plotly_chart")) == 9                     # the sparkline, the football field, the three behind the number, the two heatmaps and the two peer charts
 
 
 def test_without_price_history_the_header_still_draws_and_just_leaves_the_chart_out(monkeypatch):
     page = run_page(monkeypatch)                                  # the usual fake has no history() at all
     assert_footer_and_no_crash(page)
     assert "Share price, last 12 months" not in texts(page.caption)
-    assert len(page.get("plotly_chart")) == 4                     # no sparkline; the football field and the three below remain
+    assert len(page.get("plotly_chart")) == 8                     # no sparkline; the other eight remain
     assert "▲ UNDERVALUED" in header_of(page)
 
 
@@ -2786,7 +2807,7 @@ def test_adobes_page_has_the_football_field_with_a_headline_and_the_charts_behin
     assert any(line.startswith("**") and "of enterprise value" in line for line in markdown)       # the waterfall headline
     assert any(line.startswith("**Free cash flow is forecast to") for line in markdown)
     assert any(line.startswith("**") and "of the value comes from after year 5." in line for line in markdown)
-    assert len(page.get("plotly_chart")) == 5
+    assert len(page.get("plotly_chart")) == 9
 
 
 def test_the_headline_dollar_signs_reach_the_page_escaped(monkeypatch):
@@ -2808,18 +2829,246 @@ def test_a_company_whose_dcf_cannot_be_built_has_no_football_field_and_no_charts
     assert "Where the price sits" not in texts(page.subheader) and "Behind the number" not in texts(page.subheader)
 
 
-def test_a_very_low_wacc_leaves_the_dcf_bar_out_and_says_why(monkeypatch):
-    # With the share's price history there is still its 52-week range to draw, so the section appears without a DCF bar.
+def test_a_very_low_wacc_still_gets_a_dcf_bar_from_the_cells_that_have_an_answer(monkeypatch):
+    # Some cells of the table have no answer at this WACC, but the rest do, so the DCF bar covers those.
     low_beta = yahoo_with_prices(info=dict(ADOBE_YAHOO_INFO, beta=-0.95))
     page = run_page(monkeypatch, ticker="lowb", yahoo=low_beta)
     assert_footer_and_no_crash(page)
     assert "Where the price sits" in texts(page.subheader)
-    assert any(caption.startswith("The DCF bar is left out") for caption in texts(page.caption))
+    assert not any(caption.startswith("The DCF bar is left out") for caption in texts(page.caption))
 
 
 def test_when_nothing_is_left_to_draw_the_football_field_section_is_left_out_altogether(monkeypatch):
-    # No peers, no price history and a WACC too low for the DCF range: no bars at all.
-    low_beta = fake_statements_ticker(info=dict(ADOBE_YAHOO_INFO, beta=-0.95))
-    page = run_page(monkeypatch, ticker="lowb", yahoo=low_beta)
+    # No peers, no price history, and no combination in the table has an answer: no bars at all.
+    def impossible(*args, **kwargs):
+        raise ValueError("No pairing has an answer.")
+
+    monkeypatch.setattr("valuation.sensitivity_table", impossible)
+    page = run_page(monkeypatch, ticker="exmp", yahoo=other_company())
     assert_footer_and_no_crash(page)
     assert "Where the price sits" not in texts(page.subheader)
+
+
+# ---------------------------------------------------------------------------
+# The sensitivity heatmaps and the peer charts (redesign, Phase 3b)
+# ---------------------------------------------------------------------------
+
+HEAT_PRICES = [[150.0, 120.0, None], [100.0, 80.0, 50.0]]          # against a market price of 100; one blank cell
+HEAT_ROWS = ["10.00%", "11.00%"]
+HEAT_COLUMNS = ["1.5%", "2.0%", "2.5%"]
+
+
+def a_heatmap(**changes):
+    arguments = dict(
+        row_labels=HEAT_ROWS, column_labels=HEAT_COLUMNS, prices=HEAT_PRICES, share_price=100.0, base_cell=(1, 1),
+        row_title="WACC", column_title="Terminal growth",
+    )
+    arguments.update(changes)
+    return app.sensitivity_heatmap(**arguments)
+
+
+def test_the_cell_colour_is_the_card_colour_at_the_market_price_and_moves_to_green_above_and_red_below():
+    surface = theme.hex_to_rgb(theme.SURFACE)
+    assert app.heat_colour(0.0) == surface
+    above, below = app.heat_colour(0.25), app.heat_colour(-0.25)
+    assert above[1] > surface[1] and below[0] > surface[0]
+    assert app.heat_colour(0.5) == app.heat_colour(2.0) and app.heat_colour(-0.5) == app.heat_colour(-2.0)    # capped
+
+
+def test_the_table_tint_is_built_from_the_same_colours_as_the_heatmap():
+    red, green, blue = app.heat_colour(0.3)
+    assert f"background-color: rgb({red}, {green}, {blue})" in app.tint(130.0, 100.0)
+
+
+def test_the_heatmap_colour_scale_runs_red_card_green_with_the_card_colour_at_the_market_price():
+    low, middle, high = app.heatmap_colourscale()
+    assert [low[0], middle[0], high[0]] == [0.0, 0.5, 1.0]
+    assert middle[1] == f"rgb{theme.hex_to_rgb(theme.SURFACE)}"
+    assert low[1] == f"rgb{app.heat_colour(-0.5)}" and high[1] == f"rgb{app.heat_colour(0.5)}"
+
+
+def test_every_heatmap_cell_shows_its_price_and_upside_with_an_arrow_and_a_blank_cell_stays_empty():
+    heat = a_heatmap().data[0]
+    assert [list(row) for row in heat.text] == [
+        ["$150<br>▲ +50%", "$120<br>▲ +20%", ""],
+        ["$100<br>0%", "$80<br>▼ -20%", "$50<br>▼ -50%"],
+    ]
+    assert heat.z[0][0] == pytest.approx(0.5) and heat.z[1][1] == pytest.approx(-0.2) and heat.z[0][2] is None
+    assert heat.zmin == -app.HEATMAP_FULL_TINT_GAP and heat.zmax == app.HEATMAP_FULL_TINT_GAP
+    assert heat.hoverongaps is False
+
+
+def test_the_heatmap_hover_names_the_row_the_column_the_price_and_the_upside():
+    heat = a_heatmap().data[0]
+    price, gap, row_label, column_label = heat.customdata[1][1]
+    assert price == 80.0 and gap == pytest.approx(-0.2) and (row_label, column_label) == ("11.00%", "2.0%")
+    assert "WACC: %{customdata[2]}" in heat.hovertemplate and "Terminal growth: %{customdata[3]}" in heat.hovertemplate
+    assert "$%{customdata[0]:,.2f}" in heat.hovertemplate and "%{customdata[1]:+.1%}" in heat.hovertemplate
+
+
+def test_a_dashed_line_runs_where_the_model_equals_the_market_price():
+    contour = a_heatmap().data[1]
+    assert contour.contours.start == 0 and contour.contours.end == 0 and contour.contours.coloring == "none"
+    assert contour.line.dash == "dash" and contour.line.color == theme.TEXT
+
+
+def test_a_blue_frame_marks_the_base_case_cell():
+    [frame] = a_heatmap(base_cell=(1, 0)).layout.shapes
+    assert (frame.x0, frame.x1, frame.y0, frame.y1) == (-0.5, 0.5, 0.5, 1.5)
+    assert frame.line.color == theme.ACCENT
+
+
+def test_the_heatmap_axes_carry_the_labels_and_the_first_row_is_at_the_top():
+    figure = a_heatmap()
+    assert list(figure.layout.xaxis.ticktext) == HEAT_COLUMNS and list(figure.layout.yaxis.ticktext) == HEAT_ROWS
+    assert figure.layout.xaxis.title.text == "Terminal growth" and figure.layout.yaxis.title.text == "WACC"
+    assert figure.layout.yaxis.autorange == "reversed"
+
+
+def test_the_sensitivity_headline_counts_the_combinations_above_the_market_price():
+    assert app.sensitivity_headline(HEAT_PRICES, 100.0) == (
+        "2 of 5 combinations give a price above today's market price; the dashed line shows where the model equals it."
+    )
+    assert app.sensitivity_headline([[120.0, 130.0]], 100.0).startswith("All 2 combinations give a price above today's market price")
+    assert app.sensitivity_headline([[80.0, 90.0]], 100.0) == "None of the 2 combinations reaches today's market price."
+
+
+def test_adobes_page_has_both_heatmaps_with_a_sentence_and_the_numbers_in_a_closed_box(monkeypatch):
+    page = run_page(monkeypatch)
+    assert_footer_and_no_crash(page)
+    markdown = texts(page.markdown)
+    assert any(line.startswith("**") and "of 35 combinations" in line for line in markdown)       # 7 WACCs by 5 growth rates
+    assert any(line.startswith("**") and "of 25 combinations" in line for line in markdown)       # 5 margins by 5 growth rates
+    assert len(page.expander) >= 2
+    assert sum(1 for expander in page.expander if expander.label == "Show the numbers as a table") == 2
+
+
+def test_the_wacc_heatmap_now_spans_three_points_each_way_and_its_base_cell_is_the_dcf_price(monkeypatch):
+    page = run_page(monkeypatch)
+    wacc_table = next(element.value for element in page.dataframe if element.value.index.name == "WACC")
+    assert wacc_table.shape == (7, 5)
+    base_row = assumptions.HEATMAP_WACC_OFFSETS.index(0.0)
+    base_column = assumptions.HEATMAP_TERMINAL_GROWTH_RATES.index(assumptions.TERMINAL_GROWTH_RATE)
+    assert app.dollars(wacc_table.iloc[base_row, base_column]) == metrics(page)["DCF implied price"]
+    rates = [float(label.rstrip("%")) / 100 for label in wacc_table.index]
+    assert rates[base_row] - rates[0] == pytest.approx(0.03, abs=1e-4) and rates[-1] - rates[base_row] == pytest.approx(0.03, abs=1e-4)
+
+
+def test_the_sliders_move_both_heatmaps(monkeypatch):
+    page = run_page(monkeypatch)
+    before = next(element.value for element in page.dataframe if element.value.index.name == "WACC").iloc[3, 2]
+    page.sidebar.slider[1].set_value(-2.0).run()
+    after = next(element.value for element in page.dataframe if element.value.index.name == "WACC").iloc[3, 2]
+    assert after < before and app.dollars(after) == metrics(page)["DCF implied price"]
+
+
+def test_peer_bar_headline_says_whether_the_company_is_below_or_above_the_peer_median():
+    assert app.peer_bar_headline("EV/EBITDA", "NVIDIA", 14.9, 28.5) == "NVIDIA's EV/EBITDA of 14.9x is below the peer median of 28.5x."
+    assert app.peer_bar_headline("P/E", "Adobe", 30.0, 26.8) == "Adobe's P/E of 30.0x is above the peer median of 26.8x."
+    assert app.peer_bar_headline("P/E", "Adobe", 26.8, 26.8) == "Adobe's P/E of 26.8x is the same as the peer median."
+
+
+def test_peer_bar_headline_explains_when_there_is_nothing_to_compare():
+    assert "no usable P/E" in app.peer_bar_headline("P/E", "Ford", None, 20.0)
+    assert "no usable P/E" in app.peer_bar_headline("P/E", "Ford", -5.0, 20.0)
+    assert app.peer_bar_headline("P/S", "Ford", 2.0, None).startswith("Too few peers have a usable P/S")
+
+
+def test_the_peer_bars_are_sorted_highest_first_with_the_company_in_the_accent_colour():
+    figure = app.peer_bar_figure("EV/EBITDA", "ME (this company)", 14.9, ["A", "B", "C"], [28.5, 61.9, 5.8], 28.5)
+    bars = figure.data[0]
+    assert list(bars.y) == ["B", "A", "ME (this company)", "C"] and list(bars.x) == [61.9, 28.5, 14.9, 5.8]
+    assert list(bars.marker.color) == [theme.GREY, theme.GREY, theme.ACCENT, theme.GREY]
+    assert list(bars.text) == ["61.9x", "28.5x", "14.9x", "5.8x"]
+    assert figure.layout.yaxis.autorange == "reversed"
+
+
+def test_the_peer_bars_draw_the_median_as_a_dashed_line_and_leave_room_for_the_longest_label():
+    figure = app.peer_bar_figure("EV/EBITDA", "ME", 14.9, ["A", "B"], [28.5, 61.9], 28.5)
+    [line] = figure.layout.shapes
+    assert line.x0 == line.x1 == 28.5 and line.line.dash == "dash"
+    assert any("Peer median 28.5x" in annotation.text for annotation in figure.layout.annotations)
+    assert figure.layout.xaxis.range[0] == 0 and figure.layout.xaxis.range[1] > 61.9
+    assert figure.data[0].cliponaxis is False
+
+
+def test_a_figure_that_is_missing_or_not_a_real_multiple_is_left_off_the_peer_bars():
+    figure = app.peer_bar_figure("P/E", "ME", None, ["A", "B", "C", "D"], [20.0, None, -3.0, float("nan")], None)
+    assert list(figure.data[0].y) == ["A"]
+    assert not figure.layout.shapes                               # no median, no line
+
+
+def test_the_scatter_headline_tells_the_four_stories():
+    cheap_good = app.peer_scatter_headline("NVIDIA", 14.9, 0.652, 28.5, 0.617)
+    assert cheap_good == (
+        "NVIDIA trades at 14.9x EBITDA against the peers' 28.5x, with an operating margin of 65.2% against 61.7%: "
+        "cheaper than the typical peer while more profitable."
+    )
+    assert "less profitable, so the discount may be deserved" in app.peer_scatter_headline("X", 10.0, 0.10, 20.0, 0.30)
+    assert "dearer than the typical peer, but more profitable, so the premium has some support" in app.peer_scatter_headline("X", 30.0, 0.40, 20.0, 0.30)
+    assert app.peer_scatter_headline("X", 30.0, 0.10, 20.0, 0.30).endswith("dearer than the typical peer while less profitable.")
+
+
+def test_the_scatter_headline_is_none_when_a_figure_is_missing_or_the_company_has_no_real_multiple():
+    assert app.peer_scatter_headline("X", None, 0.2, 20.0, 0.3) is None
+    assert app.peer_scatter_headline("X", 10.0, None, 20.0, 0.3) is None
+    assert app.peer_scatter_headline("X", 10.0, 0.2, None, 0.3) is None
+    assert app.peer_scatter_headline("X", 10.0, 0.2, 20.0, None) is None
+    assert app.peer_scatter_headline("X", -4.0, 0.2, 20.0, 0.3) is None
+
+
+def test_the_scatter_puts_the_company_in_the_accent_colour_and_the_peers_in_grey_with_median_lines():
+    figure = app.peer_scatter_figure("ME", 14.9, 0.652, ["A", "B"], [28.5, 61.9], [0.49, 0.178], 28.5, 0.617)
+    peers, company = figure.data
+    assert list(peers.text) == ["A", "B"] and list(peers.x) == [0.49, 0.178] and list(peers.y) == [28.5, 61.9]
+    assert peers.marker.color == theme.GREY and company.marker.color == theme.ACCENT
+    assert company.marker.size > peers.marker.size and list(company.x) == [0.652] and list(company.y) == [14.9]
+    assert len(figure.layout.shapes) == 2 and all(shape.line.dash == "dash" for shape in figure.layout.shapes)
+
+
+def test_a_peer_missing_its_margin_or_a_real_multiple_is_left_off_the_scatter():
+    figure = app.peer_scatter_figure(
+        "ME", 14.9, 0.652, ["A", "B", "C", "D"], [28.5, 61.9, -3.0, 10.0], [None, 0.178, 0.3, float("nan")], None, None
+    )
+    assert list(figure.data[0].text) == ["B"]
+    assert not figure.layout.shapes                               # no medians, no lines
+
+
+def test_a_company_with_no_real_ebitda_multiple_is_left_off_the_scatter_but_the_peers_stay():
+    figure = app.peer_scatter_figure("ME", None, 0.2, ["A"], [28.5], [0.4], 28.5, 0.4)
+    assert len(figure.data) == 1 and list(figure.data[0].text) == ["A"]
+
+
+def test_adobes_page_has_the_peer_bars_with_a_switch_under_a_sentence(monkeypatch):
+    page = run_page(monkeypatch)
+    assert_footer_and_no_crash(page)
+    switch = page.radio(key="peer_chart_multiple")
+    assert switch.value == "EV/EBITDA" and list(switch.options) == ["EV/Sales", "EV/EBITDA", "P/E", "P/S", "Forward P/E"]
+    assert any(
+        line.startswith("**") and "EV/EBITDA of" in line and "the peer median of" in line for line in texts(page.markdown)
+    )
+
+
+def test_the_scatter_has_a_sentence_when_the_peers_margins_are_known(monkeypatch):
+    # Example Corp's made-up peers have operating margins (-25%, 30%, 20%, 10%); Adobe's fake peers here have none.
+    page = run_example_page(monkeypatch)
+    assert any(line.startswith("**Example Corp trades at ") and "EBITDA against the peers'" in line for line in texts(page.markdown))
+
+
+def test_without_peer_margins_the_scatter_has_no_sentence_but_the_bars_still_do(monkeypatch):
+    page = run_page(monkeypatch)
+    assert not any("EBITDA against the peers'" in line for line in texts(page.markdown))
+    assert any("the peer median of" in line for line in texts(page.markdown))
+
+
+def test_choosing_another_multiple_redraws_the_bar_chart_and_its_sentence(monkeypatch):
+    page = run_example_page(monkeypatch)
+    page.radio(key="peer_chart_multiple").set_value("P/E").run()
+    assert_footer_and_no_crash(page)
+    assert any(line.startswith("**Example Corp's P/E of") for line in texts(page.markdown))
+
+
+def test_the_peer_charts_come_before_the_peer_table_and_a_company_without_peers_has_neither(monkeypatch):
+    page = run_page(monkeypatch, ticker="exmp", yahoo=other_company())
+    assert not [radio for radio in page.radio if radio.key == "peer_chart_multiple"]        # no switch without peers
+    assert not any("EV/EBITDA of" in line for line in texts(page.markdown))

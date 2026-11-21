@@ -289,7 +289,7 @@
   add Plotly now, a ticker badge instead of a logo (Yahoo has none), and the verdict from the DCF upside alone. Two old
   assertions that looked for a "Adobe Inc. (ADBE)" text line now look in the header (the old line was a duplicate and is
   gone); nothing else in the old tests changed. 846 tests pass (54 new).
-- Done (in the open pull request): redesign Phase 3a of 5, the DCF charts. A new "Where the price sits" football field (one bar
+- Done: redesign Phase 3a of 5, the DCF charts (merged, pull request 58). A new "Where the price sits" football field (one bar
   per method: the DCF across the WACC and growth table in the accent colour, the five multiples across the middle half of the
   peers, and the 52-week range, with a tick at each middle value, a dashed line at the market price and a one-sentence
   headline), and the "Behind the number" section rebuilt in Plotly: a waterfall from the DCF's parts to the equity value and
@@ -298,12 +298,20 @@
   (`QUARTILE` ranges and the DCF range). `valuation.quartile_range`, `table_range`, `trading_range`, `football_field`,
   `methods_above_price` and `run_multiples`' new "price_ranges" match the cells. Haavard chose: two pull requests for Phase 3,
   the middle half of the peers for the bars, and the sensitivity table's range for the DCF bar. 897 tests pass (51 new).
-- Next: redesign Phase 3b: the two sensitivity tables as heatmaps (each cell showing the upside or downside in percent, the
-  market price marked where the model equals it, a WACC axis wide enough for a high-beta company such as NVIDIA, which sits at
-  13.3%), and the peer bars with a scatter (EV/EBITDA against operating margin: peers' growth is not stored). The football
-  field's DCF bar follows the table, so a wider WACC axis widens it. Then Phase 4 (tabs, layout, mobile, tooltips) and 5 (polish;
-  removes the DCF cards that now duplicate the header). #11 part 2 (macro, needs a free FRED key) and part 3 (thesis page with
-  Haavard's reasons boxes and a Markdown download) wait until the redesign is done.
+- Done (in the open pull request): redesign Phase 3b of 5, the sensitivity heatmaps and the peer charts. Both sensitivity tables are
+  now Plotly heatmaps: each cell shows its price and the upside against the market price with an arrow, green above and red below, a
+  dashed line where the model equals the market price, a blue frame on the base case, and the exact prices in a closed box underneath.
+  The WACC axis is now 7 rows, 3 points either way (so a high-beta company like NVIDIA, at 13.3%, shows 10-16%), and a pairing with
+  no answer (growth at or above the WACC) stays blank instead of stopping the table. The peers get a sorted bar chart (a switch picks the
+  multiple) and a scatter of EV/EBITDA against operating margin, each under a sentence. The football field's DCF bar keeps the workbook's
+  narrow WACC range on purpose (a wide one would run Coca-Cola from $24 to $450). `valuation.sensitivity_table` takes
+  `blank_impossible`, plus `upside_grid`, `cells_above_price` and a `table_range` that skips blanks. Haavard chose: 7 rows 3 points each way,
+  one bar chart with a switch, and operating margin for the scatter. 943 tests pass (45 new); one test of the old all-or-nothing
+  low-WACC behaviour was rewritten on purpose.
+- Next: redesign Phase 4 (tabs: Overview, DCF, Multiples, Sensitivity, Explanations; sidebar sliders grouped; the ? help on every
+  multiple and chart; the overview grouped by type of multiple; phone layout), then Phase 5 (polish; removes the DCF cards that now
+  duplicate the header). #11 part 2 (macro, needs a free FRED key) and part 3 (thesis page with Haavard's reasons boxes and a Markdown
+  download) wait until the redesign is done.
 - Open:
   - Ideas from Haavard (20 Nov 2026), for after Phase 3: (1) group the overview by type of multiple; (2) a ? help on every
     multiple and every chart, like the overview has (his own brief lists it under Phase 4; P/S and forward P/E still need
