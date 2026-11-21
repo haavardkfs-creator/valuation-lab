@@ -287,17 +287,90 @@ def draw_dcf(company, dcf, wacc_is_set_by_user):
     draw_explanations("dcf")
 
 
+def heat_colour(gap):
+    """Work out the colour of a heatmap cell from how far its price is above (positive) or below (negative) the
+    market price, as red, green and blue numbers: the card colour at the market price, moving towards green above it
+    and red below it, as far as HEATMAP_STRONGEST_TINT when the gap reaches HEATMAP_FULL_TINT_GAP.
+    """
+    strength = min(abs(gap) / HEATMAP_FULL_TINT_GAP, 1) * HEATMAP_STRONGEST_TINT
+    start = theme.hex_to_rgb(theme.SURFACE)
+    target = theme.hex_to_rgb(theme.UP if gap >= 0 else theme.DOWN)
+    return tuple(round(begin + (end - begin) * strength) for begin, end in zip(start, target))
+
+
 def tint(price, market_price):
     """Pick a background colour for one heatmap cell: the card colour at the market price, greener the
     further above it, redder the further below it, with whichever text colour reads best on top.
     """
-    gap = (price - market_price) / market_price
-    strength = min(abs(gap) / HEATMAP_FULL_TINT_GAP, 1) * HEATMAP_STRONGEST_TINT
-    start = theme.hex_to_rgb(theme.SURFACE)
-    target = theme.hex_to_rgb(theme.UP if gap >= 0 else theme.DOWN)
-    red, green, blue = (round(begin + (end - begin) * strength) for begin, end in zip(start, target))
+    red, green, blue = heat_colour((price - market_price) / market_price)
     text_colour = theme.readable_text_on(f"#{red:02X}{green:02X}{blue:02X}")
     return f"background-color: rgb({red}, {green}, {blue}); color: {text_colour}"
+
+
+def heatmap_colourscale():
+    """The colours of a heatmap as Plotly wants them: red-tinted at the lowest gap it shows, the card colour at the
+    market price and green-tinted at the highest, the same colours the tables use (see heat_colour).
+    """
+    colours = [heat_colour(gap) for gap in (-HEATMAP_FULL_TINT_GAP, 0.0, HEATMAP_FULL_TINT_GAP)]
+    return [[position, f"rgb{colour}"] for position, colour in zip((0.0, 0.5, 1.0), colours)]
+
+
+def sensitivity_headline(prices, share_price):
+    """Say in one sentence how many of the combinations in a sensitivity table give a price above today's market price,
+    and what the dashed line means. Blank cells are not counted.
+    """
+    above, total = valuation.cells_above_price(prices, share_price)
+    if above == total:
+        return f"All {total} combinations give a price above today's market price, so no assumption in this table brings the model down to it."
+    if above == 0:
+        return f"None of the {total} combinations reaches today's market price."
+    return f"{above} of {total} combinations give a price above today's market price; the dashed line shows where the model equals it."
+
+
+def sensitivity_heatmap(row_labels, column_labels, prices, share_price, base_cell, row_title, column_title):
+    """Draw a sensitivity table as a heatmap: every cell shows its price and its upside against the market price
+    (with an arrow and a sign), coloured green above the market price and red below it, with a dashed line along
+    the combinations where the model equals the market price and a frame round the base case. A blank cell (no answer)
+    stays empty. `base_cell` is the (row, column) position of the base case.
+    """
+    upsides = valuation.upside_grid(prices, share_price)
+    rows, columns = range(len(row_labels)), range(len(column_labels))
+    text = [
+        ["" if price is None else f"${price:,.0f}<br>{theme.change_text(gap, digits=0)}" for price, gap in zip(price_row, gap_row)]
+        for price_row, gap_row in zip(prices, upsides)
+    ]
+    customdata = [
+        [[price, gap, row_labels[row], column_labels[column]] for column, (price, gap) in enumerate(zip(price_row, gap_row))]
+        for row, (price_row, gap_row) in enumerate(zip(prices, upsides))
+    ]
+    figure = go.Figure(go.Heatmap(
+        z=upsides, x=list(columns), y=list(rows),
+        zmin=-HEATMAP_FULL_TINT_GAP, zmax=HEATMAP_FULL_TINT_GAP, colorscale=heatmap_colourscale(), showscale=False,
+        text=text, texttemplate="%{text}", textfont={"color": theme.TEXT, "size": 12},
+        customdata=customdata, hoverongaps=False, xgap=2, ygap=2,
+        hovertemplate=(
+            f"{row_title}: %{{customdata[2]}}<br>{column_title}: %{{customdata[3]}}<br>"
+            "Price $%{customdata[0]:,.2f}<br>%{customdata[1]:+.1%} against the market price<extra></extra>"
+        ),
+    ))
+    figure.add_trace(go.Contour(
+        z=upsides, x=list(columns), y=list(rows), showscale=False, hoverinfo="skip",
+        contours={"type": "levels", "start": 0, "end": 0, "size": 1, "coloring": "none", "showlabels": False},
+        line={"color": theme.TEXT, "width": 2, "dash": "dash"},
+    ))
+    base_row, base_column = base_cell
+    figure.add_shape(
+        type="rect", x0=base_column - 0.5, x1=base_column + 0.5, y0=base_row - 0.5, y1=base_row + 0.5,
+        line={"color": theme.ACCENT, "width": 3},
+    )
+    figure.update_xaxes(tickvals=list(columns), ticktext=column_labels, title=column_title, showgrid=False, zeroline=False)
+    figure.update_yaxes(
+        tickvals=list(rows), ticktext=row_labels, title=row_title, showgrid=False, zeroline=False, autorange="reversed",
+        automargin=True,
+    )
+    theme.style_figure(figure, height=110 + 56 * len(row_labels))
+    figure.update_layout(margin={"l": 0, "r": 0, "t": 10, "b": 0})
+    return figure
 
 
 NOT_MEANINGFUL = "Not meaningful"       # shown when a number would mean nothing (no P/E for a loss)
@@ -1094,17 +1167,18 @@ def football_field_figure(rows, share_price):
 
 def draw_football_field(company, dcf, multiples, dcf_inputs, base_wacc, prices):
     """Draw the football field, the main chart: every way the page has of valuing the company, as a price range,
-    against today's market price, with a sentence that says what it shows. The DCF bar covers the WACC and terminal
-    growth table (see draw_heatmap); each multiples bar covers the middle half of the peers. The 52-week range is
-    included when the price history is there.
+    against today's market price, with a sentence that says what it shows. The DCF bar covers the prices that have an
+    answer when the WACC is moved 1 point either way and the terminal growth runs from 1.5% to 3.5% (the workbook's table, not
+    the wider heatmap); each multiples bar covers the middle half of the peers. The 52-week range is included when the price history is there.
     """
     try:
         table = valuation.sensitivity_table(
-            dcf_inputs, base_wacc, assumptions.HEATMAP_WACC_OFFSETS, assumptions.HEATMAP_TERMINAL_GROWTH_RATES
+            dcf_inputs, base_wacc, assumptions.FOOTBALL_FIELD_WACC_OFFSETS, assumptions.HEATMAP_TERMINAL_GROWTH_RATES,
+            blank_impossible=True,
         )
         dcf_range = valuation.table_range(table["prices"])
     except ValueError:
-        dcf_range = None            # a very low WACC sits within a point of the terminal growth rates: see draw_heatmap
+        dcf_range = None            # no combination in the table has an answer at all: see draw_heatmap
     trading = None if prices is None else valuation.trading_range([price["close"] for price in prices])
     rows = valuation.football_field(dcf_range, dcf["implied_share_price"], multiples, trading)
     if not rows:
@@ -1113,14 +1187,14 @@ def draw_football_field(company, dcf, multiples, dcf_inputs, base_wacc, prices):
     if dcf_range is None:
         st.caption(
             f"The DCF bar is left out: this company's WACC ({percent(base_wacc)}) is too close to the terminal growth "
-            "rates in the table for its range to be worked out."
+            "rates in the table for any of its prices to be worked out."
         )
     headline = football_field_headline(company["company_name"], *valuation.methods_above_price(rows, company["share_price"]))
     if headline:
         st.markdown(f"**{headline}**")
     st.plotly_chart(football_field_figure(rows, company["share_price"]), width="stretch", config=CHART_CONFIG)
     st.caption(
-        "Each bar is a way of valuing the company: the blue bar is the DCF across the WACC and terminal growth table, "
+        "Each bar is a way of valuing the company: the blue bar is the DCF with the WACC a point either way and terminal growth from 1.5% to 3.5%, "
         "the grey bars cover the middle half of the peers' multiples (25th to 75th percentile), and the first grey "
         "bar is the share's own 52-week range. The white tick is the middle value, and the dashed line is today's "
         "market price."
@@ -1288,9 +1362,30 @@ def draw_charts(dcf, year_labels, terminal_growth_rate, operating_margins, histo
     draw_explanations("behind_the_number")
 
 
+def draw_sensitivity_numbers(prices_frame, share_price, base_cell):
+    """Under a sensitivity heatmap, a closed box with the same prices as a plain table, so the exact figures are
+    always there to read or copy. Cells are tinted like the heatmap and the base case is bold; a blank cell
+    (no answer) shows a dash.
+    """
+    base_row, base_column = base_cell
+
+    def style_cells(values):
+        """Colour every cell and put the base case in bold."""
+        styles = values.map(lambda price: "" if pd.isna(price) else tint(price, share_price))
+        styles.iloc[base_row, base_column] += "; font-weight: bold"
+        return styles
+
+    with st.expander("Show the numbers as a table"):
+        st.dataframe(
+            prices_frame.style.apply(style_cells, axis=None).format(dollars, na_rep="–"),
+            width="stretch",
+        )
+
+
 def draw_heatmap(company, dcf_inputs, base_wacc):
-    """Draw the sensitivity heatmap: the implied share price at different WACCs (down the
-    side) and terminal growth rates (along the top), coloured against the market price.
+    """Draw the sensitivity heatmap: the implied share price (and its upside) at different WACCs (down the
+    side) and terminal growth rates (along the top), coloured against the market price, with a dashed line where
+    the model equals it. A pairing whose growth rate is not below its WACC has no answer and stays blank.
     """
     st.subheader("Sensitivity: price at different WACC and terminal growth")
     try:
@@ -1299,38 +1394,43 @@ def draw_heatmap(company, dcf_inputs, base_wacc):
             base_wacc,
             assumptions.HEATMAP_WACC_OFFSETS,
             assumptions.HEATMAP_TERMINAL_GROWTH_RATES,
+            blank_impossible=True,
         )
     except ValueError:
-        # A low WACC (for a company with a low beta) can sit within a point of the highest
-        # terminal growth rate, where the formula has no answer. The headline DCF is fine.
+        # A very low WACC can sit below every terminal growth rate in the table, where the formula has no
+        # answer anywhere. The headline DCF is fine.
         st.caption(
             f"This table cannot be drawn: this company's WACC ({percent(base_wacc)}) is too close to "
             "the terminal growth rates in the table for the formula to give an answer."
         )
         return
+    row_labels = [precise_percent(rate) for rate in table["wacc_rates"]]
+    column_labels = [percent(rate) for rate in table["terminal_growth_rates"]]
+    base_cell = (
+        assumptions.HEATMAP_WACC_OFFSETS.index(0.0),
+        assumptions.HEATMAP_TERMINAL_GROWTH_RATES.index(assumptions.TERMINAL_GROWTH_RATE),
+    )
+    st.markdown(f"**{sensitivity_headline(table['prices'], company['share_price'])}**")
+    st.plotly_chart(
+        sensitivity_heatmap(
+            row_labels, column_labels, table["prices"], company["share_price"], base_cell, "WACC", "Terminal growth"
+        ),
+        width="stretch", config=CHART_CONFIG,
+    )
     prices = pd.DataFrame(
         table["prices"],
-        index=pd.Index([precise_percent(rate) for rate in table["wacc_rates"]], name="WACC"),
-        columns=pd.Index(
-            [percent(rate) for rate in table["terminal_growth_rates"]], name="Terminal growth"
-        ),
+        index=pd.Index(row_labels, name="WACC"),
+        columns=pd.Index(column_labels, name="Terminal growth"),
     )
-    base_row = assumptions.HEATMAP_WACC_OFFSETS.index(0.0)
-    base_column = assumptions.HEATMAP_TERMINAL_GROWTH_RATES.index(assumptions.TERMINAL_GROWTH_RATE)
-
-    def style_cells(values):
-        """Colour every cell and put the base case in bold."""
-        styles = values.map(lambda price: tint(price, company["share_price"]))
-        styles.iloc[base_row, base_column] += "; font-weight: bold"
-        return styles
-
-    st.dataframe(
-        prices.style.apply(style_cells, axis=None).format(dollars),
-        width="stretch",
+    draw_sensitivity_numbers(prices, company["share_price"], base_cell)
+    blank_note = (
+        " A blank cell has no answer: its growth rate is at or above its WACC."
+        if any(price is None for row in table["prices"] for price in row) else ""
     )
     st.caption(
-        f"Green means above today's market price of {dollars(company['share_price'])}, red below it. "
-        "The bold price is the base case. The growth and margin sliders move the whole table."
+        f"Each cell shows the price and how far it is above (▲, green) or below (▼, red) today's market price of "
+        f"{dollars(company['share_price'])}. The dashed line runs where the model equals the market price, and the blue frame is "
+        "the base case. The growth and margin sliders move the whole table.".replace("$", "\\$") + blank_note
     )
     draw_explanations("sensitivity")
 
@@ -1358,37 +1458,34 @@ def draw_margin_growth_table(company, dcf_inputs, dcf, terminal_growth_rate, wac
         assumptions.MARGIN_GROWTH_TABLE_MARGIN_SHIFTS,
         assumptions.MARGIN_GROWTH_TABLE_GROWTH_SHIFTS,
     )
+    row_labels = [shift_label(average, shift) for average, shift in zip(table["margin_averages"], table["margin_shifts"])]
+    column_labels = [shift_label(average, shift) for average, shift in zip(table["growth_averages"], table["growth_shifts"])]
+    base_cell = (
+        assumptions.MARGIN_GROWTH_TABLE_MARGIN_SHIFTS.index(0.0),
+        assumptions.MARGIN_GROWTH_TABLE_GROWTH_SHIFTS.index(0.0),
+    )
+    st.markdown(f"**{sensitivity_headline(table['prices'], company['share_price'])}**")
+    st.plotly_chart(
+        sensitivity_heatmap(
+            row_labels, column_labels, table["prices"], company["share_price"], base_cell,
+            "Average operating margin", "Average revenue growth",
+        ),
+        width="stretch", config=CHART_CONFIG,
+    )
     prices = pd.DataFrame(
         table["prices"],
-        index=pd.Index(
-            [shift_label(average, shift) for average, shift in zip(table["margin_averages"], table["margin_shifts"])],
-            name="Average operating margin",
-        ),
-        columns=pd.Index(
-            [shift_label(average, shift) for average, shift in zip(table["growth_averages"], table["growth_shifts"])],
-            name="Average revenue growth",
-        ),
+        index=pd.Index(row_labels, name="Average operating margin"),
+        columns=pd.Index(column_labels, name="Average revenue growth"),
     )
-    base_row = assumptions.MARGIN_GROWTH_TABLE_MARGIN_SHIFTS.index(0.0)
-    base_column = assumptions.MARGIN_GROWTH_TABLE_GROWTH_SHIFTS.index(0.0)
-
-    def style_cells(values):
-        """Colour every cell and put the base case in bold."""
-        styles = values.map(lambda price: tint(price, company["share_price"]))
-        styles.iloc[base_row, base_column] += "; font-weight: bold"
-        return styles
-
-    st.dataframe(
-        prices.style.apply(style_cells, axis=None).format(dollars),
-        width="stretch",
-    )
+    draw_sensitivity_numbers(prices, company["share_price"], base_cell)
     # Each dollar sign is escaped with a backslash, because Streamlit reads text between two
     # unescaped dollar signs as a maths formula.
     st.caption(
         (
             f"Each cell moves the operating margin and the revenue growth of every forecast year by the "
-            f"points shown. Green means above today's market price of {dollars(company['share_price'])}, "
-            f"red below it. The bold price, {dollars(dcf['implied_share_price'])}, is the DCF above. The "
+            f"points shown, and shows the price and how far it is above (▲, green) or below (▼, red) today's market "
+            f"price of {dollars(company['share_price'])}. The dashed line runs where the model equals the market price, "
+            f"and the blue frame is the base case, {dollars(dcf['implied_share_price'])}, the DCF above. The "
             "table uses the WACC and terminal growth in use, and the sliders move it."
         ).replace("$", "\\$")
     )
@@ -1562,6 +1659,155 @@ def peer_table(peers, own_label, overview, multiples):
     )
 
 
+# The multiples the peer bar chart can show: the label, where each peer's figure is in the peers, where the company's own
+# is in the overview, and where the peers' median is in run_multiples' result.
+PEER_CHART_MULTIPLES = [
+    ("EV/Sales", "peer_ev_sales", "ev_sales", "median_ev_sales"),
+    ("EV/EBITDA", "peer_ev_ebitda", "ev_ebitda", "median_ev_ebitda"),
+    ("P/E", "peer_pe", "pe", "median_pe"),
+    ("P/S", "peer_ps", "ps", "median_ps"),
+    ("Forward P/E", "peer_forward_pe", "forward_pe", "median_forward_pe"),
+]
+
+
+def peer_bar_headline(label, company_name, company_value, median):
+    """Say in one sentence how the company's multiple compares with the peers' middle one, or why it cannot be
+    compared (the company has no usable figure, or too few peers do).
+    """
+    if not valuation.usable_multiples([company_value]):
+        return f"{company_name} has no usable {label} (a loss or a missing figure), so it is left off the chart."
+    if median is None:
+        return f"Too few peers have a usable {label} to give a middle value to compare {company_name} with."
+    if company_value < median:
+        relation = "below"
+    elif company_value > median:
+        relation = "above"
+    else:
+        return f"{company_name}'s {label} of {company_value:.1f}x is the same as the peer median."
+    return f"{company_name}'s {label} of {company_value:.1f}x is {relation} the peer median of {median:.1f}x."
+
+
+def peer_bar_figure(label, company_label, company_value, tickers, peer_values, median):
+    """Draw one multiple as horizontal bars, highest at the top: the company in the accent colour, the peers in
+    grey, and a dashed line at the peers' median. A figure that is missing, or zero or negative (no real multiple), is
+    left off.
+    """
+    bars = [(company_label, company_value, True)] + [(ticker, value, False) for ticker, value in zip(tickers, peer_values)]
+    bars = sorted((bar for bar in bars if valuation.usable_multiples([bar[1]])), key=lambda bar: bar[1], reverse=True)
+    figure = go.Figure(go.Bar(
+        y=[name for name, _value, _own in bars],
+        x=[value for _name, value, _own in bars],
+        orientation="h",
+        marker={"color": [theme.ACCENT if own else theme.GREY for _name, _value, own in bars]},
+        text=[f"{value:.1f}x" for _name, value, _own in bars],
+        textposition="outside",
+        textfont={"color": theme.TEXT},
+        cliponaxis=False,
+        hovertemplate=f"<b>%{{y}}</b><br>{label} %{{x:.1f}}x<extra></extra>",
+    ))
+    if median is not None:
+        figure.add_vline(x=median, line={"color": theme.TEXT, "width": 2, "dash": "dash"})
+        figure.add_annotation(
+            x=median, y=1, yref="paper", yanchor="bottom", showarrow=False, text=f"Peer median {median:.1f}x",
+            font={"color": theme.TEXT, "size": 12},
+        )
+    longest = max([value for _name, value, _own in bars] + [median or 0], default=1)
+    figure.update_xaxes(ticksuffix="x", gridcolor=theme.BORDER, zeroline=False, range=[0, longest * 1.15])    # room for the label on the longest bar
+    figure.update_yaxes(autorange="reversed", showgrid=False, automargin=True)
+    theme.style_figure(figure, height=90 + 38 * len(bars))
+    figure.update_layout(margin={"l": 0, "r": 20, "t": 30, "b": 0})
+    return figure
+
+
+def peer_scatter_headline(company_name, company_multiple, company_margin, median_multiple, median_margin):
+    """Say in one sentence where the company sits among its peers on price (EV/EBITDA) and on profitability
+    (operating margin): cheaper or dearer than the typical peer, and with a higher or lower margin. None when any of the four
+    figures is missing.
+    """
+    if None in (company_multiple, company_margin, median_multiple, median_margin) or not valuation.usable_multiples([company_multiple]):
+        return None
+    cheaper, richer = company_multiple < median_multiple, company_margin > median_margin
+    facts = (
+        f"{company_name} trades at {company_multiple:.1f}x EBITDA against the peers' {median_multiple:.1f}x, "
+        f"with an operating margin of {company_margin:.1%} against {median_margin:.1%}"
+    )
+    if cheaper and richer:
+        return f"{facts}: cheaper than the typical peer while more profitable."
+    if cheaper:
+        return f"{facts}: cheaper than the typical peer, but less profitable, so the discount may be deserved."
+    if richer:
+        return f"{facts}: dearer than the typical peer, but more profitable, so the premium has some support."
+    return f"{facts}: dearer than the typical peer while less profitable."
+
+
+def peer_scatter_figure(company_label, company_multiple, company_margin, tickers, peer_multiples, peer_margins,
+                        median_multiple, median_margin):
+    """Draw the peers as dots, EV/EBITDA up and operating margin across: the company in the accent colour (bigger), the
+    peers in grey with their tickers, and dashed lines at the peers' median of each. A dot far below the middle of the
+    cloud is cheap for its profitability. A peer missing either figure, or without a real multiple, is left off.
+    """
+    dots = [
+        (ticker, margin, multiple)
+        for ticker, margin, multiple in zip(tickers, peer_margins, peer_multiples)
+        if margin is not None and margin == margin and valuation.usable_multiples([multiple])
+    ]
+    figure = go.Figure(go.Scatter(
+        x=[margin for _t, margin, _m in dots], y=[multiple for _t, _x, multiple in dots],
+        text=[ticker for ticker, _x, _m in dots], mode="markers+text", textposition="top center",
+        textfont={"color": theme.TEXT, "size": 12}, marker={"color": theme.GREY, "size": 12},
+        hovertemplate="<b>%{text}</b><br>Operating margin %{x:.1%}<br>EV/EBITDA %{y:.1f}x<extra></extra>",
+    ))
+    if company_margin is not None and valuation.usable_multiples([company_multiple]):
+        figure.add_trace(go.Scatter(
+            x=[company_margin], y=[company_multiple], text=[company_label], mode="markers+text", textposition="top center",
+            textfont={"color": theme.ACCENT, "size": 13}, marker={"color": theme.ACCENT, "size": 18},
+            hovertemplate="<b>%{text}</b><br>Operating margin %{x:.1%}<br>EV/EBITDA %{y:.1f}x<extra></extra>",
+        ))
+    if median_multiple is not None:
+        figure.add_hline(y=median_multiple, line={"color": theme.GREY, "width": 1, "dash": "dash"})
+    if median_margin is not None:
+        figure.add_vline(x=median_margin, line={"color": theme.GREY, "width": 1, "dash": "dash"})
+    figure.update_xaxes(title="Operating margin", tickformat=".0%", gridcolor=theme.BORDER, zeroline=False)
+    figure.update_yaxes(title="EV/EBITDA", ticksuffix="x", gridcolor=theme.BORDER, zeroline=False, rangemode="tozero")
+    theme.style_figure(figure, height=380)
+    figure.update_layout(margin={"l": 0, "r": 10, "t": 20, "b": 0})
+    return figure
+
+
+def draw_peer_charts(multiples, peers, own_label, overview, company_name):
+    """Draw the two peer charts under the price boxes: one multiple at a time as sorted bars (chosen with a switch,
+    EV/EBITDA to start) and a scatter of EV/EBITDA against operating margin, each under a sentence that says what it
+    shows.
+    """
+    labels = [label for label, _peer, _own, _median in PEER_CHART_MULTIPLES]
+    chosen = st.radio("Compare one multiple", labels, index=labels.index("EV/EBITDA"), horizontal=True, key="peer_chart_multiple")
+    label, peer_key, own_key, median_key = next(entry for entry in PEER_CHART_MULTIPLES if entry[0] == chosen)
+    st.markdown(f"**{peer_bar_headline(label, company_name, overview[own_key], multiples[median_key])}**")
+    st.plotly_chart(
+        peer_bar_figure(
+            label, own_label, overview[own_key], peers["peer_tickers"], peers[peer_key], multiples[median_key]
+        ),
+        width="stretch", config=CHART_CONFIG,
+    )
+    median_margin = valuation.median_of_available(peers["peer_operating_margin"], assumptions.MINIMUM_PEERS)
+    headline = peer_scatter_headline(
+        company_name, overview["ev_ebitda"], overview["operating_margin"], multiples["median_ev_ebitda"], median_margin
+    )
+    if headline:
+        st.markdown(f"**{headline}**")
+    st.plotly_chart(
+        peer_scatter_figure(
+            own_label, overview["ev_ebitda"], overview["operating_margin"], peers["peer_tickers"],
+            peers["peer_ev_ebitda"], peers["peer_operating_margin"], multiples["median_ev_ebitda"], median_margin,
+        ),
+        width="stretch", config=CHART_CONFIG,
+    )
+    st.caption(
+        "Blue is this company, grey the peers, and dashed lines the peers' middle values. In the scatter, a dot low on "
+        "the chart is cheap for its profitability, and one far to the right earns a high margin."
+    )
+
+
 def draw_multiples(multiples, peers, notes, peers_are_suggested, own_label, overview, company_name):
     """Draw the multiples section: the price each peer multiple gives, their middle value, how
     far the DCF price is from it, and the table of peers behind them.
@@ -1601,6 +1847,7 @@ def draw_multiples(multiples, peers, notes, peers_are_suggested, own_label, over
             "Only two of the five multiples gave a price, so this is their average, not a middle: "
             "two numbers have no middle. Treat it with care, and see the table for which peers are missing."
         )
+    draw_peer_charts(multiples, peers, own_label, overview, company_name)
     st.dataframe(peer_table(peers, own_label, overview, multiples))
     st.caption(
         f"Each multiple needs at least {assumptions.MINIMUM_PEERS} peers with a usable figure; "

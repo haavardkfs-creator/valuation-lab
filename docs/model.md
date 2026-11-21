@@ -649,3 +649,34 @@ The charts under "Behind the number" show numbers the DCF already works out; not
   operating margin (a line, right-hand axis). Reported free cash flow and the model's are not built the same way, and the page says so.
 - **Terminal value ring.** The terminal value's share of the enterprise value; the slice turns red above
   `TERMINAL_VALUE_SHARE_WARNING` (75%), the limit the caution under the charts already used.
+
+## The sensitivity heatmaps and the peer charts
+
+The two sensitivity tables are drawn as heatmaps. The numbers are the same functions as before (`sensitivity_table`, checked against
+the workbook's table `valuation` C36:H41 with the workbook's rounded WACC, and `margin_growth_table`); what changed is how they are shown
+and one range:
+- **Each cell** shows its price and its upside against the market price with an arrow and a sign ("$308, ▲ +41%"), coloured the card colour
+  at the market price, greener above and redder below, up to a gap of 50%. The upside is the existing `upside(price, share_price)`.
+- **A dashed line** runs through the combinations where the model equals the market price: where the cells change from green to red.
+  It is the answer to "what is priced in". If every cell is on one side the line is missing and the sentence above the chart says so.
+- **A blue frame** marks the base case, and hovering names the row, the column, the price and the upside.
+- **The WACC axis is now 7 rows, 3 points either way in 1-point steps** (it was 5 rows, 1 point either way in half-point steps, the
+  workbook's). The rows beyond the workbook's are not checked against Excel (same function). Terminal growth stays 1.5% to 3.5%.
+- **A pairing whose growth rate is at or above its WACC has no answer** (the terminal value divides by their gap). It stays blank, and
+  the rest of the table is drawn; only when no pairing at all has an answer does the page say the table cannot be drawn.
+- The exact prices are in a closed "Show the numbers as a table" box under each heatmap (the old tables).
+- **The football field's DCF bar keeps the workbook's range**: the WACC a point either way and terminal growth 1.5% to 3.5%
+  (`FOOTBALL_FIELD_WACC_OFFSETS`, `Multiples` F87 and G87). With the heatmap's wider axis the bar for a low-WACC company would be absurd
+  (Coca-Cola, WACC 7.1%: $24 to $450 instead of $35 to $96, because the lowest row is next to the highest growth rate).
+
+The peer charts sit under the price boxes, above the peer table, each under a sentence that says what it shows:
+- **Bars.** One multiple at a time (EV/Sales, EV/EBITDA, P/E, P/S or forward P/E, EV/EBITDA to start), the highest at the top, the company
+  in the accent colour, the peers in grey, a dashed line at the peers' median. A peer's figure that is missing, zero or negative is left
+  off; a company without a real multiple (a loss) is said to be left off.
+- **Scatter.** Each peer as a dot, EV/EBITDA up and operating margin across, with dashed lines at the peers' median of each; the company in
+  the accent colour. A dot low on the chart is cheap for its profitability. The sentence says whether the company is cheaper or dearer than
+  the typical peer and more or less profitable. Operating margin is used because every peer has one (even Adobe's peers and the backup
+  source); revenue growth, which the brief asked for, is not stored for the peers.
+- On 20 Nov 2026 NVIDIA: EV/EBITDA 14.9x against the peers' median of 28.5x, with a margin of 65.2% against 61.7%: cheaper than the typical
+  peer while more profitable. Its WACC heatmap (13.3% WACC) shows 13 of 35 combinations above the market price of $125.53; the
+  margin and growth heatmap 6 of 25.

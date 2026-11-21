@@ -174,9 +174,18 @@ WACC_GAP_WARNING = 0.04                  # below 4 points between WACC and termi
 # The sensitivity heatmap (Phase 5)
 # ---------------------------------------------------------------------------
 
-# How far above and below the model's own WACC each row of the heatmap sits. Same spacing as
-# the workbook's sensitivity table (valuation C37:C41): half a percentage point a row.
-HEATMAP_WACC_OFFSETS = [-0.01, -0.005, 0.0, 0.005, 0.01]
+# How far above and below the model's own WACC each row of the heatmap sits: 3 points either way in 1-point steps.
+# The workbook's table (valuation C37:C41) has half-point steps and 1 point either way; the wider axis is for a
+# company whose WACC the reader doubts, a high-beta one such as NVIDIA at 13.3%, which the narrow table could not show
+# at 10-11%. Chosen with Haavard on 21 Nov 2026. The rows that do not come from the workbook are not checked against
+# Excel (they use the same function).
+HEATMAP_WACC_OFFSETS = [-0.03, -0.02, -0.01, 0.0, 0.01, 0.02, 0.03]
+
+# The WACC rows the football field's DCF bar covers: the workbook's own table, half a point a row and 1 point either
+# way (valuation C37:C41; `Multiples` F87 and G87 are its lowest and highest price). It stays narrow on purpose: with the
+# heatmap's 3 points either way a low-WACC company's lowest row sits next to its highest growth rate and the bar would run
+# from $24 to $450 for Coca-Cola. Chosen with Haavard on 21 Nov 2026.
+FOOTBALL_FIELD_WACC_OFFSETS = [-0.01, -0.005, 0.0, 0.005, 0.01]
 
 # The terminal growth rate of each column of the heatmap. Excel: valuation D36:H36.
 HEATMAP_TERMINAL_GROWTH_RATES = [0.015, 0.02, 0.025, 0.03, 0.035]

@@ -779,10 +779,26 @@ def price_from_ps(revenue, ps_multiple, shares):
 
 def table_range(prices):
     """Find the lowest and the highest price in a table of prices (a list of rows), as (low, high): the
-    range the DCF bar on the football field covers (workbook: `Multiples` F87 and G87).
+    range the DCF bar on the football field covers (workbook: `Multiples` F87 and G87). A blank cell (None)
+    is skipped, and a table with no price at all gives None.
     """
-    flat = [price for row in prices for price in row]
-    return min(flat), max(flat)
+    flat = [price for row in prices for price in row if price is not None]
+    return (min(flat), max(flat)) if flat else None
+
+
+def upside_grid(prices, share_price):
+    """Turn a table of prices into a table of upsides against the market price (0.2 means 20% above it), cell
+    by cell, keeping a blank cell (None) blank. The colour and the percentage on each heatmap cell come from it.
+    """
+    return [[None if price is None else upside(price, share_price) for price in row] for row in prices]
+
+
+def cells_above_price(prices, share_price):
+    """Count how many cells of a table of prices are above the market price, as (above, cells that have a
+    price): the figure behind the sentence under a sensitivity heatmap. A blank cell (None) is not counted.
+    """
+    priced = [price for row in prices for price in row if price is not None]
+    return sum(1 for price in priced if price > share_price), len(priced)
 
 
 def trading_range(closes):
@@ -1086,24 +1102,34 @@ def reverse_dcf(dcf_inputs, market_price, terminal_growth_rate, wacc_override, s
 # The sensitivity table: price at many WACCs and terminal growth rates
 # ---------------------------------------------------------------------------
 
-def sensitivity_table(dcf_inputs, base_wacc, wacc_offsets, terminal_growth_rates):
+def sensitivity_table(dcf_inputs, base_wacc, wacc_offsets, terminal_growth_rates, blank_impossible=False):
     """Work out the implied share price for every pairing of a WACC and a terminal growth rate.
 
     dcf_inputs holds every input run_full_dcf needs except the terminal growth rate and the
     WACC. The WACCs tried are the base WACC plus each offset (an offset of 0 is the base
     WACC itself). Returns the WACCs, the growth rates and the prices, one row of prices
     per WACC and one column per growth rate.
+
+    A pairing whose growth rate is not below its WACC has no answer (the terminal value formula divides by
+    their gap). Normally that stops the whole table with an error. With blank_impossible the price of such a
+    pairing is None instead and the rest of the table is worked out; the error comes back only when no
+    pairing at all has an answer.
     """
     wacc_rates = [base_wacc + offset for offset in wacc_offsets]
-    prices = [
-        [
-            run_full_dcf(
+
+    def price_at(growth_rate, wacc_rate):
+        try:
+            return run_full_dcf(
                 **dcf_inputs, terminal_growth_rate=growth_rate, wacc_override=wacc_rate
             )["implied_share_price"]
-            for growth_rate in terminal_growth_rates
-        ]
-        for wacc_rate in wacc_rates
-    ]
+        except ValueError:
+            if blank_impossible:
+                return None
+            raise
+
+    prices = [[price_at(growth_rate, wacc_rate) for growth_rate in terminal_growth_rates] for wacc_rate in wacc_rates]
+    if blank_impossible and all(price is None for row in prices for price in row):
+        raise ValueError("No pairing of these discount rates and growth rates has an answer: every growth rate is at or above its WACC.")
     return {
         "wacc_rates": wacc_rates,
         "terminal_growth_rates": list(terminal_growth_rates),

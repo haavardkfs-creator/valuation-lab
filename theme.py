@@ -159,13 +159,14 @@ def money_short(amount_in_millions):
     return sign + text
 
 
-def change_text(change):
+def change_text(change, digits=1):
     """Write a change as a signed percentage with the arrow that goes with it, so it reads without colour:
-    "▲ +41.3%" for up, "▼ -12.0%" for down. Exactly zero has no arrow: "0.0%".
+    "▲ +41.3%" for up, "▼ -12.0%" for down. Exactly zero has no arrow: "0.0%". `digits` is how many decimals to
+    show (0 gives "▲ +41%", for the small cells of a heatmap).
     """
-    text = f"{change:+.1%}"
-    if text in ("+0.0%", "-0.0%"):
-        return "0.0%"                       # too small to show a direction
+    text = f"{change:+.{digits}%}"
+    if float(text.rstrip("%")) == 0:
+        return f"{0:.{digits}f}%"            # too small to show a direction
     return ("▲ " if change > 0 else "▼ ") + text
 
 
