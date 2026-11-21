@@ -243,6 +243,22 @@ HELP_TEXTS = {
         "market price: the boundary between assumptions that imply upside and those that imply downside. The blue "
         "frame is the base case, the assumptions the DCF uses.",
     ),
+    "macro_treasury_yield": (
+        "10-year Treasury yield",
+        "What the US government pays to borrow for ten years, the usual \"risk-free\" return. It is where the cost of "
+        "equity in the WACC starts: when it rises, the discount rate rises and DCF values fall, other things equal.",
+    ),
+    "macro_fed_funds": (
+        "Fed funds rate",
+        "The interest rate the US central bank steers for overnight lending between banks. It sets the price of money "
+        "across the economy: higher rates make borrowing dearer for companies and make safe savings more attractive, "
+        "which tends to pull share prices down.",
+    ),
+    "macro_inflation": (
+        "US inflation, last 12 months",
+        "How much US consumer prices rose over the last twelve months (the CPI). High inflation tends to push interest "
+        "rates up, and it squeezes profit margins when a company cannot raise its prices as fast as its costs rise.",
+    ),
     "analyst_rating": (
         "Consensus rating",
         "What the analysts who follow the company say on balance, as Yahoo Finance sums it up: strong buy, buy, hold, "

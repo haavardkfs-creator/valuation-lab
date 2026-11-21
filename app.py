@@ -38,7 +38,7 @@ FOOTER_TEXT = "Valuation Lab is a learning project, not investment advice."
 # figures typed in by hand in data.py (the WACC table says the same), Adobe's base case is its own hand-checked set.
 SOURCES_TEXT = (
     "Sources: share prices, financial statements, peers and news from Yahoo Finance (Financial Modeling Prep as a "
-    "backup when Yahoo is not answering); risk-free rate and equity risk premium from Damodaran, 1 Nov 2026; "
+    "backup when Yahoo is not answering); risk-free rate and equity risk premium from Damodaran, 1 Nov 2026; interest-rate and inflation numbers from FRED; "
     "Adobe's base case from its FY2025 10-K."
 )
 
@@ -846,6 +846,19 @@ def bridge_fmp_key():
         return
     if key:
         os.environ.setdefault("FMP_API_KEY", str(key))
+
+
+def bridge_fred_key():
+    """Copy the FRED key from Streamlit's private settings (the secrets file on this computer, or the Secrets box on
+    Streamlit Cloud) into the environment, where data.py looks for it. With no key the macro section says it is
+    not available. The key is never shown or stored here.
+    """
+    try:
+        key = st.secrets["FRED_API_KEY"]
+    except Exception:           # no secrets at all, or no such key: the macro section stays off
+        return
+    if key:
+        os.environ.setdefault("FRED_API_KEY", str(key))
 
 
 def wacc_sources(company, source_used):
@@ -2244,6 +2257,14 @@ def load_company_context(ticker):
 
 
 @st.cache_data(ttl=SLOW_DATA_CACHE_SECONDS, show_spinner=False)
+def load_macro_backdrop():
+    """Fetch the macro numbers (they change once a day at most) and remember them for SLOW_DATA_CACHE_SECONDS.
+    Stops with a plain error if FRED has no key or could not be reached.
+    """
+    return data.get_macro_backdrop()
+
+
+@st.cache_data(ttl=SLOW_DATA_CACHE_SECONDS, show_spinner=False)
 def load_history(ticker, usd_per_unit):
     """Fetch a company's yearly history (in US dollars) and remember it for
     SLOW_DATA_CACHE_SECONDS. Stops with a plain error if Yahoo cannot be reached or has none.
@@ -2645,6 +2666,44 @@ def draw_news_and_management(ticker):
     )
 
 
+def macro_date_text(row):
+    """Say how fresh a macro number is: "as of 19 Nov 2026" for a daily one, "as of Oct 2026" for a monthly one."""
+    try:
+        day = datetime.date.fromisoformat(row["date"])
+    except (TypeError, ValueError):
+        return "date not given"
+    return f"as of {day.strftime('%b %Y')}" if row["monthly"] else f"as of {day.day} {day.strftime('%b %Y')}"
+
+
+def draw_macro_backdrop():
+    """Draw "Macro backdrop": three US numbers from FRED that sit behind every valuation (the 10-year Treasury yield, the
+    Fed funds rate and inflation), each with its date and a ? that says what it means. A number FRED could not give says
+    so, and with no key or no answer the whole section says so; nothing else on the page depends on it.
+    """
+    st.subheader("Macro backdrop")
+    try:
+        rows = load_macro_backdrop()
+    except ValueError as error:
+        st.caption(f"The macro numbers are not available right now. {error}")
+        return
+    help_texts = {
+        "treasury_yield": explanations.help_text("macro_treasury_yield"),
+        "fed_funds": explanations.help_text("macro_fed_funds"),
+        "inflation": explanations.help_text("macro_inflation"),
+    }
+    for column, row in zip(st.columns(len(rows)), rows):
+        column.metric(
+            row["label"], f"{row['value']:.2f}%" if row["value"] is not None else NOT_AVAILABLE,
+            delta=macro_date_text(row) if row["value"] is not None else None, delta_color="off", delta_arrow="off",
+            help=help_texts[row["key"]],
+        )
+    st.caption(
+        "From FRED, the Federal Reserve Bank of St. Louis. These are US numbers: a company that lives on another country's "
+        "rates (Aker on Norway's, for instance) is moved more by those. They are background for the valuation, not an input "
+        "to it: the WACC's risk-free rate is typed in from Damodaran."
+    )
+
+
 NOT_AVAILABLE = "Not available"
 
 # Plotly charts without its toolbar (zoom, download and so on): the hover is enough for a reader of this page.
@@ -2831,6 +2890,7 @@ def draw_page():
             draw_overview(overview)
             draw_history(history, history_error, overview, company["company_name"])
             draw_news_and_management(company["ticker"])
+            draw_macro_backdrop()
         with explanations_tab:
             draw_explanations_tab()
         draw_footer()
@@ -2842,6 +2902,7 @@ def draw_page():
         draw_overview(overview)
         draw_history(history, history_error, overview, company["company_name"])
         draw_news_and_management(company["ticker"])
+        draw_macro_backdrop()
     with dcf_tab:
         draw_dcf(company, dcf, wacc_override is not None, terminal_growth_rate)
         draw_reverse_dcf(company, dcf_inputs, terminal_growth_rate, wacc_override, history)
@@ -2869,4 +2930,5 @@ def draw_page():
 st.set_page_config(page_title="Valuation Lab", page_icon="📈")
 theme.inject_theme()
 bridge_fmp_key()
+bridge_fred_key()
 draw_page()

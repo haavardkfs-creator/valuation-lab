@@ -606,6 +606,25 @@ for a company, as context next to the valuation. Nothing in the valuation depend
 - **Where.** At the end of the page, just above the footer, for every company that loads, including one whose DCF
   cannot be built (Ford); a ticker that cannot be found gets only the error.
 
+## Macro backdrop
+
+Not a formula in the workbook: three US numbers looked up from FRED (the Federal Reserve Bank of St. Louis), shown last on the
+Overview tab, under the news. Each has its date and a ? saying what it means for a valuation.
+
+- **10-year Treasury yield** (FRED series `DGS10`, percent, daily). What the US government pays to borrow for ten years, the
+  usual risk-free return. It is where the cost of equity in the WACC starts.
+- **Fed funds rate** (`DFF`, percent, daily). The rate the US central bank steers for overnight lending between banks.
+- **US inflation, last 12 months** (`CPIAUCSL` asked with FRED's `units=pc1`, "percent change from a year ago"; monthly, so its
+  date is shown as a month). How much consumer prices rose over the last year.
+
+The newest real reading is used; FRED marks a day with no reading (a bank holiday) with a ".", which is skipped
+(`FRED_READINGS_ASKED` newest are fetched). The numbers are background, not an input: they change nothing in the DCF, and
+the WACC's risk-free rate is still typed in from Damodaran (its gap to today's 10-year yield is not shown yet). They are
+US numbers, so the page says a company living on another country's rates is moved more by those. They are remembered for
+6 hours (`SLOW_DATA_CACHE_SECONDS`). The key is read from `FRED_API_KEY` (Secrets on Streamlit Cloud, `.streamlit/secrets.toml`
+here), is never shown, and never appears in an error message. One number failing leaves the other two; no key or no answer
+makes the whole section say it is not available right now and leaves the rest of the page alone.
+
 ## The verdict badge
 
 Not a formula in the workbook: a rule that only names a number the page already shows, the DCF's upside against the market
