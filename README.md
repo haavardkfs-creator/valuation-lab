@@ -48,6 +48,8 @@ before, on Yahoo alone.
 - A **peer multiples comparison** (EV/Sales, EV/EBITDA, P/E, P/S and forward P/E) sits beside the DCF.
 - **News and management** at the end of the page: the five most recent headlines (as links) and the top
   officers, from Yahoo Finance. It is context only; nothing in the valuation depends on it.
+- An optional **live risk-free rate**: a sidebar tick box swaps Damodaran's typed-in rate for today's 10-year Treasury yield
+  from FRED (needs the `FRED_API_KEY`). Checked against the Excel model.
 - A **Compare tab**: type a second ticker and see the two companies side by side, in a table and in a chart of how far
   each way of valuing them is from their own market price. Both get the same sliders and the same typed-in WACC.
 - A **shareable link**: the page's address holds the company, the sliders, the typed-in WACC, the one-off amount and the peers,

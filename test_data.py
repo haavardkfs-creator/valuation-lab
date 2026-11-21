@@ -2560,3 +2560,20 @@ def test_when_no_number_can_be_had_the_reason_is_passed_on():
 
     with pytest.raises(data.SourceUnavailable, match="Could not get the macro numbers"):
         data.get_macro_backdrop(fetch=breaks)
+
+
+def test_the_ten_year_yield_becomes_a_decimal_risk_free_rate_with_its_date():
+    rows = [
+        {"key": "fed_funds", "value": 3.64, "date": "2026-11-19"},
+        {"key": "treasury_yield", "value": 4.12, "date": "2026-11-19"},
+    ]
+    assert data.risk_free_from_macro(rows) == {"rate": pytest.approx(0.0412), "date": "2026-11-19"}
+
+
+@pytest.mark.parametrize("rows", [
+    [], [{"key": "fed_funds", "value": 3.64, "date": "2026-11-19"}], [{"key": "treasury_yield", "value": None, "date": None}],
+])
+def test_without_the_ten_year_yield_there_is_a_plain_error(rows):
+    with pytest.raises(data.SourceUnavailable, match="10-year Treasury yield"):
+        data.risk_free_from_macro(rows)
+

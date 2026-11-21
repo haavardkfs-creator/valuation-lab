@@ -243,6 +243,12 @@ HELP_TEXTS = {
         "market price: the boundary between assumptions that imply upside and those that imply downside. The blue "
         "frame is the base case, the assumptions the DCF uses.",
     ),
+    "live_risk_free": (
+        "Today's 10-year Treasury yield",
+        "Unticked, the model uses a risk-free rate typed in from Damodaran. Ticked, it uses today's 10-year "
+        "US Treasury yield from FRED instead. A lower rate lowers the WACC and raises the DCF value. Damodaran's equity risk "
+        "premium was worked out with his own rate, so mixing the two is a little inconsistent.",
+    ),
     "compare_chart": (
         "Each way of valuing them against the price",
         "For each of the two companies, how far a price from each method (the DCF and the five multiples) is above or below "

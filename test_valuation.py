@@ -2229,3 +2229,17 @@ def test_the_analysts_are_not_counted_as_a_valuation_method_in_the_headline():
     ]
     assert v.methods_above_price(rows, 250.0) == (1, 1)                     # only the DCF counts, though the analysts' mean is above too
     assert v.methods_above_price(rows[:1], 250.0) == (0, 0)
+
+
+def test_a_lower_risk_free_rate_matches_the_excel_model_with_wacc_c8_typed_as_4_50_percent():
+    """Haavard typed 4.50% into WACC!C8 on 20 Nov 2026 (and put 5.29% back): WACC C29 gave 10.1812% and valuation C26 gave $336.1776."""
+    result = v.run_full_dcf(
+        base_revenue=BASE_REVENUE, growth_rates=GROWTH_RATES, operating_margins=OPERATING_MARGINS, tax_rate=TAX_RATE,
+        da_pcts=DA_PCTS, capex_pcts=CAPEX_PCTS, wc_pcts=WC_PCTS, risk_free_rate=0.045, beta=BETA,
+        equity_risk_premium=EQUITY_RISK_PREMIUM, pre_tax_cost_of_debt=PRE_TAX_COST_OF_DEBT, share_price=SHARE_PRICE,
+        shares=SHARES, debt=DEBT, cash_and_investments=CASH_AND_INVESTMENTS, terminal_growth_rate=TERMINAL_GROWTH_RATE,
+    )
+    assert result["wacc"] == pytest.approx(0.101812, abs=5e-7)             # the workbook shows 10.1812 % in full
+    assert result["implied_share_price"] == pytest.approx(336.1776, abs=5e-5)
+    assert result["wacc"] < run_base_case()["wacc"] and result["implied_share_price"] > run_base_case()["implied_share_price"]
+

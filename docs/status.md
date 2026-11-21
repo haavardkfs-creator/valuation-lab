@@ -371,6 +371,13 @@
   money still gets a column. The second ticker is part of the shareable link. Only shown when the first company has a DCF.
   `app.value_for_compare`, `compare_column`, `comparison_table`, `method_upsides`, `compare_figure`, `draw_compare`.
   No maths of its own (it reuses valuation.py), so no Excel step. The tab-order test was updated on purpose.
+- Done (in the open pull request "the big three", commit 3 of 3): an optional live risk-free rate. A sidebar tick box (off by
+  default) swaps the typed-in 5.29% for today's 10-year Treasury yield from FRED, for the page's company and for the Compare
+  tab's second company; the WACC table names the source and date; the sidebar warns that Damodaran's equity risk premium was
+  worked out with his own rate. Matched to the Excel model exactly: with `WACC!C8` typed as 4.50%, WACC 10.1812% and price
+  $336.1776 (Haavard's two numbers, 20 Nov 2026), in `test_valuation.py` and on the page. Part of the shareable link.
+  `data.risk_free_from_macro`, `app.draw_live_risk_free`, `apply_live_risk_free`. The "show the gap" idea is done (the sidebar
+  note gives both rates).
 - Next: check the macro numbers on the live app after the merge; the live FMP check with Yahoo switched
   off; the small items below. CLAUDE.md still needs Haavard's edits (the theme line, and rows for theme.py and test_theme.py).
 - Open:
@@ -401,7 +408,6 @@
     `.streamlit/secrets.toml` and in Streamlit Cloud) on 20 Nov 2026. On 20 Nov 2026 the new key worked
     against the real service (one `ratios-ttm` request for Apple answered, and its P/S matched Yahoo's). Still to do: the full live
     check with Yahoo switched off, to prove every step of the backup chain.
-  - Open idea (not built): beside the 10-year yield, show the model's own risk-free rate (typed in from Damodaran) and the gap.
   - Even after the capex fade, Microsoft's DCF price is 48% below its market price ($278 vs
     $532, 6 Nov 2026). A starting point from one year is not a forecast, and a 17.8% grower
     fading to 2.5% over five years is a conservative path for it.

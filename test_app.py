@@ -4341,7 +4341,7 @@ def test_method_upsides_gives_none_for_a_method_with_no_answer():
 def test_the_compare_chart_has_a_help_text_and_the_caption_says_what_is_shared(monkeypatch):
     page = run_compared(monkeypatch)
     assert any(e.help == explanations.help_text("compare_chart") for e in tab_named(page, "Compare").markdown)
-    assert any("same sliders and the same typed-in WACC" in c for c in texts(tab_named(page, "Compare").caption))
+    assert any("same sliders, the same typed-in WACC and the same risk-free rate" in c for c in texts(tab_named(page, "Compare").caption))
 
 
 def test_the_second_company_is_part_of_the_link(monkeypatch):
@@ -4353,4 +4353,138 @@ def test_the_second_company_is_part_of_the_link(monkeypatch):
     page = run_compared(monkeypatch)
     assert page.text_input(key=app.COMPARE_KEY).value == "OTHR"
     assert address_of(page) == {"ticker": "EXMP", "compare": "OTHR", "peers": "LOSS, AAA, BBB, CCC"}
+
+
+# ---------------------------------------------------------------------------
+# The live risk-free rate: today's 10-year Treasury yield instead of Damodaran's typed-in rate
+# ---------------------------------------------------------------------------
+
+
+def macro_rows_with_yield(percent):
+    return [dict(row, value=percent if row["key"] == "treasury_yield" else row["value"]) for row in MACRO_ROWS]
+
+
+class BrokenYahoo:
+    """Yahoo not answering, so Adobe comes from the snapshot of the Excel model: exact numbers to compare with."""
+
+    def __init__(self, ticker):
+        raise ConnectionError("no internet")
+
+
+def run_snapshot_with_live_rate(monkeypatch, percent=4.5, tick=True):
+    monkeypatch.setattr("data.get_macro_backdrop", lambda: macro_rows_with_yield(percent))
+    page = run_page(monkeypatch, yahoo=BrokenYahoo)
+    if tick:
+        page.sidebar.checkbox(key=app.LIVE_RF_KEY).check().run()
+    return page
+
+
+def test_the_live_rate_is_off_until_it_is_ticked_and_then_the_snapshot_page_is_unchanged(monkeypatch):
+    page = run_snapshot_with_live_rate(monkeypatch, tick=False)
+    assert page.sidebar.checkbox(key=app.LIVE_RF_KEY).value is False
+    assert metrics(page)["DCF implied price"] == "$305.60"
+    assert wacc_table_of(page)["Where it comes from"].to_dict()["Risk-free rate"] == "Damodaran, 1 Nov 2026 (typed in by hand)"
+
+
+def test_ticking_it_at_4_50_percent_gives_the_excel_model_s_336_18_and_wacc_10_18(monkeypatch):
+    """The workbook with WACC!C8 typed as 4.50%: WACC 10.1812%, price $336.1776."""
+    page = run_snapshot_with_live_rate(monkeypatch, 4.5)
+    assert_footer_and_no_crash(page)
+    assert metrics(page)["DCF implied price"] == "$336.18"
+    table = wacc_table_of(page)
+    assert table.loc["Risk-free rate"].iloc[0] == "4.50%"
+    assert table.loc["WACC"].iloc[0] == "10.18%"
+    assert "▲ UNDERVALUED" in header_of(page)
+
+
+def test_the_wacc_table_says_the_rate_is_the_ten_year_yield_from_fred_with_its_date(monkeypatch):
+    page = run_snapshot_with_live_rate(monkeypatch)
+    where = wacc_table_of(page)["Where it comes from"].to_dict()
+    assert where["Risk-free rate"] == "Today's 10-year US Treasury yield from FRED, 19 Nov 2026"
+    assert where["Equity risk premium"] == "Damodaran, 1 Nov 2026 (typed in by hand)"
+
+
+def test_the_sidebar_says_which_rates_are_swapped_and_warns_about_the_risk_premium(monkeypatch):
+    page = run_snapshot_with_live_rate(monkeypatch, 4.5)
+    [note] = [c for c in texts(page.sidebar.caption) if c.startswith("Risk-free rate 4.50%")]
+    assert "the 10-year yield on 19 Nov 2026, from FRED" in note
+    assert "instead of 5.29% (Damodaran)" in note
+    assert "4.41% equity risk premium was worked out with the older rate" in note
+
+
+def test_a_yield_fred_cannot_give_leaves_the_models_own_rate_and_says_so(monkeypatch):
+    monkeypatch.setattr("data.get_macro_backdrop", lambda: (_ for _ in ()).throw(data.SourceUnavailable("No FRED key is set.")))
+    page = run_page(monkeypatch, yahoo=BrokenYahoo)
+    page.sidebar.checkbox(key=app.LIVE_RF_KEY).check().run()
+    assert_footer_and_no_crash(page)
+    assert "Today's yield is not available (No FRED key is set.) so the model's own risk-free rate is used." in texts(page.sidebar.warning)
+    assert metrics(page)["DCF implied price"] == "$305.60"
+
+
+def test_a_typed_in_wacc_still_wins_over_the_live_rate(monkeypatch):
+    """With the WACC typed in, the risk-free rate no longer matters to the price: the same 11% gives the same price either way."""
+    with_live = run_snapshot_with_live_rate(monkeypatch, 4.5)
+    with_live.sidebar.checkbox(key=app.WACC_TICK_KEY).check().run()
+    with_live.sidebar.slider(key=app.WACC_KEY).set_value(0.11).run()
+    without = run_snapshot_with_live_rate(monkeypatch, tick=False)
+    without.sidebar.checkbox(key=app.WACC_TICK_KEY).check().run()
+    without.sidebar.slider(key=app.WACC_KEY).set_value(0.11).run()
+    assert metrics(with_live)["DCF implied price"] == metrics(without)["DCF implied price"]
+    assert metrics(with_live)["DCF implied price"] != "$336.18"
+
+
+def test_the_heatmap_and_scenarios_follow_the_live_rate_because_they_share_the_dcf_inputs(monkeypatch):
+    plain = run_snapshot_with_live_rate(monkeypatch, tick=False)
+    live = run_snapshot_with_live_rate(monkeypatch, 4.5)
+    assert metrics(live)["Probability-weighted price"] != metrics(plain)["Probability-weighted price"]
+
+
+def test_a_cost_of_debt_estimated_from_the_risk_free_rate_is_redone_with_the_new_rate():
+    company = {"risk_free_rate": 0.0529, "pre_tax_cost_of_debt": 0.0529 + data.CREDIT_SPREAD, "cost_of_debt_is_fallback": True}
+    live = {"rate": 0.04, "date": "2026-11-19"}
+    changed = app.apply_live_risk_free(company, live)
+    assert changed["risk_free_rate"] == 0.04
+    assert changed["pre_tax_cost_of_debt"] == pytest.approx(0.04 + data.CREDIT_SPREAD)
+    assert company["risk_free_rate"] == 0.0529 and company["pre_tax_cost_of_debt"] == pytest.approx(0.0529 + data.CREDIT_SPREAD)   # the original is untouched
+
+
+def test_a_cost_of_debt_from_the_debt_notes_is_left_alone():
+    company = {"risk_free_rate": 0.0529, "pre_tax_cost_of_debt": 0.0416}
+    changed = app.apply_live_risk_free(company, {"rate": 0.04, "date": "2026-11-19"})
+    assert changed["pre_tax_cost_of_debt"] == 0.0416 and changed["risk_free_rate"] == 0.04
+
+
+def test_with_no_live_rate_the_company_is_returned_as_it_was():
+    company = {"risk_free_rate": 0.0529}
+    assert app.apply_live_risk_free(company, None) is company
+
+
+def test_the_second_company_in_compare_gets_the_live_rate_too(monkeypatch):
+    monkeypatch.setattr("data.get_macro_backdrop", lambda: macro_rows_with_yield(4.5))
+    both = run_compared(monkeypatch, {"live_rf": "1"})
+    table = compare_table_of(both)
+    assert table.loc["WACC", "EXMP"] != compare_table_of(run_compared(monkeypatch)).loc["WACC", "EXMP"]
+    for ticker in ("EXMP", "OTHR"):
+        alone = run_linked(monkeypatch, {"ticker": ticker, "live_rf": "1"}, yahoo=two_companies())
+        assert table.loc["DCF value per share", ticker] == card_values(header_of(alone))["DCF value per share"]
+
+
+def test_the_live_rate_is_part_of_the_link(monkeypatch):
+    assert app.settings_from_link({"live_rf": "1"}) == {"live_rf": True}
+    assert app.settings_from_link({"live_rf": "0"}) == {}
+    assert app.settings_from_link({"live_rf": "yes"}) == {}
+    assert app.link_from_state({app.LIVE_RF_KEY: True}) == {"live_rf": "1"}
+    assert app.link_from_state({app.LIVE_RF_KEY: False}) == {}
+    monkeypatch.setattr("data.get_macro_backdrop", lambda: macro_rows_with_yield(4.5))
+    page = run_linked(monkeypatch, {"live_rf": "1"}, yahoo=BrokenYahoo)
+    assert page.sidebar.checkbox(key=app.LIVE_RF_KEY).value is True
+    assert metrics(page)["DCF implied price"] == "$336.18"
+    assert address_of(page) == {"live_rf": "1"}
+
+
+def test_the_macro_caption_says_the_numbers_become_an_input_only_if_the_box_is_ticked(monkeypatch):
+    monkeypatch.setattr("data.get_macro_backdrop", lambda: MACRO_ROWS)
+    page = run_page(monkeypatch)
+    caption = next(c for c in texts(tab_named(page, "Overview").caption) if c.startswith("From FRED"))
+    assert "not an input to it, unless you tick" in caption
 

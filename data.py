@@ -725,6 +725,17 @@ def get_macro_backdrop(fetch=fetch_fred_latest):
     return rows
 
 
+def risk_free_from_macro(rows):
+    """Pick today's 10-year US Treasury yield out of the macro numbers (see get_macro_backdrop) as a decimal rate, ready to
+    use as the risk-free rate: {"rate": 0.0412, "date": "2026-11-19"}. FRED gives percent, so this only moves the decimal point.
+    Stops with a SourceUnavailable error if the yield is not among them.
+    """
+    for row in rows:
+        if row["key"] == "treasury_yield" and row["value"] is not None:
+            return {"rate": row["value"] / 100, "date": row["date"]}
+    raise SourceUnavailable("FRED has no 10-year Treasury yield right now.")
+
+
 # ---------------------------------------------------------------------------
 # What other analysts say: Yahoo Finance's consensus rating and price targets (opinions, not this app's advice)
 # ---------------------------------------------------------------------------

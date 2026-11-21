@@ -625,6 +625,26 @@ US numbers, so the page says a company living on another country's rates is move
 here), is never shown, and never appears in an error message. One number failing leaves the other two; no key or no answer
 makes the whole section say it is not available right now and leaves the rest of the page alone.
 
+## An optional live risk-free rate
+
+The workbook's risk-free rate is one typed-in cell (`WACC!C8`, 5.29%, Damodaran, 1 Nov 2026). A sidebar tick box, "Use today's
+10-year Treasury yield as the risk-free rate" (off by default), swaps it for today's 10-year US Treasury yield from FRED
+(the macro backdrop's first number, as a decimal). Nothing else in the model changes, so there is no new formula: the
+rate goes into the same cost of equity, risk-free rate + beta × equity risk premium. A company whose cost of debt was
+estimated as the risk-free rate plus a credit spread (`cost_of_debt_is_fallback`) gets that estimate redone with the new
+rate; one whose cost of debt comes from the 10-K's debt notes (Adobe) does not change.
+
+Checked against the workbook with `WACC!C8` typed as 4.50% (20 Nov 2026; 5.29% put back, file not saved): WACC C29 gives
+10.1812% (10.93% before) and valuation C26 gives $336.1776 ($305.60 before). Python gives the same, and the page, on the
+snapshot with a 4.50% yield, shows $336.18 (`test_valuation.py`, `test_app.py`).
+
+The rate applies to the page's company and to the second company in Compare, the DCF tab, scenarios and heatmaps (they all
+share the DCF inputs). A typed-in WACC still replaces the WACC outright, so with one set the risk-free rate no longer
+matters. Limits the page says: Damodaran's 4.41% equity risk premium was worked out with his own rate, so mixing it with
+another rate is a little inconsistent; and it is a US rate used for every company, as the typed-in one always was. If FRED
+cannot give the yield the sidebar says so and the model's own rate is used. The WACC table's "Where it comes from" names
+the yield and its date. The tick box is part of the shareable link (`live_rf=1`).
+
 ## Compare: a second company next to the first
 
 Not a formula in the workbook: the Compare tab (after Sensitivity) takes a second ticker and puts the two companies side by
