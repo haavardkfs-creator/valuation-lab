@@ -2534,7 +2534,9 @@ def yahoo_with_prices(info=None, income=None, closes=None):
 def card_values(header):
     """The headline cards of a header as {label: value}, read back out of the HTML."""
     import re
-    return dict(re.findall(r'class="vl-kpi-label">([^<]+)</div><div class="vl-kpi-value[^"]*">([^<]+)</div>', header))
+    return dict(re.findall(
+        r'class="vl-kpi-label">([^<]+)(?:<span[^>]*>\?</span>)?</div><div class="vl-kpi-value[^"]*">([^<]+)</div>', header
+    ))
 
 
 def test_the_header_cards_show_the_same_numbers_as_the_dcf_section_below(monkeypatch):
@@ -3084,7 +3086,7 @@ def test_choosing_another_multiple_redraws_the_bar_chart_and_its_sentence(monkey
 def test_the_peer_charts_come_before_the_peer_table_and_a_company_without_peers_has_neither(monkeypatch):
     page = run_page(monkeypatch, ticker="exmp", yahoo=other_company())
     assert not [radio for radio in page.radio if radio.key == "peer_chart_multiple"]        # no switch without peers
-    assert not any("EV/EBITDA of" in line for line in texts(page.markdown))
+    assert not any("EV/EBITDA of" in line for line in texts(tab_named(page, "Multiples").markdown))
 
 
 # ---------------------------------------------------------------------------
@@ -3207,15 +3209,17 @@ def test_the_explanations_tab_groups_the_terms_under_the_sections_they_belong_to
     page = run_page(monkeypatch)
     markdown = texts(tab_named(page, "Explanations").markdown)
     headings = [line for line in markdown if line.startswith("##### ")]
-    assert headings == ["##### The DCF", "##### Behind the number", "##### Sensitivity", "##### Multiples"]
+    assert headings == ["##### The DCF", "##### Behind the number", "##### Sensitivity", "##### Multiples", "##### Reading the page"]
     assert markdown.index("**Discounted cash flow (DCF)**  \n" + app.explanations.EXPLANATIONS["dcf"][1]) < markdown.index("##### Behind the number")
 
 
-def test_a_term_that_is_in_no_section_is_added_at_the_end_of_the_explanations_tab(monkeypatch):
-    monkeypatch.setitem(app.explanations.EXPLANATIONS, "p_s", ("P/S", "Price divided by sales."))
+def test_a_term_that_is_in_no_section_is_added_after_the_sections_under_more_terms(monkeypatch):
+    monkeypatch.setitem(app.explanations.EXPLANATIONS, "gross_margin", ("Gross margin", "Sales less the cost of making them."))
     page = run_page(monkeypatch)
     markdown = texts(tab_named(page, "Explanations").markdown)
-    assert "##### More terms" in markdown and markdown[-1] == "**P/S**  \nPrice divided by sales."
+    more = markdown.index("##### More terms")
+    assert markdown[more + 1] == "**Gross margin**  \nSales less the cost of making them."
+    assert markdown.index("##### Multiples") < more < markdown.index("##### Reading the page")
 
 
 def test_the_sidebar_has_its_headings_in_order(monkeypatch):
@@ -3223,3 +3227,128 @@ def test_the_sidebar_has_its_headings_in_order(monkeypatch):
     assert texts(page.sidebar.header) == ["Company", "Assumptions"]                       # Adobe has no peer box
     other = run_example_page(monkeypatch)
     assert texts(other.sidebar.header) == ["Company", "Assumptions", "Peers", "One-off items"]
+
+
+# ---------------------------------------------------------------------------
+# A ? on every multiple, card and chart, and the old closed boxes gone (redesign, Phase 4b)
+# ---------------------------------------------------------------------------
+
+def markdown_starting(container, start):
+    """The one markdown element of a page or tab whose text starts with `start`."""
+    [element] = [element for element in container.markdown if element.value.startswith(start)]
+    return element
+
+
+def test_the_four_header_cards_and_the_verdict_badge_have_a_question_mark(monkeypatch):
+    header = header_of(run_page(monkeypatch))
+    assert header.count('class="vl-help"') == 4
+    import html as html_module
+    for key in ("current_price", "implied_share_price", "upside_vs_market", "multiples_value"):
+        assert f'title="{html_module.escape(app.explanations.help_text(key), quote=True)}"' in header
+    assert 'class="vl-badge vl-badge-up" title="' in header and "not investment advice" in header
+
+
+def test_the_header_cards_still_read_back_with_their_marks(monkeypatch):
+    cards = card_values(header_of(run_page(monkeypatch)))
+    assert list(cards) == ["Current price", "DCF value per share", "Upside / downside", "Multiples value"]
+
+
+def test_the_share_price_chart_caption_has_a_question_mark(monkeypatch):
+    page = run_page(monkeypatch, yahoo=yahoo_with_prices())
+    [caption] = [caption for caption in page.caption if caption.value == "Share price, last 12 months"]
+    assert caption.help == app.explanations.help_text("sparkline")
+
+
+def test_the_four_dcf_cards_use_the_glossary_wording(monkeypatch):
+    page = run_page(monkeypatch)
+    helps = {metric.label: metric.help for metric in tab_named(page, "DCF").metric}
+    assert helps["DCF implied price"] == app.explanations.EXPLANATIONS["implied_share_price"][1]
+    assert helps["Upside vs market"] == app.explanations.EXPLANATIONS["upside_vs_market"][1]
+    assert helps["WACC"] == app.explanations.EXPLANATIONS["wacc"][1]
+    assert helps["Market price"] == app.explanations.help_text("current_price")
+
+
+def test_every_price_box_on_the_multiples_tab_has_a_question_mark(monkeypatch):
+    page = run_page(monkeypatch)
+    helps = {metric.label: metric.help for metric in tab_named(page, "Multiples").metric}
+    assert helps["EV/Sales price"] == app.explanations.help_text("ev_sales_price")
+    assert helps["EV/EBITDA price"] == app.explanations.help_text("ev_ebitda_price")
+    assert helps["P/E price"] == app.explanations.help_text("pe_price")
+    assert helps["P/S price"] == app.explanations.help_text("ps_price")
+    assert helps["Forward P/E price"] == app.explanations.help_text("forward_pe_price")
+    assert helps["Middle of the five prices"] == app.explanations.help_text("middle_price")
+    assert helps["DCF vs multiples"] == app.explanations.EXPLANATIONS["dcf_vs_multiples"][1]
+    assert all(helps.values())
+
+
+def test_the_overview_multiples_use_haavards_glossary_wording(monkeypatch):
+    page = run_page(monkeypatch)
+    helps = {metric.label: metric.help for metric in tab_named(page, "Overview").metric}
+    for label, term in [("EV/Sales", "ev_sales"), ("EV/EBITDA", "ev_ebitda"), ("P/E", "pe"), ("P/S", "ps"), ("Forward P/E", "forward_pe")]:
+        assert helps[label] == app.explanations.EXPLANATIONS[term][1]
+    assert helps["P/S"].startswith("P/S shows how much investors are paying for each dollar")
+    assert helps["Forward P/E"].startswith("Forward P/E shows the share price compared with the earnings analysts expect")
+
+
+def test_the_football_field_headline_has_a_question_mark(monkeypatch):
+    page = run_page(monkeypatch)
+    headline = markdown_starting(tab_named(page, "Overview"), "**Adobe Inc. trades ")
+    assert headline.help == app.explanations.help_text("football_field")
+
+
+def test_the_charts_behind_the_number_each_have_a_question_mark(monkeypatch):
+    dcf_tab = tab_named(run_page(monkeypatch), "DCF")
+    waterfall = next(element for element in dcf_tab.markdown if "of enterprise value" in element.value)
+    cash_flow = markdown_starting(dcf_tab, "**Free cash flow is forecast to")
+    ring = next(element for element in dcf_tab.markdown if "of the value comes from after year 5." in element.value)
+    assert waterfall.help == app.explanations.help_text("waterfall")
+    assert cash_flow.help == app.explanations.help_text("cash_flow_chart")
+    assert ring.help == app.explanations.help_text("terminal_value_ring")
+
+
+def test_both_heatmaps_have_a_question_mark_that_explains_the_dashed_line_and_the_frame(monkeypatch):
+    sensitivity = tab_named(run_page(monkeypatch), "Sensitivity")
+    wacc, margin = [element for element in sensitivity.markdown if "combinations" in element.value]
+    assert wacc.help == app.explanations.help_text("heatmap_wacc")
+    assert margin.help == app.explanations.help_text("heatmap_margin")
+    for help_text in (wacc.help, margin.help):
+        assert "dashed line" in help_text and "blue frame" in help_text
+
+
+def test_the_peer_bars_and_the_scatter_each_have_a_question_mark(monkeypatch):
+    multiples = tab_named(run_example_page(monkeypatch), "Multiples")
+    bars = next(element for element in multiples.markdown if "the peer median" in element.value)
+    scatter = markdown_starting(multiples, "**Example Corp trades at ")
+    assert bars.help == app.explanations.help_text("peer_bars")
+    assert scatter.help == app.explanations.help_text("peer_scatter")
+
+
+def test_the_old_closed_boxes_with_the_glossary_are_gone_from_every_section(monkeypatch):
+    page = run_page(monkeypatch)
+    assert "What do these terms mean?" not in [expander.label for expander in page.expander]
+    assert not hasattr(app, "draw_explanations")
+    assert "What do these terms mean?" not in APP_SOURCE_TEXT
+
+
+APP_SOURCE_TEXT = (Path(__file__).parent / "app.py").read_text(encoding="utf-8")
+
+
+def test_the_explanations_tab_has_a_reading_the_page_section_with_every_help_text(monkeypatch):
+    markdown = texts(tab_named(run_page(monkeypatch), "Explanations").markdown)
+    assert "##### Reading the page" in markdown
+    after = markdown[markdown.index("##### Reading the page") + 1:]
+    for key, (title, _raw) in app.explanations.HELP_TEXTS.items():
+        assert f"**{title}**  \n{app.explanations.help_text(key)}" in after
+
+
+def test_the_two_new_glossary_terms_are_in_the_explanations_tab_with_haavards_words(monkeypatch):
+    text = "\n".join(texts(tab_named(run_page(monkeypatch), "Explanations").markdown))
+    assert "**P/S (Price to Sales)**  \nP/S shows how much investors are paying for each dollar of a company’s revenue." in text
+    assert "**Forward P/E**  \nForward P/E shows the share price compared with the earnings analysts expect over the next year." in text
+
+
+def test_a_company_with_no_dcf_still_has_the_explanations_with_reading_the_page(monkeypatch):
+    loss = dict(ADOBE_YAHOO_INCOME, **{"Pretax Income": (-100e6, 50e6)})
+    page = run_page(monkeypatch, ticker="loss", yahoo=fake_statements_ticker(income=loss))
+    assert "##### Reading the page" in texts(tab_named(page, "Explanations").markdown)
+    assert header_of(page).count('class="vl-help"') == 4

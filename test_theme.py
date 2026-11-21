@@ -327,3 +327,44 @@ def test_a_change_can_be_written_without_decimals(change, expected):
 def test_the_default_is_still_one_decimal():
     assert theme.change_text(0.413) == "▲ +41.3%" and theme.change_text(0.413, digits=1) == "▲ +41.3%"
     assert theme.change_text(0.0004) == "0.0%"
+
+
+# ---------------------------------------------------------------------------
+# The ? on the header's cards and badge (redesign, Phase 4b)
+# ---------------------------------------------------------------------------
+
+def test_there_is_no_question_mark_without_a_help_text():
+    assert theme.help_mark_html(None) == "" and theme.help_mark_html("") == ""
+    assert "vl-help" not in theme.kpi_card_html("Current price", "$217.71")
+
+
+def test_the_question_mark_holds_its_text_as_a_tooltip():
+    mark = theme.help_mark_html("What it means.")
+    assert mark == '<span class="vl-help" title="What it means.">?</span>'
+
+
+def test_the_tooltip_text_is_escaped_so_it_can_only_be_text():
+    mark = theme.help_mark_html('He said "hi" <script>alert(1)</script> & left')
+    assert "<script>" not in mark and 'title="He said &quot;hi&quot; &lt;script&gt;alert(1)&lt;/script&gt; &amp; left"' in mark
+    assert mark.count('"') == 4                                       # only the two attributes' own quotes
+
+
+def test_a_card_with_help_has_the_mark_next_to_its_label_and_not_next_to_its_value():
+    card = theme.kpi_card_html("Multiples value", "$390.59", "Middle of the five prices", help="What it is.")
+    assert 'class="vl-kpi-label">Multiples value<span class="vl-help" title="What it is.">?</span></div>' in card
+    assert card.count("vl-help") == 1
+
+
+def test_the_verdict_badge_shows_its_help_as_a_tooltip():
+    badge = theme.verdict_badge_html("undervalued", help="The model's output.")
+    assert 'title="The model&#x27;s output."' in badge and "UNDERVALUED" in badge
+    assert "title=" not in theme.verdict_badge_html("undervalued")
+
+
+def test_the_header_passes_the_verdict_tooltip_to_its_badge():
+    header = theme.header_html("Adobe Inc.", "ADBE", "fair", [], "Basis.", verdict_help="Not advice.")
+    assert 'title="Not advice."' in header and "FAIRLY VALUED" in header
+
+
+def test_the_question_mark_looks_like_a_small_circled_mark_with_a_help_cursor():
+    assert ".vl-help" in theme.CARD_CSS and "cursor: help" in theme.CARD_CSS and "border-radius: 50%" in theme.CARD_CSS

@@ -308,7 +308,7 @@
   `blank_impossible`, plus `upside_grid`, `cells_above_price` and a `table_range` that skips blanks. Haavard chose: 7 rows 3 points each way,
   one bar chart with a switch, and operating margin for the scatter. 943 tests pass (45 new); one test of the old all-or-nothing
   low-WACC behaviour was rewritten on purpose.
-- Done (in the open pull request): redesign Phase 4a of 5, the layout. The page now has five tabs under the answer-first header:
+- Done: redesign Phase 4a of 5, the layout (merged, pull request 60). The page now has five tabs under the answer-first header:
   Overview (the football field, the overview, the history, news and management), DCF (the DCF cards, what the market implies,
   scenarios, assumptions, the WACC build, the charts behind the number), Multiples, Sensitivity (both heatmaps) and
   Explanations (every term of the glossary, grouped by where it is used). The overview is grouped by what the numbers say (what
@@ -317,15 +317,21 @@
   Explanations tabs. 959 tests pass (16 new). Peer table lookups in 13 tests now find the table by its columns instead of its
   position, and two order checks were updated on purpose (the Overview tab comes before the DCF tab; news is the last section of the
   Overview tab, not of the page).
-- Next: redesign Phase 4b, a ? help on every multiple, card and chart, all from the same glossary text, and removal of the closed
-  "What do these terms mean?" boxes (Haavard chose to remove them). Needs from Haavard: his own wording for P/S and forward P/E
-  in the glossary (the overview's help for those two is a plain placeholder from Claude until then); the "how to read this chart"
-  texts are drafted by Claude for him to review. Then Phase 5 (polish; removes the DCF cards that duplicate the header). #11 part 2
-  (macro, needs a free FRED key) and part 3 (thesis page with Haavard's reasons boxes and a Markdown download) wait until the
-  redesign is done.
+- Done (in the open pull request): redesign Phase 4b of 5, a ? on every multiple, card and chart. The header's four cards and the
+  verdict badge, the DCF cards, the five overview multiples, the five price boxes on the Multiples tab and the middle and gap
+  boxes, the price chart and every chart headline (football field, waterfall, free cash flow, terminal value ring, both heatmaps,
+  peer bars, scatter) now show an explanation when hovered. Where the glossary has the term the ? shows Haavard's glossary wording;
+  the rest come from `HELP_TEXTS` in `explanations.py`, drafted by Claude from Haavard's own explanations for him to review (their
+  fixed limits, such as the verdict's 15%, are filled in from `assumptions.py`). P/S and forward P/E are in the glossary in Haavard's
+  exact words (`docs/glossary.md`, copied from his message). The closed "What do these terms mean?" boxes are gone, and the
+  Explanations tab has a "Reading the page" section with the same help texts. 1010 tests pass (47 new).
+- Next: redesign Phase 5 (polish: a loading spinner while data is fetched, nicer error messages for a ticker that is not found,
+  removal of anything messy, double or unstyled such as the DCF cards that now repeat the header, a discreet sources line and the
+  not-advice note at the bottom). #11 part 2 (macro, needs a free FRED key) and part 3 (thesis page with Haavard's reasons boxes
+  and a Markdown download) wait until the redesign is done. Then Haavard's company-name search idea.
 - Open:
   - Ideas from Haavard (20 Nov 2026): (1) group the overview by type of multiple: done in Phase 4a; (2) a ? help on every
-    multiple and every chart, like the overview has: Phase 4b (P/S and forward P/E still need his glossary wording); (3) search
+    multiple and every chart, like the overview has: done in Phase 4b; (3) search
     by company name that lists several matching tickers, like Nordnet's search (Yahoo has a free search with name, ticker and
     exchange; price and day change would cost extra requests): after the redesign.
   - CLAUDE.md still says "Light theme in config.toml, colours only" under "Already decided", and lists `.streamlit/config.toml`

@@ -81,6 +81,11 @@ CARD_CSS = f"""
     box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
 }}
 .vl-kpi-label {{ color: {GREY}; font-size: 0.85rem; }}
+/* The small ? next to a label: hovering it shows what the number means (the browser's own tooltip). */
+.vl-help {{
+    display: inline-block; width: 1.15em; height: 1.15em; margin-left: 0.4em; border: 1px solid {GREY}; border-radius: 50%;
+    text-align: center; font-size: 0.75em; line-height: 1.1em; color: {GREY}; cursor: help;
+}}
 .vl-kpi-value {{ color: {TEXT}; font-size: 1.7rem; font-weight: 700; line-height: 1.25; white-space: nowrap; }}
 .vl-kpi-value.vl-up {{ color: {UP}; }}
 .vl-kpi-value.vl-down {{ color: {DOWN}; }}
@@ -185,15 +190,25 @@ def tone_of(change):
 # name from Yahoo) is escaped first, so it can only ever be shown as text.
 # ---------------------------------------------------------------------------
 
-def kpi_card_html(label, value, note=None, tone=None, muted=False):
-    """Write one headline card: a small grey label, a big value (in the up colour or the down colour when
-    `tone` is "up" or "down") and, if given, a small grey note underneath. A `muted` card is one with no
-    number to show ("Not available"): its value is written small and grey, so a gap never looks like a result.
+def help_mark_html(help_text):
+    """Write the small ? that shows `help_text` when hovered (as the browser's tooltip), or nothing when there is no
+    text. The text is escaped, quotes included, so it can only ever be text inside the tooltip.
+    """
+    if not help_text:
+        return ""
+    return f'<span class="vl-help" title="{html.escape(help_text, quote=True)}">?</span>'
+
+
+def kpi_card_html(label, value, note=None, tone=None, muted=False, help=None):
+    """Write one headline card: a small grey label (with a ? that explains it, when `help` is given), a big value (in
+    the up colour or the down colour when `tone` is "up" or "down") and, if given, a small grey note underneath. A
+    `muted` card is one with no number to show ("Not available"): its value is written small and grey, so a gap
+    never looks like a result.
     """
     tone_class = " vl-muted" if muted else (f" vl-{tone}" if tone in ("up", "down") else "")
     note_html = f'<div class="vl-kpi-note">{html.escape(note)}</div>' if note else ""
     return (
-        f'<div class="vl-kpi"><div class="vl-kpi-label">{html.escape(label)}</div>'
+        f'<div class="vl-kpi"><div class="vl-kpi-label">{html.escape(label)}{help_mark_html(help)}</div>'
         f'<div class="vl-kpi-value{tone_class}">{html.escape(value)}</div>{note_html}</div>'
     )
 
@@ -207,23 +222,26 @@ VERDICT_LOOKS = {
 }
 
 
-def verdict_badge_html(verdict):
-    """Write the verdict badge for "undervalued", "fair", "overvalued" or None (no verdict could be made)."""
+def verdict_badge_html(verdict, help=None):
+    """Write the verdict badge for "undervalued", "fair", "overvalued" or None (no verdict could be made). With
+    `help` the badge shows it as a tooltip when hovered.
+    """
     words, tone = VERDICT_LOOKS[verdict]
     tone_class = f" vl-badge-{tone}" if tone else ""
-    return f'<span class="vl-badge{tone_class}">{html.escape(words)}</span>'
+    title = f' title="{html.escape(help, quote=True)}"' if help else ""
+    return f'<span class="vl-badge{tone_class}"{title}>{html.escape(words)}</span>'
 
 
-def header_html(company_name, ticker, verdict, cards, basis):
+def header_html(company_name, ticker, verdict, cards, basis, verdict_help=None):
     """Write the whole header: the small app name, the company's name with its ticker badge and the verdict
-    badge, a line saying what the verdict is based on, and then the headline cards (a list of the HTML that
-    kpi_card_html wrote).
+    badge (with its tooltip, when `verdict_help` is given), a line saying what the verdict is based on, and then the
+    headline cards (a list of the HTML that kpi_card_html wrote).
     """
     return (
         '<div class="vl-header">'
         '<div class="vl-brand">Valuation Lab</div>'
         f'<div class="vl-name"><h1>{html.escape(company_name)}</h1>'
-        f'<span class="vl-badge vl-badge-ticker">{html.escape(ticker)}</span>{verdict_badge_html(verdict)}</div>'
+        f'<span class="vl-badge vl-badge-ticker">{html.escape(ticker)}</span>{verdict_badge_html(verdict, verdict_help)}</div>'
         f'<div class="vl-basis">{html.escape(basis)}</div>'
         f'<div class="vl-kpis">{"".join(cards)}</div>'
         "</div>"

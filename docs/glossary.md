@@ -117,3 +117,9 @@ The middle value of a metric for a group of comparable companies. It is often us
 
 ## DCF vs multiples
 The percentage difference between the DCF price and the price implied by peer valuation multiples. A negative value means the DCF valuation is lower than the multiples-based valuation, while a positive value means it is higher.
+
+## P/S (Price to Sales)
+P/S shows how much investors are paying for each dollar of a company’s revenue. A higher P/S means the market places a higher value on the company’s sales.
+
+## Forward P/E
+Forward P/E shows the share price compared with the earnings analysts expect over the next year. It tells you how much investors are paying today for a dollar of forecast earnings.
