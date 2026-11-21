@@ -368,3 +368,23 @@ def test_the_header_passes_the_verdict_tooltip_to_its_badge():
 
 def test_the_question_mark_looks_like_a_small_circled_mark_with_a_help_cursor():
     assert ".vl-help" in theme.CARD_CSS and "cursor: help" in theme.CARD_CSS and "border-radius: 50%" in theme.CARD_CSS
+
+
+# ---------------------------------------------------------------------------
+# The "things to check" card on the page that says a company could not be found (redesign, Phase 5)
+# ---------------------------------------------------------------------------
+
+def test_the_hints_card_has_a_title_and_one_bullet_per_hint():
+    card = theme.hints_card_html("Things to check", ["First hint.", "Second hint."])
+    assert card.startswith('<div class="vl-hints"><div class="vl-hints-title">Things to check</div><ul>')
+    assert card.count("<li>") == 2 and "<li>First hint.</li><li>Second hint.</li>" in card
+
+
+def test_everything_in_the_hints_card_is_escaped_including_what_the_reader_typed():
+    card = theme.hints_card_html('Is <b>"X"</b> right?', ["Try <script>alert(1)</script> & more"])
+    assert "<b>" not in card and "<script>" not in card
+    assert "Is &lt;b&gt;&quot;X&quot;&lt;/b&gt; right?" in card and "&lt;script&gt;alert(1)&lt;/script&gt; &amp; more" in card
+
+
+def test_the_hints_card_is_styled_like_the_other_cards():
+    assert ".vl-hints" in theme.CARD_CSS and f"border-radius: {theme.CARD_RADIUS}" in theme.CARD_CSS

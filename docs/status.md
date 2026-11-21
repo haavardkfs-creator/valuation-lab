@@ -317,7 +317,7 @@
   Explanations tabs. 959 tests pass (16 new). Peer table lookups in 13 tests now find the table by its columns instead of its
   position, and two order checks were updated on purpose (the Overview tab comes before the DCF tab; news is the last section of the
   Overview tab, not of the page).
-- Done (in the open pull request): redesign Phase 4b of 5, a ? on every multiple, card and chart. The header's four cards and the
+- Done: redesign Phase 4b of 5, a ? on every multiple, card and chart (merged, pull request 61). The header's four cards and the
   verdict badge, the DCF cards, the five overview multiples, the five price boxes on the Multiples tab and the middle and gap
   boxes, the price chart and every chart headline (football field, waterfall, free cash flow, terminal value ring, both heatmaps,
   peer bars, scatter) now show an explanation when hovered. Where the glossary has the term the ? shows Haavard's glossary wording;
@@ -325,10 +325,19 @@
   fixed limits, such as the verdict's 15%, are filled in from `assumptions.py`). P/S and forward P/E are in the glossary in Haavard's
   exact words (`docs/glossary.md`, copied from his message). The closed "What do these terms mean?" boxes are gone, and the
   Explanations tab has a "Reading the page" section with the same help texts. 1010 tests pass (47 new).
-- Next: redesign Phase 5 (polish: a loading spinner while data is fetched, nicer error messages for a ticker that is not found,
-  removal of anything messy, double or unstyled such as the DCF cards that now repeat the header, a discreet sources line and the
-  not-advice note at the bottom). #11 part 2 (macro, needs a free FRED key) and part 3 (thesis page with Haavard's reasons boxes
-  and a Markdown download) wait until the redesign is done. Then Haavard's company-name search idea.
+- Done (in the open pull request): redesign Phase 5 of 5, the polish, which finishes the redesign. Loading messages ("Loading NVDA..."
+  while a company is fetched, and a second one under the header while its history is). A friendlier not-found page: the original
+  message plus a "Things to check" card (Apple is AAPL, an exchange ending for shares listed elsewhere, a few tickers to try), and
+  "What you can do" instead when the data source was not answering. The DCF tab no longer repeats the header (it keeps the DCF price
+  and the WACC and gains the terminal growth rate), "What the market price implies" no longer repeats the market price, and the
+  verdict line under the name is one short sentence. The "Starting point, not a forecast" box is a calmer blue note. The two History
+  charts are Plotly in the house style, each with a headline and a ?. Every page ends with a sources line and then the not-advice
+  note, and the browser tab has an icon. 1038 tests pass (26 new); 11 old tests were repointed on purpose (eight read the "Market
+  price" card that is now only in the header, two unpacked the old warning box, one checked the old verdict wording).
+- Next: the redesign is done. Left on the list: #11 part 2 (macro backdrop: needs a free FRED key from Haavard, never pasted in
+  chat) and part 3 (thesis page with Haavard's reasons boxes and a Markdown download, nothing saved on the server); Haavard's
+  company-name search that lists several matching tickers; the live FMP check with Yahoo switched off; forward P/E and the other
+  small items below. CLAUDE.md still needs Haavard's edits (the theme line, and rows for theme.py and test_theme.py).
 - Open:
   - Ideas from Haavard (20 Nov 2026): (1) group the overview by type of multiple: done in Phase 4a; (2) a ? help on every
     multiple and every chart, like the overview has: done in Phase 4b; (3) search
