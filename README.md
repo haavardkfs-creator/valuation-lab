@@ -35,6 +35,8 @@ before, on Yahoo alone.
 
 - Five **tabs** under the header: Overview (the football field, the overview numbers grouped by what they say,
   the history, news and management), DCF, Multiples, Sensitivity and Explanations (the glossary).
+- An **analyst view** on the Overview tab: Yahoo Finance's consensus rating and price targets (and a bar for them on
+  the football field), as a comparison for the model.
 - **Search by company name**: type part of a name in the sidebar and click the company you mean; a ticker that is not found
   also offers likely matches.
 - An **"answer first" header** at the top: the company's name, a verdict badge (undervalued, fairly valued or

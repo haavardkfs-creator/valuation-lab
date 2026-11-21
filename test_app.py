@@ -3116,7 +3116,9 @@ def test_the_page_has_five_tabs_in_this_order(monkeypatch):
 
 def test_each_section_is_in_its_own_tab(monkeypatch):
     page = run_page(monkeypatch, yahoo=yahoo_with_prices())
-    assert texts(tab_named(page, "Overview").subheader) == ["Where the price sits", "Overview", "History", "News and management"]
+    assert texts(tab_named(page, "Overview").subheader) == [
+        "Where the price sits", "Analyst view", "Overview", "History", "News and management",
+    ]
     assert texts(tab_named(page, "DCF").subheader) == [
         "Discounted cash flow (DCF)", "What the market price implies", "Scenarios", "What the model assumes",
         "How the WACC is built", "Behind the number",
@@ -3165,7 +3167,7 @@ def test_a_company_whose_dcf_cannot_be_built_gets_only_the_overview_and_the_expl
     assert_footer_and_no_crash(page)
     assert [tab.label for tab in page.tabs] == ["Overview", "Explanations"]
     assert "Could not value LOSS." in texts(tab_named(page, "Overview").error)[0]
-    assert texts(tab_named(page, "Overview").subheader) == ["Overview", "History", "News and management"]
+    assert texts(tab_named(page, "Overview").subheader) == ["Analyst view", "Overview", "History", "News and management"]
 
 
 def test_a_ticker_that_cannot_be_found_has_no_tabs_at_all(monkeypatch):
@@ -3737,3 +3739,213 @@ def test_a_search_with_html_in_it_cannot_become_page_code(monkeypatch):
     page.sidebar.text_input(key="name_search").set_value("<b>x</b>").run()
     assert_footer_and_no_crash(page)
     assert "No company found for \\<b\\>x\\</b\\>." in texts(page.sidebar.caption)         # every angle bracket has its backslash
+
+
+# ---------------------------------------------------------------------------
+# Analyst view: what other analysts say, on the Overview tab and as a football-field bar
+# ---------------------------------------------------------------------------
+
+def yahoo_with_analysts(targets=None, counts=None, key="hold", analysts=33, income=None, extra_info=None):
+    """Yahoo's reply for an Adobe-like company that also has analyst coverage: a rating, a count of analysts, price targets and
+    the table of how many give each rating.
+    """
+    info = dict(ADOBE_YAHOO_INFO, recommendationKey=key, recommendationMean=2.97, numberOfAnalystOpinions=analysts)
+    info.update(extra_info or {})
+    base = fake_statements_ticker(income=income, info=info)
+    target_values = {"current": 240.74, "high": 373.0, "low": 140.0, "mean": 266.9097, "median": 260.0} if targets is None else targets
+    table = (
+        pd.DataFrame({"period": ["0m"], "strongBuy": [4], "buy": [5], "hold": [23], "sell": [6], "strongSell": [1]})
+        if counts is None else counts
+    )
+
+    class WithAnalysts(base):
+        analyst_price_targets = target_values
+        recommendations_summary = table
+
+    return WithAnalysts
+
+
+def analyst_cards(page):
+    return {metric.label: metric for metric in tab_named(page, "Overview").metric}
+
+
+def test_the_overview_tab_has_an_analyst_view_with_three_cards(monkeypatch):
+    page = run_page(monkeypatch, yahoo=yahoo_with_analysts())
+    assert_footer_and_no_crash(page)
+    cards = analyst_cards(page)
+    assert cards["Consensus rating"].value == "Hold" and cards["Consensus rating"].delta == "33 analysts"
+    assert cards["Mean price target"].value == "$266.91" and cards["Mean price target"].delta == "▲ +10.9%"
+    assert cards["Target range"].value == "$140 – 373" and cards["Target range"].delta == "lowest to highest"
+
+
+def test_the_analyst_view_sits_between_the_football_field_and_the_overview_numbers(monkeypatch):
+    page = run_page(monkeypatch, yahoo=yahoo_with_analysts())
+    subheaders = texts(tab_named(page, "Overview").subheader)
+    assert subheaders.index("Where the price sits") < subheaders.index("Analyst view") < subheaders.index("Overview")
+
+
+def test_no_analyst_card_value_has_two_dollar_signs_which_streamlit_would_read_as_a_formula(monkeypatch):
+    for metric in analyst_cards(run_page(monkeypatch, yahoo=yahoo_with_analysts())).values():
+        assert metric.value.count("$") <= 1, metric.value
+
+
+@pytest.mark.parametrize("low, high, text", [
+    (140.0, 373.0, "$140 – 373"),             # Adobe
+    (12.0, 20.0, "$12.00 – 20.00"),           # Ford: under 100, so cents stay
+    (99.5, 99.9, "$99.50 – 99.90"),
+    (100.0, 100.4, "$100 – 100"),             # from 100 up, whole dollars
+    (1400.0, 21000.0, "$1,400 – 21,000"),
+])
+def test_the_target_range_fits_a_small_card_and_has_one_dollar_sign(low, high, text):
+    assert app.target_range_text(low, high) == text and app.target_range_text(low, high).count("$") == 1
+
+
+def test_the_analyst_cards_have_a_question_mark_with_their_own_text(monkeypatch):
+    cards = analyst_cards(run_page(monkeypatch, yahoo=yahoo_with_analysts()))
+    assert cards["Consensus rating"].help == app.explanations.help_text("analyst_rating")
+    assert cards["Mean price target"].help == app.explanations.help_text("analyst_target")
+    assert cards["Target range"].help == app.explanations.help_text("analyst_range")
+
+
+def test_the_analyst_headline_compares_the_target_with_the_price_and_with_the_dcf(monkeypatch):
+    page = run_page(monkeypatch, yahoo=yahoo_with_analysts())
+    overview = tab_named(page, "Overview")
+    headline = next(element for element in overview.markdown if element.value.startswith("**Analysts rate"))
+    assert headline.value.startswith(
+        "**Analysts rate Adobe Inc. hold (33 analysts); their mean price target of \\$266.91 is 10.9% above today's price."
+    )
+    assert "The model's DCF value of \\$305.84 is above that target.**" in headline.value
+    assert headline.help == app.explanations.help_text("analyst_split")
+
+
+def test_the_analyst_section_says_these_are_other_peoples_opinions(monkeypatch):
+    page = run_page(monkeypatch, yahoo=yahoo_with_analysts())
+    caption = next(caption for caption in texts(tab_named(page, "Overview").caption) if caption.startswith("Other analysts' opinions"))
+    assert "not this app's advice" in caption and "optimistic" in caption
+
+
+def test_the_analyst_split_is_one_more_chart_on_the_overview_tab(monkeypatch):
+    covered = run_page(monkeypatch, yahoo=yahoo_with_analysts())
+    assert len(tab_named(covered, "Overview").get("plotly_chart")) == 4                  # football field, split, two history charts
+
+
+def test_a_company_with_targets_but_no_split_table_has_no_split_chart(monkeypatch):
+    page = run_page(monkeypatch, yahoo=yahoo_with_analysts(counts=pd.DataFrame()))
+    assert len(tab_named(page, "Overview").get("plotly_chart")) == 3
+    assert analyst_cards(page)["Mean price target"].value == "$266.91"
+
+
+def test_a_company_with_a_rating_but_no_targets_says_not_available_for_the_target(monkeypatch):
+    page = run_page(monkeypatch, yahoo=yahoo_with_analysts(targets={"current": 240.74}))
+    cards = analyst_cards(page)
+    assert cards["Consensus rating"].value == "Hold" and cards["Mean price target"].value == "Not available"
+    assert "Target range" not in cards
+
+
+def test_a_company_with_no_analyst_coverage_says_so_plainly(monkeypatch):
+    page = run_page(monkeypatch)                                        # the usual fake has no analyst figures at all
+    assert_footer_and_no_crash(page)
+    assert "There is no analyst coverage of Adobe Inc. on Yahoo Finance." in texts(tab_named(page, "Overview").caption)
+    assert "Consensus rating" not in analyst_cards(page)
+
+
+def test_when_yahoo_cannot_give_the_analysts_view_the_section_says_so_and_the_page_still_works(monkeypatch):
+    monkeypatch.setattr("data.get_analyst_view", lambda *args, **kwargs: (_ for _ in ()).throw(data.SourceUnavailable("busy")))
+    page = run_page(monkeypatch)
+    assert_footer_and_no_crash(page)
+    assert "The analysts' view is not available right now." in texts(tab_named(page, "Overview").caption)
+    assert "▲ UNDERVALUED" in header_of(page)
+
+
+def test_a_company_whose_dcf_cannot_be_built_still_gets_its_analyst_view_without_the_dcf_sentence(monkeypatch):
+    loss = dict(ADOBE_YAHOO_INCOME, **{"Pretax Income": (-100e6, 50e6)})
+    page = run_page(monkeypatch, ticker="loss", yahoo=yahoo_with_analysts(income=loss))
+    assert_footer_and_no_crash(page)
+    overview = tab_named(page, "Overview")
+    assert "Analyst view" in texts(overview.subheader)
+    headline = next(element for element in overview.markdown if element.value.startswith("**Analysts rate"))
+    assert "DCF" not in headline.value
+
+
+def test_the_headline_gives_only_what_yahoo_has():
+    view = {"rating": "Buy", "analysts": 4, "counts": None, "targets": {"low": 1.0, "mean": 120.0, "high": 200.0}, "rating_mean": 2.0}
+    assert app.analyst_headline("Aker", view, 100.0, None) == "Analysts rate Aker buy (4 analysts); their mean price target of $120.00 is 20.0% above today's price."
+    assert app.analyst_headline("Aker", dict(view, targets=None), 100.0, 90.0) == "Analysts rate Aker buy (4 analysts)."
+    assert app.analyst_headline("Aker", dict(view, rating=None, analysts=None), 100.0, None) == (
+        "Analysts' mean price target for Aker of $120.00 is 20.0% above today's price."
+    )
+    assert app.analyst_headline("Aker", dict(view, rating=None, targets=None), 100.0, None) is None
+
+
+def test_the_headline_says_below_above_or_the_same_in_the_right_places():
+    view = {"rating": "Sell", "analysts": None, "counts": None, "targets": {"low": 1.0, "mean": 80.0, "high": 200.0}, "rating_mean": 4.0}
+    assert "is 20.0% below today's price" in app.analyst_headline("X", view, 100.0, None)
+    assert "is the same as today's price" in app.analyst_headline("X", dict(view, targets={"low": 1.0, "mean": 100.0, "high": 2.0}), 100.0, None)
+    assert app.analyst_headline("X", view, 100.0, None).startswith("Analysts rate X sell; their mean")             # no count: no brackets
+    assert "DCF value of $90.00 is above that target" in app.analyst_headline("X", view, 100.0, 90.0)
+    assert "DCF value of $70.00 is below that target" in app.analyst_headline("X", view, 100.0, 70.0)
+    assert "DCF value of $80.00 is the same as that target" in app.analyst_headline("X", view, 100.0, 80.0)
+
+
+COUNTS = {"strong_buy": 4, "buy": 5, "hold": 23, "sell": 6, "strong_sell": 1}
+
+
+def test_the_analyst_split_is_one_stacked_bar_of_buy_hold_and_sell():
+    figure = app.analyst_split_figure(COUNTS)
+    buy, hold, sell = figure.data
+    assert (buy.name, hold.name, sell.name) == ("Buy", "Hold", "Sell")
+    assert (buy.x[0], hold.x[0], sell.x[0]) == (9, 23, 7)                                    # strong counts are folded in
+    assert (buy.marker.color, hold.marker.color, sell.marker.color) == (theme.UP, theme.GREY, theme.DOWN)
+    assert list(buy.text) == ["Buy 9"] and list(hold.text) == ["Hold 23"] and list(sell.text) == ["Sell 7"]
+    assert figure.layout.barmode == "stack" and figure.layout.xaxis.visible is False
+
+
+def test_hovering_the_split_gives_the_exact_counts_of_all_five_ratings():
+    buy, hold, sell = app.analyst_split_figure(COUNTS).data
+    assert "Strong buy 4, buy 5" in buy.hovertemplate and "Hold 23" in hold.hovertemplate and "Sell 6, strong sell 1" in sell.hovertemplate
+
+
+def test_a_group_nobody_chose_has_no_label():
+    figure = app.analyst_split_figure({"strong_buy": 3, "buy": 1, "hold": 0, "sell": 0, "strong_sell": 0})
+    assert list(figure.data[1].text) == [""] and list(figure.data[2].text) == [""]
+
+
+def test_the_football_field_gets_a_grey_analysts_bar_with_a_tick_at_the_mean(monkeypatch):
+    rows = [
+        {"label": "Analysts", "kind": "analysts", "low": 140.0, "middle": 266.9, "high": 373.0},
+        {"label": "DCF", "kind": "dcf", "low": 253.0, "middle": 305.6, "high": 390.1},
+    ]
+    figure = app.football_field_figure(rows, 217.71)
+    assert list(figure.data[0].marker.color) == [theme.GREY, theme.ACCENT]
+    assert list(figure.data[1].y) == ["Analysts", "DCF"] and list(figure.data[1].x) == [266.9, 305.6]
+
+
+def test_the_football_field_headline_does_not_count_the_analysts_as_a_method(monkeypatch):
+    page = run_page(monkeypatch, yahoo=yahoo_with_analysts(targets={"low": 140.0, "mean": 900.0, "high": 1200.0, "median": 900.0}))
+    headline = next(element for element in tab_named(page, "Overview").markdown if element.value.startswith("**Adobe Inc. trades "))
+    assert "of every valuation method" in headline.value                         # six methods, all above the price, whatever the analysts say
+
+
+def test_the_football_field_caption_and_help_mention_the_analysts(monkeypatch):
+    page = run_page(monkeypatch, yahoo=yahoo_with_analysts())
+    caption = next(caption for caption in texts(tab_named(page, "Overview").caption) if caption.startswith("Each bar is a way of valuing"))
+    assert "the analysts' price targets" in caption
+    assert "analysts' price targets" in app.explanations.help_text("football_field")
+
+
+def test_the_analyst_targets_are_converted_like_the_share_price_for_a_company_in_kroner(monkeypatch):
+    # Reports and trades in NOK, like Aker; pretend one krone is 10 US cents. The targets are in kroner too.
+    info = dict(ADOBE_YAHOO_INFO, financialCurrency="NOK", currency="NOK")
+    base = yahoo_with_analysts(targets={"current": 240.74, "high": 2100.0, "low": 1400.0, "mean": 1655.0, "median": 1560.0}, extra_info=info)
+
+    class Norwegian(base):
+        def __init__(self, ticker):
+            if ticker == "NOKUSD=X":
+                self.info = {"regularMarketPrice": 0.10}
+                return
+            super().__init__(ticker)
+
+    page = run_page(monkeypatch, ticker="aker.ol", yahoo=Norwegian)
+    assert_footer_and_no_crash(page)
+    cards = analyst_cards(page)
+    assert cards["Mean price target"].value == "$165.50" and cards["Target range"].value == "$140 – 210"

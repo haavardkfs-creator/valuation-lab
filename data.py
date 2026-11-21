@@ -639,6 +639,93 @@ def get_company_context(ticker, fetch_news=fetch_yahoo_news, fetch_officers=fetc
 
 
 # ---------------------------------------------------------------------------
+# What other analysts say: Yahoo Finance's consensus rating and price targets (opinions, not this app's advice)
+# ---------------------------------------------------------------------------
+
+# Yahoo's own words for the consensus, written the way the page shows them.
+ANALYST_RATING_NAMES = {
+    "strong_buy": "Strong buy", "buy": "Buy", "hold": "Hold", "underperform": "Underperform", "sell": "Sell",
+}
+
+# The columns of Yahoo's table of how many analysts give each rating, and the key each is kept under.
+ANALYST_COUNT_COLUMNS = {
+    "strongBuy": "strong_buy", "buy": "buy", "hold": "hold", "sell": "sell", "strongSell": "strong_sell",
+}
+
+
+def fetch_yahoo_analysts(ticker):
+    """Ask Yahoo Finance what analysts say about a share. Gives {"info": ..., "targets": ..., "counts": ...}: the
+    consensus rating, rating mean and number of analysts from the quote, the price targets (low, mean, median, high) in
+    the currency the share trades in, and the table of how many analysts give each rating. A part Yahoo could not give
+    is an Exception stored instead of the value, so the caller can tell "no coverage" (empty) from "could not ask"
+    (an error). This is the only function in this part that touches the internet.
+    """
+    import yfinance
+
+    stock = yfinance.Ticker(ticker)
+    parts = {}
+    for name, ask in (
+        ("info", lambda: stock.info),
+        ("targets", lambda: stock.analyst_price_targets),
+        ("counts", lambda: stock.recommendations_summary),
+    ):
+        try:
+            parts[name] = ask()
+        except Exception as error:      # kept, not raised: one missing part must not hide the others
+            parts[name] = error
+    return parts
+
+
+def get_analyst_view(ticker, usd_per_unit=1.0, fetch_analysts=fetch_yahoo_analysts):
+    """Get the analyst consensus for a share as {"rating", "rating_mean", "analysts", "counts", "targets"}: the rating's
+    name (None when Yahoo has no consensus), Yahoo's rating mean (1 is strong buy, 5 is sell), how many analysts, how many give
+    each rating (None without a table) and the price targets in US dollars (None unless Yahoo gives a low, a mean and a
+    high). `usd_per_unit` converts the targets from the currency the share trades in, the rate the page's share price
+    was converted with. A company with no coverage gives all None, which is an answer, not an error. Leaves Yahoo alone
+    while it is cooling down, and stops with a plain error if Yahoo could not be asked at all. `fetch_analysts` can be
+    swapped, which is how the tests run without the internet.
+    """
+    if _yahoo_cooling_down():
+        raise SourceUnavailable(YAHOO_BUSY_MESSAGE)
+    try:
+        parts = fetch_analysts(ticker)
+    except Exception as error:      # Yahoo can fail in many ways; the reader needs one clear message
+        raise SourceUnavailable("Could not get the analysts' view from Yahoo Finance: %s" % error) from error
+    if all(isinstance(part, Exception) for part in parts.values()):
+        raise SourceUnavailable("Could not get the analysts' view from Yahoo Finance.")
+
+    info = parts["info"] if isinstance(parts["info"], dict) else {}
+    analysts = info.get("numberOfAnalystOpinions")
+    view = {
+        "rating": ANALYST_RATING_NAMES.get(info.get("recommendationKey")),
+        "rating_mean": info.get("recommendationMean"),
+        "analysts": int(analysts) if isinstance(analysts, (int, float)) and analysts == analysts and analysts > 0 else None,
+        "counts": None,
+        "targets": None,
+    }
+    table = parts["counts"]
+    if hasattr(table, "iloc") and len(table):
+        rows = table[table["period"] == "0m"] if "period" in table else table
+        row = (rows if len(rows) else table).iloc[0]
+        counts = {key: int(row[column]) for column, key in ANALYST_COUNT_COLUMNS.items() if column in row}
+        if len(counts) == len(ANALYST_COUNT_COLUMNS) and sum(counts.values()) > 0:
+            view["counts"] = counts
+    targets = parts["targets"]
+    if isinstance(targets, dict) and all(isinstance(targets.get(key), (int, float)) and targets[key] > 0 for key in ("low", "mean", "high")):
+        view["targets"] = {
+            key: valuation.convert_currency(targets[key], usd_per_unit)
+            for key in ("low", "mean", "median", "high")
+            if isinstance(targets.get(key), (int, float)) and targets[key] > 0
+        }
+    return view
+
+
+def has_analyst_coverage(view):
+    """Say whether Yahoo has anything from analysts for a share: a consensus rating, price targets or a table of ratings."""
+    return any(view[key] for key in ("rating", "targets", "counts"))
+
+
+# ---------------------------------------------------------------------------
 # Searching for a company by name (Yahoo Finance's free search), so a reader can find a ticker
 # ---------------------------------------------------------------------------
 

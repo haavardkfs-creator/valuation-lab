@@ -2288,3 +2288,154 @@ def test_the_real_lookup_gives_yahoos_quotes_for_the_text_and_count(monkeypatch)
     monkeypatch.setattr("yfinance.Search", FakeSearch)
     assert data.fetch_yahoo_search("appl", 15) == [hit("AAPL", "Apple Inc.")]
     assert seen == {"query": "appl", "max_results": 15, "news_count": 0}                  # no news wanted
+
+
+# ---------------------------------------------------------------------------
+# What other analysts say: consensus rating and price targets (Yahoo's own figures; not Excel)
+# ---------------------------------------------------------------------------
+
+ADOBE_ANALYST_INFO = {"recommendationKey": "hold", "recommendationMean": 2.97436, "numberOfAnalystOpinions": 33}
+ADOBE_ANALYST_TARGETS = {"current": 217.71, "high": 373.0, "low": 140.0, "mean": 266.9097, "median": 260.0}
+ADOBE_RATING_TABLE = pd.DataFrame({
+    "period": ["0m", "-1m"], "strongBuy": [4, 4], "buy": [5, 5], "hold": [23, 24], "sell": [6, 5], "strongSell": [1, 1],
+})
+
+
+def analysts_with(info=None, targets=None, counts=None, usd_per_unit=1.0):
+    """Run get_analyst_view against made-up parts (Adobe's, unless told otherwise)."""
+    parts = {
+        "info": ADOBE_ANALYST_INFO if info is None else info,
+        "targets": ADOBE_ANALYST_TARGETS if targets is None else targets,
+        "counts": ADOBE_RATING_TABLE if counts is None else counts,
+    }
+    return data.get_analyst_view("ADBE", usd_per_unit, fetch_analysts=lambda ticker: parts)
+
+
+def test_a_company_with_full_coverage_gives_its_rating_its_split_and_its_targets():
+    view = analysts_with()
+    assert view["rating"] == "Hold" and view["rating_mean"] == pytest.approx(2.97436) and view["analysts"] == 33
+    assert view["counts"] == {"strong_buy": 4, "buy": 5, "hold": 23, "sell": 6, "strong_sell": 1}
+    assert view["targets"] == {"low": 140.0, "mean": pytest.approx(266.9097), "median": 260.0, "high": 373.0}
+    assert data.has_analyst_coverage(view)
+
+
+def test_the_targets_are_converted_to_dollars_at_the_given_rate_and_the_counts_are_not():
+    view = analysts_with(targets={"low": 1400.0, "mean": 1655.0, "median": 1560.0, "high": 2100.0}, usd_per_unit=0.10)
+    assert view["targets"] == {"low": pytest.approx(140.0), "mean": pytest.approx(165.5), "median": pytest.approx(156.0), "high": pytest.approx(210.0)}
+    assert view["counts"]["hold"] == 23
+
+
+def test_targets_in_pence_are_converted_through_pounds():
+    # Like Shell in London: targets in pence, a pound worth $1.30.
+    view = analysts_with(targets={"low": 3786.3, "mean": 4251.0, "median": 4197.8, "high": 5060.2}, usd_per_unit=0.013)
+    assert view["targets"]["mean"] == pytest.approx(4251.0 * 0.013)
+
+
+def test_a_company_with_no_coverage_gives_nothing_and_that_is_not_an_error():
+    view = analysts_with(info={"recommendationKey": "none"}, targets={"current": 0.412}, counts=pd.DataFrame())
+    assert view == {"rating": None, "rating_mean": None, "analysts": None, "counts": None, "targets": None}
+    assert not data.has_analyst_coverage(view)
+
+
+def test_a_rating_alone_still_counts_as_coverage():
+    view = analysts_with(info={"recommendationKey": "buy"}, targets={}, counts=pd.DataFrame())
+    assert view["rating"] == "Buy" and view["targets"] is None and view["counts"] is None
+    assert data.has_analyst_coverage(view)
+
+
+@pytest.mark.parametrize("key, name", [
+    ("strong_buy", "Strong buy"), ("buy", "Buy"), ("hold", "Hold"), ("underperform", "Underperform"), ("sell", "Sell"),
+])
+def test_every_rating_yahoo_uses_has_a_readable_name(key, name):
+    assert analysts_with(info={"recommendationKey": key})["rating"] == name
+
+
+@pytest.mark.parametrize("key", ["none", None, "mystery", ""])
+def test_a_rating_that_is_missing_or_unknown_is_no_consensus(key):
+    assert analysts_with(info={"recommendationKey": key})["rating"] is None
+
+
+@pytest.mark.parametrize("count", [None, 0, -3, float("nan"), "many"])
+def test_an_analyst_count_that_is_not_a_positive_number_is_none(count):
+    assert analysts_with(info={"recommendationKey": "buy", "numberOfAnalystOpinions": count})["analysts"] is None
+
+
+@pytest.mark.parametrize("targets", [
+    {"low": 140.0, "mean": 266.9},                              # no high
+    {"low": 140.0, "high": 373.0},                              # no mean
+    {"low": 0, "mean": 266.9, "high": 373.0},                   # a zero is not a price
+    {"low": None, "mean": 266.9, "high": 373.0},
+    {"current": 217.71},
+])
+def test_targets_without_a_low_a_mean_and_a_high_are_not_used(targets):
+    assert analysts_with(targets=targets)["targets"] is None
+
+
+def test_the_median_is_left_out_when_yahoo_does_not_give_one():
+    view = analysts_with(targets={"low": 140.0, "mean": 266.9, "high": 373.0})
+    assert "median" not in view["targets"] and set(view["targets"]) == {"low", "mean", "high"}
+
+
+def test_the_split_uses_this_months_row_of_the_table():
+    table = pd.DataFrame({"period": ["-1m", "0m"], "strongBuy": [9, 1], "buy": [9, 2], "hold": [9, 3], "sell": [9, 4], "strongSell": [9, 5]})
+    assert analysts_with(counts=table)["counts"] == {"strong_buy": 1, "buy": 2, "hold": 3, "sell": 4, "strong_sell": 5}
+
+
+def test_a_table_with_no_this_month_row_or_no_period_column_uses_its_first_row():
+    older = pd.DataFrame({"period": ["-1m", "-2m"], "strongBuy": [7, 1], "buy": [1, 1], "hold": [1, 1], "sell": [1, 1], "strongSell": [1, 1]})
+    assert analysts_with(counts=older)["counts"]["strong_buy"] == 7
+    plain = pd.DataFrame({"strongBuy": [3], "buy": [1], "hold": [1], "sell": [0], "strongSell": [0]})
+    assert analysts_with(counts=plain)["counts"] == {"strong_buy": 3, "buy": 1, "hold": 1, "sell": 0, "strong_sell": 0}
+
+
+def test_a_table_of_zeros_or_with_a_missing_rating_is_not_used():
+    zeros = pd.DataFrame({"period": ["0m"], "strongBuy": [0], "buy": [0], "hold": [0], "sell": [0], "strongSell": [0]})
+    assert analysts_with(counts=zeros)["counts"] is None
+    missing = pd.DataFrame({"period": ["0m"], "strongBuy": [1], "buy": [1], "hold": [1]})
+    assert analysts_with(counts=missing)["counts"] is None
+
+
+def test_a_part_yahoo_could_not_give_leaves_the_other_parts_in_place():
+    parts = {"info": ADOBE_ANALYST_INFO, "targets": ConnectionError("no internet"), "counts": ADOBE_RATING_TABLE}
+    view = data.get_analyst_view("ADBE", fetch_analysts=lambda ticker: parts)
+    assert view["targets"] is None and view["rating"] == "Hold" and view["counts"]["hold"] == 23
+
+
+def test_when_yahoo_could_not_give_any_part_the_view_stops_with_a_plain_error():
+    boom = ConnectionError("no internet")
+    with pytest.raises(data.SourceUnavailable, match="Could not get the analysts' view from Yahoo Finance"):
+        data.get_analyst_view("ADBE", fetch_analysts=lambda ticker: {"info": boom, "targets": boom, "counts": boom})
+
+
+def test_when_the_whole_lookup_fails_the_view_stops_with_a_plain_error():
+    def broken(ticker):
+        raise ConnectionError("no internet")
+
+    with pytest.raises(data.SourceUnavailable, match="Could not get the analysts' view from Yahoo Finance: no internet"):
+        data.get_analyst_view("ADBE", fetch_analysts=broken)
+
+
+def test_the_analyst_view_leaves_yahoo_alone_while_it_is_cooling_down(monkeypatch):
+    monkeypatch.setattr("data._yahoo_busy_until", 10**12)
+
+    def must_not_be_called(ticker):
+        pytest.fail("asked Yahoo")
+
+    with pytest.raises(data.SourceUnavailable, match="isn't answering"):
+        data.get_analyst_view("ADBE", fetch_analysts=must_not_be_called)
+
+
+def test_the_real_lookup_keeps_a_failing_part_as_an_error_and_the_others_as_they_are(monkeypatch):
+    class FakeStock:
+        def __init__(self, ticker):
+            self.info = ADOBE_ANALYST_INFO
+            self.recommendations_summary = ADOBE_RATING_TABLE
+
+        @property
+        def analyst_price_targets(self):
+            raise ConnectionError("no targets")
+
+    monkeypatch.setattr("yfinance.Ticker", FakeStock)
+    parts = data.fetch_yahoo_analysts("ADBE")
+    assert parts["info"] == ADOBE_ANALYST_INFO and parts["counts"] is ADOBE_RATING_TABLE
+    assert isinstance(parts["targets"], ConnectionError)
