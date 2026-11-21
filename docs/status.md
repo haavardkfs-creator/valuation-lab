@@ -358,6 +358,12 @@
   app after the merge). One number failing leaves the other two; no key says so. `data.fetch_fred_latest`, `get_macro_backdrop`,
   `app.draw_macro_backdrop`. No maths, so no Excel step. 1158 tests pass (23 new; three layout tests updated on purpose because
   the Overview tab has one more section).
+- Done (in the open pull request "the big three", commit 1 of 3): a shareable link. The page's address now holds the company, the
+  growth and margin sliders, terminal growth, the typed-in WACC, the one-off amount and the peers, is rewritten after every
+  change and read once when a visit begins. A bad or out-of-range value in an address is ignored. Checked in a real browser
+  (opened a link, typed KO, reloaded the new address: same view). `app.settings_from_link`, `link_from_state`, `load_link`,
+  `write_link`. No maths, so no Excel step. 1195 tests pass (37 new). The scenario boxes are not in the link.
+  A linked visit logs one harmless line in the server log ("widget ... also had its value set via the Session State API").
 - Next: check the macro numbers on the live app after the merge; the live FMP check with Yahoo switched
   off; the small items below. CLAUDE.md still needs Haavard's edits (the theme line, and rows for theme.py and test_theme.py).
 - Open:

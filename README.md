@@ -48,6 +48,8 @@ before, on Yahoo alone.
 - A **peer multiples comparison** (EV/Sales, EV/EBITDA, P/E, P/S and forward P/E) sits beside the DCF.
 - **News and management** at the end of the page: the five most recent headlines (as links) and the top
   officers, from Yahoo Finance. It is context only; nothing in the valuation depends on it.
+- A **shareable link**: the page's address holds the company, the sliders, the typed-in WACC, the one-off amount and the peers,
+  so copying the address from the browser sends exactly your view.
 - A **macro backdrop** under the news: the 10-year Treasury yield, the Fed funds rate and US inflation, from FRED. Background
   only; it needs a free `FRED_API_KEY` (the same two places as the Financial Modeling Prep key) and says so when it has none.
 - A **"What do these terms mean?" box** under each section explains the terms in plain

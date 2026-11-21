@@ -625,6 +625,20 @@ US numbers, so the page says a company living on another country's rates is move
 here), is never shown, and never appears in an error message. One number failing leaves the other two; no key or no answer
 makes the whole section say it is not available right now and leaves the rest of the page alone.
 
+## The shareable link
+
+Not a formula in the workbook: the page's address holds the view, so sending the address sends the view. The address is
+rewritten after every change (`write_link`) and read once when a visit begins (`load_link`), so a reader's later changes are
+never undone. It remembers: the company (`ticker`), the growth and margin shifts in points (`growth`, `margin`), terminal growth
+and the typed-in WACC as percentages (`terminal_growth`, `wacc`; the WACC only while its box is ticked), the one-off amount in
+$ millions (`oneoff`) and the peer tickers (`peers`), the last two being those of the company in the ticker box. It does not
+remember the scenario boxes. Only a setting that differs from its usual value is written, so the plain page has a plain address.
+
+An address can be typed by anyone, so what is read from it is checked: a value that is not a plain number, lies outside what
+its slider can show, or has odd characters (a ticker or peer list with anything but letters, digits and `. ^ = -`, over
+`LINK_TICKER_MAX_CHARACTERS` / `LINK_PEERS_MAX_CHARACTERS` characters) is ignored, and that setting starts at its usual value.
+A number between two steps of a slider moves to the nearest step. Nothing from the address is ever shown as HTML.
+
 ## The verdict badge
 
 Not a formula in the workbook: a rule that only names a number the page already shows, the DCF's upside against the market

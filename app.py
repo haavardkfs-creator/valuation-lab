@@ -6,7 +6,9 @@ rail 5). Run it with: streamlit run app.py
 """
 
 import datetime
+import math
 import os
+import re
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -225,6 +227,141 @@ def model_wacc(dcf_inputs):
     )["wacc"]
 
 
+# ---------------------------------------------------------------------------
+# The shareable link: the page's address holds the company and the settings, so a link opens the same view
+# ---------------------------------------------------------------------------
+
+# The keys of the sidebar boxes that the link remembers (the ticker box's key is TICKER_BOX_KEY, further down). The peers and
+# the one-off amount have one box per company, whose key is the name below with the ticker after it.
+GROWTH_KEY = "growth_shift"
+MARGIN_KEY = "margin_shift"
+TERMINAL_GROWTH_KEY = "terminal_growth"
+WACC_TICK_KEY = "wacc_tick"
+WACC_KEY = "wacc_value"
+PEERS_KEY_START = "peers_"
+ONE_OFF_KEY_START = "oneoff_"
+LINK_LOADED_KEY = "link_loaded"
+
+LINK_TICKER_PATTERN = re.compile(r"[A-Za-z0-9.^=\-]+")
+LINK_PEERS_PATTERN = re.compile(r"[A-Za-z0-9.^=\-, ]+")
+
+
+def number_from_link(text, low, high, step):
+    """Read a number from the address and make it fit a slider: None when it is not a plain number or lies outside
+    low..high, otherwise the number moved to the nearest step the slider has.
+    """
+    try:
+        value = float(text)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(value) or not low - 1e-9 <= value <= high + 1e-9:
+        return None
+    return round(round(value / step) * step, 6)
+
+
+def settings_from_link(params):
+    """Turn the words after the ? in the page's address (a dictionary of text) into the settings it holds: "ticker", "growth"
+    and "margin" (in points), "terminal_growth" and "wacc" (decimals), "oneoff" ($ millions a year) and "peers" (text). The
+    address is typed by anyone, so a setting that is missing, is not a number, lies outside what the sliders can show or has
+    odd characters in it is simply left out, and the page starts that setting at its usual value.
+    """
+    settings = {}
+    ticker = params.get("ticker", "")
+    if ticker and len(ticker) <= assumptions.LINK_TICKER_MAX_CHARACTERS and LINK_TICKER_PATTERN.fullmatch(ticker):
+        settings["ticker"] = ticker.upper()
+    for name, low, high, step in (
+        ("growth", assumptions.GROWTH_SHIFT_MIN_POINTS, assumptions.GROWTH_SHIFT_MAX_POINTS, assumptions.GROWTH_SHIFT_STEP_POINTS),
+        ("margin", assumptions.MARGIN_SHIFT_MIN_POINTS, assumptions.MARGIN_SHIFT_MAX_POINTS, assumptions.MARGIN_SHIFT_STEP_POINTS),
+    ):
+        value = number_from_link(params.get(name), low, high, step)
+        if value is not None:
+            settings[name] = value
+    for name, low, high, step in (
+        ("terminal_growth", assumptions.TERMINAL_GROWTH_MIN, assumptions.TERMINAL_GROWTH_MAX, assumptions.TERMINAL_GROWTH_STEP),
+        ("wacc", assumptions.WACC_SLIDER_MIN, assumptions.WACC_SLIDER_MAX, assumptions.WACC_SLIDER_STEP),
+    ):
+        # In the address these are percentages ("2.5"); the sliders hold decimals (0.025).
+        try:
+            decimal = float(params.get(name)) / 100
+        except (TypeError, ValueError):
+            continue
+        value = number_from_link(decimal, low, high, step)
+        if value is not None:
+            settings[name] = value
+    limit = assumptions.LINK_ONE_OFF_LIMIT_MILLIONS
+    one_off = number_from_link(params.get("oneoff"), -limit, limit, 1)
+    if one_off is not None:
+        settings["oneoff"] = one_off
+    peers = params.get("peers", "")
+    if peers and len(peers) <= assumptions.LINK_PEERS_MAX_CHARACTERS and LINK_PEERS_PATTERN.fullmatch(peers):
+        settings["peers"] = peers
+    return settings
+
+
+def link_from_state(state):
+    """Write the settings in `state` (the page's boxes, by key) as the words for the address, as text. Only a setting that
+    differs from its usual value is written, so the plain page has a plain address. The peers and the one-off amount are
+    those of the company in the ticker box.
+    """
+    def number(value):
+        return f"{value:g}"
+
+    ticker = str(state.get(TICKER_BOX_KEY, "")).strip().upper() or DEFAULT_TICKER
+    params = {}
+    if ticker != DEFAULT_TICKER:
+        params["ticker"] = ticker
+    for name, key in (("growth", GROWTH_KEY), ("margin", MARGIN_KEY)):
+        if state.get(key, 0.0) != 0.0:
+            params[name] = number(state[key])
+    if state.get(TERMINAL_GROWTH_KEY, assumptions.TERMINAL_GROWTH_RATE) != assumptions.TERMINAL_GROWTH_RATE:
+        params["terminal_growth"] = number(round(state[TERMINAL_GROWTH_KEY] * 100, 4))
+    if state.get(WACC_TICK_KEY) and WACC_KEY in state:
+        params["wacc"] = number(round(state[WACC_KEY] * 100, 4))
+    if state.get(ONE_OFF_KEY_START + ticker, 0.0) != 0.0:
+        params["oneoff"] = number(state[ONE_OFF_KEY_START + ticker])
+    if state.get(PEERS_KEY_START + ticker):
+        params["peers"] = state[PEERS_KEY_START + ticker]
+    return params
+
+
+def load_link():
+    """When a visit begins (and only then, so a reader's later changes are never undone), put the settings held in the page's
+    address into the sidebar boxes. It runs before the boxes are drawn, which is the one moment a box's value may be set.
+    """
+    if st.session_state.get(LINK_LOADED_KEY):
+        return
+    st.session_state[LINK_LOADED_KEY] = True
+    settings = settings_from_link(dict(st.query_params))
+    ticker = settings.get("ticker", DEFAULT_TICKER)
+    if "ticker" in settings:
+        st.session_state[TICKER_BOX_KEY] = ticker
+    for name, key in (
+        ("growth", GROWTH_KEY), ("margin", MARGIN_KEY), ("terminal_growth", TERMINAL_GROWTH_KEY), ("wacc", WACC_KEY),
+    ):
+        if name in settings:
+            st.session_state[key] = settings[name]
+    if "wacc" in settings:
+        st.session_state[WACC_TICK_KEY] = True
+    if "oneoff" in settings:
+        st.session_state[ONE_OFF_KEY_START + ticker] = settings["oneoff"]
+    if "peers" in settings:
+        st.session_state[PEERS_KEY_START + ticker] = settings["peers"]
+
+
+def write_link():
+    """Write the page's current settings into its address, so copying the address from the browser shares this view."""
+    params = link_from_state(st.session_state)
+    if dict(st.query_params) != params:
+        st.query_params.from_dict(params)
+
+
+def draw_link_note():
+    """Say, at the bottom of the sidebar, how to share the view: the address holds it."""
+    st.sidebar.caption(
+        "To share this view, copy the page's address from your browser: it holds the company and the settings above."
+    )
+
+
 def draw_sliders():
     """Draw the sliders in the sidebar and return what they are set to: the growth shift,
     the margin shift, the terminal growth rate and the WACC the user chose (None when the
@@ -237,6 +374,7 @@ def draw_sliders():
         max_value=assumptions.GROWTH_SHIFT_MAX_POINTS,
         value=0.0,
         step=assumptions.GROWTH_SHIFT_STEP_POINTS,
+        key=GROWTH_KEY,
         format="%+.1f pts",
         help="Adds this many percentage points to every forecast year's growth. 0 is the base case; the table 'What the model assumes' shows the result.",
     )
@@ -246,6 +384,7 @@ def draw_sliders():
         max_value=assumptions.MARGIN_SHIFT_MAX_POINTS,
         value=0.0,
         step=assumptions.MARGIN_SHIFT_STEP_POINTS,
+        key=MARGIN_KEY,
         format="%+.1f pts",
         help="Adds this many percentage points to every forecast year's operating margin. 0 is the base case; the table 'What the model assumes' shows the result.",
     )
@@ -255,12 +394,14 @@ def draw_sliders():
         max_value=assumptions.TERMINAL_GROWTH_MAX,
         value=assumptions.TERMINAL_GROWTH_RATE,
         step=assumptions.TERMINAL_GROWTH_STEP,
+        key=TERMINAL_GROWTH_KEY,
         format="percent",
         help="How fast cash flow is assumed to grow forever after year 5. The base case is 2.5%.",
     )
     wacc_override = None
     if st.sidebar.checkbox(
         "Set the WACC myself",
+        key=WACC_TICK_KEY,
         help="Unticked, the model works out its own WACC from the company's figures. Ticked, the slider sets it.",
     ):
         wacc_override = st.sidebar.slider(
@@ -269,6 +410,7 @@ def draw_sliders():
             max_value=assumptions.WACC_SLIDER_MAX,
             value=assumptions.WACC_SLIDER_START,
             step=assumptions.WACC_SLIDER_STEP,
+            key=WACC_KEY,
             format="percent",
             help="The rate that cash flows are discounted at. Higher means a lower price.",
         )
@@ -2306,7 +2448,7 @@ def draw_adjustment_box(company):
             value=0.0,
             step=100.0,
             format="%.0f",
-            key=f"oneoff_{company['ticker']}",
+            key=ONE_OFF_KEY_START + company["ticker"],
             help=(
                 "Add or take off a yearly amount from operating income, in US dollars: for example -1000 "
                 "to take out a tax credit that flatters the profit. It is applied to the last fiscal year "
@@ -2368,7 +2510,7 @@ def draw_peer_box(company):
     typed = st.sidebar.text_input(
         "Peer tickers",
         value=", ".join(suggested),
-        key=f"peers_{company['ticker']}",      # one box per company, so peers are not carried over
+        key=PEERS_KEY_START + company["ticker"],      # one box per company, so peers are not carried over
         help=(
             "Companies to compare with, separated by commas. Suggested from Yahoo's industry "
             f"list, the closest in margin and growth; change them as you like (up to {assumptions.MAX_TYPED_PEERS})."
@@ -2827,6 +2969,7 @@ def draw_page():
     the reason instead. If it was found but a DCF cannot be built (it lost money), draw the header, the reason and
     only the Overview and Explanations tabs.
     """
+    load_link()
     ticker = draw_ticker_box()
     draw_name_search()
     growth_shift, margin_shift, terminal_growth_rate, wacc_override = draw_sliders()
@@ -2932,3 +3075,5 @@ theme.inject_theme()
 bridge_fmp_key()
 bridge_fred_key()
 draw_page()
+draw_link_note()
+write_link()

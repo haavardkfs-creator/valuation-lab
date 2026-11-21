@@ -4040,3 +4040,167 @@ def test_with_no_secrets_at_all_there_is_no_fred_key(monkeypatch):
 def test_the_sources_line_names_fred():
     assert "FRED" in app.SOURCES_TEXT
 
+
+# ---------------------------------------------------------------------------
+# The shareable link: the page's address holds the company and the settings
+# ---------------------------------------------------------------------------
+
+
+def run_linked(monkeypatch, params, yahoo=None):
+    """Open the page the way a link does: with `params` after the ? in the address."""
+    monkeypatch.setattr("yfinance.Industry", FakeIndustry)
+    monkeypatch.setattr("yfinance.Ticker", yahoo or example_with_peers())
+    page = AppTest.from_file(APP_FILE, default_timeout=60)
+    for name, value in params.items():
+        page.query_params[name] = value
+    return page.run()
+
+
+def address_of(page):
+    """What the page wrote into its address, as plain text (the test runner keeps each value in a list)."""
+    return {name: value[0] if isinstance(value, list) else value for name, value in page.query_params.items()}
+
+
+def test_a_full_address_is_read_into_every_setting():
+    got = app.settings_from_link({
+        "ticker": "msft", "growth": "1.5", "margin": "-2", "terminal_growth": "3", "wacc": "9.5", "oneoff": "-1000",
+        "peers": "AAPL, GOOG",
+    })
+    assert got == {
+        "ticker": "MSFT", "growth": 1.5, "margin": -2.0, "terminal_growth": 0.03, "wacc": 0.095, "oneoff": -1000.0,
+        "peers": "AAPL, GOOG",
+    }
+
+
+def test_an_empty_address_holds_no_settings():
+    assert app.settings_from_link({}) == {}
+
+
+@pytest.mark.parametrize("params", [
+    {"growth": "abc"}, {"growth": "99"}, {"growth": "nan"}, {"growth": "inf"}, {"growth": ""},      # not a number, too big, odd
+    {"margin": "-5.5"}, {"terminal_growth": "9"}, {"terminal_growth": "-1"}, {"wacc": "3"}, {"wacc": "20"},
+    {"oneoff": "1e12"}, {"oneoff": "x"},
+    {"ticker": "A" * 16}, {"ticker": "AB CD"}, {"ticker": "<script>"}, {"ticker": "A;B"}, {"ticker": ""},
+    {"peers": "A" * 201}, {"peers": "AAPL;DROP"}, {"peers": "<b>x</b>"},
+])
+def test_a_setting_that_is_odd_or_outside_what_the_boxes_can_show_is_left_out(params):
+    assert app.settings_from_link(params) == {}
+
+
+def test_a_number_between_two_steps_moves_to_the_nearest_step():
+    assert app.settings_from_link({"growth": "1.3"}) == {"growth": 1.5}
+    assert app.settings_from_link({"wacc": "9.6"}) == {"wacc": 0.095}              # steps of 0.25 points: 9.6 is nearest 9.5
+
+
+def test_one_odd_setting_does_not_stop_the_others():
+    assert app.settings_from_link({"growth": "oops", "margin": "1", "ticker": "x y"}) == {"margin": 1.0}
+
+
+def test_the_plain_page_has_a_plain_address():
+    assert app.link_from_state({}) == {}
+    state = {
+        app.TICKER_BOX_KEY: app.DEFAULT_TICKER, app.GROWTH_KEY: 0.0, app.MARGIN_KEY: 0.0,
+        app.TERMINAL_GROWTH_KEY: assumptions.TERMINAL_GROWTH_RATE, app.WACC_TICK_KEY: False,
+    }
+    assert app.link_from_state(state) == {}
+
+
+def test_only_settings_that_differ_from_the_usual_are_written():
+    state = {
+        app.TICKER_BOX_KEY: " exmp ", app.GROWTH_KEY: 1.5, app.MARGIN_KEY: 0.0,
+        app.TERMINAL_GROWTH_KEY: 0.03, app.WACC_TICK_KEY: True, app.WACC_KEY: 0.095,
+        app.ONE_OFF_KEY_START + "EXMP": -1000.0, app.PEERS_KEY_START + "EXMP": "LOSS, AAA",
+    }
+    assert app.link_from_state(state) == {
+        "ticker": "EXMP", "growth": "1.5", "terminal_growth": "3", "wacc": "9.5", "oneoff": "-1000", "peers": "LOSS, AAA",
+    }
+
+
+def test_a_wacc_slider_value_is_not_written_while_the_box_is_unticked():
+    assert "wacc" not in app.link_from_state({app.WACC_TICK_KEY: False, app.WACC_KEY: 0.095})
+
+
+def test_the_peers_and_the_one_off_amount_written_are_those_of_the_company_in_the_box():
+    state = {
+        app.TICKER_BOX_KEY: "MSFT", app.PEERS_KEY_START + "EXMP": "AAA", app.ONE_OFF_KEY_START + "EXMP": 5.0,
+    }
+    assert app.link_from_state(state) == {"ticker": "MSFT"}
+
+
+def test_what_is_written_is_read_back_the_same():
+    state = {
+        app.TICKER_BOX_KEY: "EXMP", app.GROWTH_KEY: -2.5, app.MARGIN_KEY: 4.0, app.TERMINAL_GROWTH_KEY: 0.0175,
+        app.WACC_TICK_KEY: True, app.WACC_KEY: 0.0925, app.ONE_OFF_KEY_START + "EXMP": 250.0, app.PEERS_KEY_START + "EXMP": "AAA, BBB",
+    }
+    assert app.settings_from_link(app.link_from_state(state)) == {
+        "ticker": "EXMP", "growth": -2.5, "margin": 4.0, "terminal_growth": 0.0175, "wacc": 0.0925, "oneoff": 250.0,
+        "peers": "AAA, BBB",
+    }
+
+
+def test_opening_a_link_sets_the_sliders_the_wacc_and_the_company(monkeypatch):
+    page = run_linked(monkeypatch, {"ticker": "exmp", "growth": "1.5", "margin": "-2", "terminal_growth": "3", "wacc": "9.5"})
+    assert_footer_and_no_crash(page)
+    assert page.sidebar.text_input(key=app.TICKER_BOX_KEY).value == "EXMP"          # a ticker is always in capitals
+    assert "Example Corp" in header_of(page)
+    assert page.sidebar.slider(key=app.GROWTH_KEY).value == 1.5
+    assert page.sidebar.slider(key=app.MARGIN_KEY).value == -2.0
+    assert page.sidebar.slider(key=app.TERMINAL_GROWTH_KEY).value == 0.03
+    assert page.sidebar.checkbox(key=app.WACC_TICK_KEY).value is True
+    assert page.sidebar.slider(key=app.WACC_KEY).value == 0.095
+
+
+def test_opening_a_link_with_peers_and_a_one_off_amount_fills_those_boxes_for_that_company(monkeypatch):
+    page = run_linked(monkeypatch, {"ticker": "EXMP", "peers": "AAA, BBB", "oneoff": "-500"})
+    assert_footer_and_no_crash(page)
+    assert peer_box(page).value == "AAA, BBB"
+    assert page.sidebar.number_input(key=app.ONE_OFF_KEY_START + "EXMP").value == -500.0
+
+
+def test_a_linked_view_gives_the_same_price_as_setting_the_boxes_by_hand(monkeypatch):
+    linked = run_linked(monkeypatch, {"growth": "1.5", "margin": "-2"})
+    by_hand = run_page(monkeypatch)
+    by_hand.sidebar.slider[0].set_value(1.5).run()
+    by_hand.sidebar.slider[1].set_value(-2.0).run()
+    assert metrics(linked)["DCF implied price"] == metrics(by_hand)["DCF implied price"]
+    assert metrics(linked)["DCF implied price"] != metrics(run_page(monkeypatch))["DCF implied price"]
+
+
+def test_garbage_in_the_address_starts_the_usual_page(monkeypatch):
+    page = run_linked(monkeypatch, {"growth": "abc", "ticker": "<script>", "wacc": "999", "peers": "x;y"})
+    assert_footer_and_no_crash(page)
+    assert page.sidebar.text_input(key=app.TICKER_BOX_KEY).value == app.DEFAULT_TICKER
+    assert page.sidebar.slider(key=app.GROWTH_KEY).value == 0.0
+    assert page.sidebar.checkbox(key=app.WACC_TICK_KEY).value is False
+
+
+def test_the_page_with_no_link_leaves_the_address_plain(monkeypatch):
+    page = run_page(monkeypatch)
+    assert address_of(page) == {}
+    assert "To share this view, copy the page's address" in texts(page.sidebar.caption)[-1]
+
+
+def test_changing_a_box_writes_it_into_the_address_and_changing_it_back_takes_it_out(monkeypatch):
+    page = run_page(monkeypatch)
+    page.sidebar.slider(key=app.GROWTH_KEY).set_value(-1.0).run()
+    assert address_of(page) == {"growth": "-1"}
+    page.sidebar.checkbox(key=app.WACC_TICK_KEY).check().run()
+    page.sidebar.slider(key=app.WACC_KEY).set_value(0.1).run()
+    assert address_of(page) == {"growth": "-1", "wacc": "10"}
+    page.sidebar.slider(key=app.GROWTH_KEY).set_value(0.0).run()
+    page.sidebar.checkbox(key=app.WACC_TICK_KEY).uncheck().run()
+    assert address_of(page) == {}
+
+
+def test_the_link_is_read_once_so_a_readers_changes_are_never_undone(monkeypatch):
+    page = run_linked(monkeypatch, {"growth": "1.5"})
+    page.sidebar.slider(key=app.GROWTH_KEY).set_value(-3.0).run()
+    page.sidebar.slider(key=app.MARGIN_KEY).set_value(1.0).run()
+    assert page.sidebar.slider(key=app.GROWTH_KEY).value == -3.0
+    assert address_of(page) == {"growth": "-3", "margin": "1"}
+
+
+def test_typing_another_company_writes_its_ticker_into_the_address(monkeypatch):
+    page = run_example_page(monkeypatch)
+    assert address_of(page) == {"ticker": "EXMP", "peers": "LOSS, AAA, BBB, CCC"}
+
