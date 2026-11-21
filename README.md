@@ -35,6 +35,8 @@ before, on Yahoo alone.
 
 - Five **tabs** under the header: Overview (the football field, the overview numbers grouped by what they say,
   the history, news and management), DCF, Multiples, Sensitivity and Explanations (the glossary).
+- **Search by company name**: type part of a name in the sidebar and click the company you mean; a ticker that is not found
+  also offers likely matches.
 - An **"answer first" header** at the top: the company's name, a verdict badge (undervalued, fairly valued or
   overvalued, from the DCF against the market price), four headline cards and a 12-month price chart.
 - **Sliders** change revenue growth, operating margin and terminal growth, and an optional

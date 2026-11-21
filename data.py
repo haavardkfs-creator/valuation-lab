@@ -639,6 +639,53 @@ def get_company_context(ticker, fetch_news=fetch_yahoo_news, fetch_officers=fetc
 
 
 # ---------------------------------------------------------------------------
+# Searching for a company by name (Yahoo Finance's free search), so a reader can find a ticker
+# ---------------------------------------------------------------------------
+
+def fetch_yahoo_search(query, how_many):
+    """Ask Yahoo Finance's search what matches a name or part of one. Gives Yahoo's own list, most relevant first: each
+    a dictionary with a "symbol", names, an exchange and a "quoteType" (a share, a fund, a future and so on). This is the
+    only function in this part that touches the internet.
+    """
+    import yfinance
+
+    return yfinance.Search(query, max_results=how_many, news_count=0).quotes
+
+
+def search_companies(query, how_many, minimum_characters, matches_asked, fetch_matches=fetch_yahoo_search):
+    """Find the companies that match a name (or part of one) the reader typed, as a list of {"ticker", "name",
+    "exchange"}, most relevant first, at most `how_many`. Yahoo is asked for `matches_asked` (more than are shown,
+    because many are dropped): only company shares are kept, futures, funds and the like are dropped, and a ticker
+    appears once. Fewer than `minimum_characters` typed gives an empty list without asking anyone. Leaves Yahoo alone
+    while it is cooling down, and stops with a plain error if Yahoo cannot be reached. `fetch_matches` can be swapped,
+    which is how the tests run without the internet.
+    """
+    query = tidy_text(query)
+    if len(query) < minimum_characters:
+        return []
+    if _yahoo_cooling_down():
+        raise SourceUnavailable(YAHOO_BUSY_MESSAGE)
+    try:
+        found = fetch_matches(query, matches_asked)
+    except Exception as error:      # Yahoo can fail in many ways; the reader needs one clear message
+        raise SourceUnavailable("Could not search Yahoo Finance: %s" % error) from error
+    matches, seen = [], set()
+    for item in found or []:
+        ticker = tidy_text(item.get("symbol"))
+        if item.get("quoteType") != "EQUITY" or not ticker or ticker in seen:
+            continue
+        seen.add(ticker)
+        matches.append({
+            "ticker": ticker,
+            "name": tidy_text(item.get("shortname")) or tidy_text(item.get("longname")) or ticker,
+            "exchange": tidy_text(item.get("exchDisp") or item.get("exchange")) or None,
+        })
+        if len(matches) == how_many:
+            break
+    return matches
+
+
+# ---------------------------------------------------------------------------
 # The share price over the last twelve months (for the sparkline in the page header)
 # ---------------------------------------------------------------------------
 

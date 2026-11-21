@@ -2103,6 +2103,16 @@ def load_adobe_peer_margins(tickers):
 
 
 @st.cache_data(ttl=LIVE_DATA_CACHE_SECONDS, show_spinner=False)
+def load_company_matches(query):
+    """Search Yahoo Finance for the companies matching a name and remember the answer for LIVE_DATA_CACHE_SECONDS. Stops
+    with a plain error if Yahoo is busy or cannot be reached.
+    """
+    return data.search_companies(
+        query, assumptions.SEARCH_RESULTS_SHOWN, assumptions.SEARCH_MIN_CHARACTERS, assumptions.SEARCH_MATCHES_ASKED
+    )
+
+
+@st.cache_data(ttl=LIVE_DATA_CACHE_SECONDS, show_spinner=False)
 def load_price_history(ticker, usd_per_unit):
     """Fetch a share's closing prices over the last year (in US dollars) and remember them for
     LIVE_DATA_CACHE_SECONDS. Stops with a plain error if Yahoo is busy or has none.
@@ -2266,17 +2276,84 @@ def draw_peer_box(company):
     return figures, notes
 
 
+# The keys of the two sidebar boxes: a click on a match writes the chosen ticker into the first and clears the second.
+TICKER_BOX_KEY = "ticker_box"
+NAME_SEARCH_KEY = "name_search"
+
+
+def choose_ticker(ticker):
+    """Run when the reader clicks a match: put its ticker in the ticker box (so the page loads that company) and clear the
+    search box. It runs before the page is drawn again, which is the one moment a box's value may be set.
+    """
+    st.session_state[TICKER_BOX_KEY] = ticker
+    st.session_state[NAME_SEARCH_KEY] = ""
+
+
+def match_label(match):
+    """Write one match as the text of its button: the name, the ticker and the exchange, for example
+    "Apple Inc. · AAPL · NASDAQ". The text comes from Yahoo, so it is made safe for markdown first.
+    """
+    parts = [plain_text_for_markdown(match["name"]), plain_text_for_markdown(match["ticker"])]
+    if match["exchange"]:
+        parts.append(plain_text_for_markdown(match["exchange"]))
+    return " · ".join(parts)
+
+
+def find_matches(query):
+    """Look up the companies whose name matches `query`: a list of matches (empty when nothing matches), or None when the
+    search could not be made (Yahoo is busy or cannot be reached). It never stops the page.
+    """
+    try:
+        return load_company_matches(query)
+    except ValueError:
+        return None
+
+
+def draw_match_buttons(container, matches, key_prefix):
+    """Draw each match as a button in `container` (the sidebar or the page); clicking one loads that company. The keys
+    start with `key_prefix`, so the same company can be offered in two places at once without clashing.
+    """
+    for match in matches:
+        container.button(
+            match_label(match), key=f"{key_prefix}_{match['ticker']}", on_click=choose_ticker, args=(match["ticker"],),
+            width="stretch",
+        )
+
+
 def draw_ticker_box():
     """Draw the company ticker box at the top of the sidebar and return the ticker typed in,
     in capitals. An empty box means the default company.
     """
     st.sidebar.header("Company")
+    st.session_state.setdefault(TICKER_BOX_KEY, DEFAULT_TICKER)
     typed = st.sidebar.text_input(
         "Company ticker",
-        value=DEFAULT_TICKER,
+        key=TICKER_BOX_KEY,
         help="A US stock ticker, for example MSFT. Adobe (ADBE) has hand-chosen assumptions and peers; any other company gets a starting point from its own last reported year and suggested peers.",
     )
     return typed.strip().upper() or DEFAULT_TICKER
+
+
+def draw_name_search():
+    """Draw the "Search by company name" box under the ticker box, and, once something is typed, the matching companies
+    as buttons. It is how a reader finds a ticker without knowing it.
+    """
+    query = st.sidebar.text_input(
+        "Search by company name", key=NAME_SEARCH_KEY, placeholder="For example Microsoft",
+        help="Type part of a company's name and press Enter. Click a match to load it.",
+    ).strip()
+    if not query:
+        return
+    if len(query) < assumptions.SEARCH_MIN_CHARACTERS:
+        st.sidebar.caption(f"Type at least {assumptions.SEARCH_MIN_CHARACTERS} characters.")
+        return
+    matches = find_matches(query)
+    if matches is None:
+        st.sidebar.caption("The search is not available right now. Type the ticker instead.")
+    elif not matches:
+        st.sidebar.caption(f"No company found for {plain_text_for_markdown(query)}.")
+    else:
+        draw_match_buttons(st.sidebar, matches, "match")
 
 
 def currency_note(company):
@@ -2378,8 +2455,12 @@ def draw_error(ticker, error):
     """
     st.title("Valuation Lab")
     st.error(f"Could not value {ticker}. {error}")
-    title = "Things to check" if not isinstance(error, data.SourceUnavailable) else "What you can do"
-    st.html(theme.hints_card_html(title, error_hints(ticker, error)))
+    busy = isinstance(error, data.SourceUnavailable)
+    st.html(theme.hints_card_html("What you can do" if busy else "Things to check", error_hints(ticker, error)))
+    matches = [] if busy else find_matches(ticker) or []             # no suggestions when the source is down or finds nothing
+    if matches:
+        st.markdown("**Did you mean one of these?**")
+        draw_match_buttons(st, matches, "didyoumean")
     draw_footer()
 
 
@@ -2563,6 +2644,7 @@ def draw_page():
     only the Overview and Explanations tabs.
     """
     ticker = draw_ticker_box()
+    draw_name_search()
     growth_shift, margin_shift, terminal_growth_rate, wacc_override = draw_sliders()
     scenario_settings = draw_scenario_boxes()
     adjustment = 0.0

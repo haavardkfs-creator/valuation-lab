@@ -277,3 +277,18 @@ OFFICERS_SHOWN = 5
 # than this far below it for OVERVALUED; anything in between is FAIRLY VALUED. 15% is a common rule of thumb
 # for a margin of safety, not a result from the model. Chosen with Haavard on 20 Nov 2026.
 VERDICT_THRESHOLD = 0.15
+
+
+# ---------------------------------------------------------------------------
+# Searching for a company by name
+# ---------------------------------------------------------------------------
+
+# How many matches the page lists. Yahoo sends about five to eight, mixed with futures, funds and foreign copies of the
+# same share; after those are dropped, six is enough to find the one you mean. Chosen with Haavard on 21 Nov 2026.
+SEARCH_RESULTS_SHOWN = 6
+
+# The fewest characters a search needs: one letter would match half the market.
+SEARCH_MIN_CHARACTERS = 2
+
+# How many matches to ask Yahoo for, more than are shown, because many of them are dropped (only company shares are kept).
+SEARCH_MATCHES_ASKED = 15

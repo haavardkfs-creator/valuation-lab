@@ -325,7 +325,7 @@
   fixed limits, such as the verdict's 15%, are filled in from `assumptions.py`). P/S and forward P/E are in the glossary in Haavard's
   exact words (`docs/glossary.md`, copied from his message). The closed "What do these terms mean?" boxes are gone, and the
   Explanations tab has a "Reading the page" section with the same help texts. 1010 tests pass (47 new).
-- Done (in the open pull request): redesign Phase 5 of 5, the polish, which finishes the redesign. Loading messages ("Loading NVDA..."
+- Done: redesign Phase 5 of 5, the polish, which finishes the redesign (merged, pull request 62). Loading messages ("Loading NVDA..."
   while a company is fetched, and a second one under the header while its history is). A friendlier not-found page: the original
   message plus a "Things to check" card (Apple is AAPL, an exchange ending for shares listed elsewhere, a few tickers to try), and
   "What you can do" instead when the data source was not answering. The DCF tab no longer repeats the header (it keeps the DCF price
@@ -334,15 +334,22 @@
   charts are Plotly in the house style, each with a headline and a ?. Every page ends with a sources line and then the not-advice
   note, and the browser tab has an icon. 1038 tests pass (26 new); 11 old tests were repointed on purpose (eight read the "Market
   price" card that is now only in the header, two unpacked the old warning box, one checked the old verdict wording).
-- Next: the redesign is done. Left on the list: #11 part 2 (macro backdrop: needs a free FRED key from Haavard, never pasted in
-  chat) and part 3 (thesis page with Haavard's reasons boxes and a Markdown download, nothing saved on the server); Haavard's
-  company-name search that lists several matching tickers; the live FMP check with Yahoo switched off; forward P/E and the other
-  small items below. CLAUDE.md still needs Haavard's edits (the theme line, and rows for theme.py and test_theme.py).
+- Done (in the open pull request): searching for a company by name (Haavard's idea, 20 Nov 2026, after the Nordnet search). A "Search by
+  company name" box sits under the ticker box: typing part of a name and pressing Enter lists the matching companies as buttons
+  ("Microsoft Corporation · MSFT · NASDAQ", at most 6), and one click puts the ticker in the ticker box and loads that company. When a
+  ticker is not found, the page also offers "Did you mean one of these?" for what was typed (the mistyped "appl" offers Apple first).
+  It uses Yahoo Finance's free search, keeps only company shares (futures, funds and duplicates are dropped, foreign listings stay
+  with their exchange shown), is remembered for 15 minutes, leaves Yahoo alone while it is cooling down, and if it cannot search says
+  so and the page still works. `data.search_companies`, `assumptions.SEARCH_*`. No maths, so no Excel step. 1069 tests pass (31 new);
+  two sidebar assertions were updated on purpose (the sidebar now has two text boxes, and keeps its Company heading).
+- Next: #11 part 3 (thesis page with Haavard's reasons boxes and a Markdown download, nothing saved on the server) and part 2 (macro
+  backdrop: needs a free FRED key from Haavard, never pasted in chat); the live FMP check with Yahoo switched off; the small items
+  below. CLAUDE.md still needs Haavard's edits (the theme line, and rows for theme.py and test_theme.py).
 - Open:
   - Ideas from Haavard (20 Nov 2026): (1) group the overview by type of multiple: done in Phase 4a; (2) a ? help on every
     multiple and every chart, like the overview has: done in Phase 4b; (3) search
-    by company name that lists several matching tickers, like Nordnet's search (Yahoo has a free search with name, ticker and
-    exchange; price and day change would cost extra requests): after the redesign.
+    by company name that lists several matching tickers, like Nordnet's search: done (price and day change in the list would cost
+    extra requests, so the list shows name, ticker and exchange only).
   - CLAUDE.md still says "Light theme in config.toml, colours only" under "Already decided", and lists `.streamlit/config.toml`
     as "Theme settings only" with no row for `theme.py` or `test_theme.py`. Haavard changes his own rules file: the lines
     to update are given in the pull request description.
