@@ -61,6 +61,15 @@ CARD_CSS = f"""
 [data-testid="stExpander"] {{ border-radius: {CARD_RADIUS}; border: 1px solid {BORDER}; }}
 [data-testid="stDataFrame"], [data-testid="stTable"] {{ border-radius: {CARD_RADIUS}; }}
 
+/* The card that helps when a company cannot be found: a title and a short list of things to check. */
+.vl-hints {{
+    background: {SURFACE}; border: 1px solid {BORDER}; border-radius: {CARD_RADIUS}; padding: 1rem 1.25rem; margin: 0.75rem 0 1rem 0;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+}}
+.vl-hints-title {{ color: {TEXT}; font-weight: 700; margin-bottom: 0.4rem; }}
+.vl-hints ul {{ margin: 0; padding-left: 1.2rem; color: {GREY}; }}
+.vl-hints li {{ margin: 0.25rem 0; }}
+
 /* The "answer first" header at the top of the page. */
 .vl-brand {{ color: {GREY}; font-size: 0.8rem; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; }}
 .vl-name {{ display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; margin: 0.25rem 0 0.6rem 0; }}
@@ -230,6 +239,14 @@ def verdict_badge_html(verdict, help=None):
     tone_class = f" vl-badge-{tone}" if tone else ""
     title = f' title="{html.escape(help, quote=True)}"' if help else ""
     return f'<span class="vl-badge{tone_class}"{title}>{html.escape(words)}</span>'
+
+
+def hints_card_html(title, items):
+    """Write a small card with a title and a bulleted list of things to check, for the page that says a company could
+    not be found. Every piece of text is escaped first (the title can contain what the reader typed).
+    """
+    bullets = "".join(f"<li>{html.escape(item)}</li>" for item in items)
+    return f'<div class="vl-hints"><div class="vl-hints-title">{html.escape(title)}</div><ul>{bullets}</ul></div>'
 
 
 def header_html(company_name, ticker, verdict, cards, basis, verdict_help=None):

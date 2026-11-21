@@ -243,6 +243,17 @@ HELP_TEXTS = {
         "market price: the boundary between assumptions that imply upside and those that imply downside. The blue "
         "frame is the base case, the assumptions the DCF uses.",
     ),
+    "history_amounts": (
+        "Revenue and free cash flow by year",
+        "Revenue (blue) and free cash flow as the company reports it (grey) for each year Yahoo Finance has, in US "
+        "dollars. Reported free cash flow adds back share-based pay, so it can sit higher than the model's own figure.",
+    ),
+    "history_margins": (
+        "Margins by year",
+        "The operating margin (blue) is operating profit as a share of revenue; the free cash flow margin (grey) is "
+        "reported free cash flow as a share of revenue. A line that moves a lot says one year is a poor guide to the "
+        "next.",
+    ),
     "peer_bars": (
         "Peer bars",
         "One multiple for the company (blue) and for each of its peers (grey), highest at the top. The dashed line is "

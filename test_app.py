@@ -99,6 +99,11 @@ def peer_table_of(page):
     return table
 
 
+def market_price_of(page):
+    """The market price a page shows, read from the "Current price" card of its header."""
+    return card_values(header_of(page))["Current price"]
+
+
 def assert_footer_and_no_crash(page):
     assert not page.exception
     assert app.FOOTER_TEXT in texts(page.caption)
@@ -127,7 +132,7 @@ def test_adobe_falls_back_to_the_snapshot_when_yahoo_cannot_be_reached(monkeypat
     assert_footer_and_no_crash(page)
     assert any("could not be reached" in warning for warning in texts(page.warning))
     assert metrics(page)["DCF implied price"] == "$305.60"
-    assert metrics(page)["Market price"] == "$251.47"
+    assert market_price_of(page) == "$251.47"
 
 
 def test_an_empty_ticker_box_means_adobe(monkeypatch):
@@ -152,10 +157,11 @@ def test_another_company_gets_a_starting_point_with_a_warning_and_no_multiples_w
     header = header_of(page)
     assert "<h1>Example Corp</h1>" in header and ">EXMP</span>" in header
     assert "All figures are from Yahoo Finance's latest annual statements." in texts(page.caption)
-    [warning] = texts(page.warning)
-    assert warning.startswith("Starting point, not a forecast")
-    assert "Example Corp's own last reported year" in warning
-    assert "banks, loss-making and early-stage" in warning
+    assert not page.warning                                                  # the starting-point caveat is a calm note now
+    [note] = texts(page.info)
+    assert note.startswith("Starting point, not a forecast")
+    assert "Example Corp's last reported margins flat" in note
+    assert "banks, loss-makers or early-stage ones" in note
     subheaders = texts(page.subheader)
     assert "Discounted cash flow (DCF)" in subheaders
     assert "Behind the number" in subheaders
@@ -164,7 +170,7 @@ def test_another_company_gets_a_starting_point_with_a_warning_and_no_multiples_w
     assert "Peer multiples" in subheaders
     assert "EV/Sales price" not in metrics(page)
     assert any("No suitable peers were found" in caption for caption in texts(page.caption))
-    assert metrics(page)["Market price"] == "$240.74"
+    assert market_price_of(page) == "$240.74"
 
 
 def test_a_company_with_no_interest_expense_is_valued_with_a_note_about_the_estimate(monkeypatch):
@@ -173,10 +179,11 @@ def test_a_company_with_no_interest_expense_is_valued_with_a_note_about_the_esti
     page = run_page(monkeypatch, ticker="aapl", yahoo=no_interest_expense_company())
     assert_footer_and_no_crash(page)
     assert not page.error
-    note, warning = texts(page.warning)
+    [note] = texts(page.warning)
     assert "no interest expense" in note
     assert "6.40%" in note and "1.11%" in note
-    assert warning.startswith("Starting point, not a forecast")
+    [starting_point] = texts(page.info)
+    assert starting_point.startswith("Starting point, not a forecast")
     assert "Discounted cash flow (DCF)" in texts(page.subheader)
 
 
@@ -349,7 +356,7 @@ def test_a_company_in_kroner_is_shown_in_dollars_with_a_conversion_note(monkeypa
     page = run_page(monkeypatch, ticker="krn.ol", yahoo=krone_company())
     assert_footer_and_no_crash(page)
     assert "Converted from NOK to US dollars at today's exchange rate (1 NOK = $0.1)." in texts(page.caption)
-    assert metrics(page)["Market price"] == "$24.07"        # 240.74 kroner at 10 US cents each
+    assert market_price_of(page) == "$24.07"        # 240.74 kroner at 10 US cents each
 
 
 def test_a_dollar_company_gets_no_conversion_note(monkeypatch):
@@ -1914,7 +1921,7 @@ def test_adobe_still_works_from_the_snapshot_with_a_warning_when_yahoo_is_limiti
     page = run_page(monkeypatch, yahoo=fake_statements_ticker(info={}))
     assert_footer_and_no_crash(page)
     assert any("could not be reached" in warning for warning in texts(page.warning))
-    assert metrics(page)["Market price"] == "$251.47"                                # the frozen snapshot's price
+    assert market_price_of(page) == "$251.47"                                # the frozen snapshot's price
 
 
 # ---------------------------------------------------------------------------
@@ -1937,14 +1944,14 @@ def test_adobe_takes_its_live_price_from_fmp_when_yahoo_is_not_answering(monkeyp
         in texts(page.caption)
     )
     assert not page.warning
-    assert metrics(page)["Market price"] == "$250.00"                                # FMP's price, not the snapshot's
+    assert market_price_of(page) == "$250.00"                                # FMP's price, not the snapshot's
 
 
 def test_adobe_warns_that_neither_provider_answered_when_it_falls_to_the_snapshot(monkeypatch):
     page = run_page_with_yahoo_down(monkeypatch, profile=[dict(FMP_PROFILE[0], price=None)])
     assert_footer_and_no_crash(page)
     assert any("Neither Yahoo Finance nor Financial Modeling Prep could be reached" in w for w in texts(page.warning))
-    assert metrics(page)["Market price"] == "$251.47"
+    assert market_price_of(page) == "$251.47"
 
 
 def test_another_company_is_valued_from_fmp_when_yahoo_is_not_answering(monkeypatch):
@@ -2315,8 +2322,9 @@ def test_the_fiscal_year_numbers_worked_from_ebit_use_the_adjustment(monkeypatch
 def test_what_is_reported_stays_as_reported(monkeypatch):
     plain = run_exmp_with_quarters(monkeypatch)
     adjusted = run_exmp_with_quarters(monkeypatch, -1000)
-    for label in ("P/E", "Cash conversion", "Revenue growth", "EV/Sales", "Market price", "WACC"):
+    for label in ("P/E", "Cash conversion", "Revenue growth", "EV/Sales", "WACC"):
         assert metrics(adjusted)[label] == metrics(plain)[label], label
+    assert market_price_of(adjusted) == market_price_of(plain)
     assert history_table_of(adjusted).equals(history_table_of(plain))             # the History is as the company reported
 
 
@@ -2539,13 +2547,13 @@ def card_values(header):
     ))
 
 
-def test_the_header_cards_show_the_same_numbers_as_the_dcf_section_below(monkeypatch):
+def test_the_header_cards_agree_with_the_dcf_tab_and_with_each_other(monkeypatch):
     page = run_page(monkeypatch)
     cards = card_values(header_of(page))
     shown = metrics(page)
-    assert cards["Current price"] == shown["Market price"]
-    assert cards["DCF value per share"] == shown["DCF implied price"]
-    assert cards["Upside / downside"] == "▲ +" + shown["Upside vs market"]            # an up arrow and a plus sign
+    assert cards["DCF value per share"] == shown["DCF implied price"]                  # the DCF tab's own card
+    price, dcf_price = (float(cards[label].lstrip("$").replace(",", "")) for label in ("Current price", "DCF value per share"))
+    assert cards["Upside / downside"] == theme.change_text(dcf_price / price - 1)       # the upside follows from the two prices
     assert list(cards) == ["Current price", "DCF value per share", "Upside / downside", "Multiples value"]
 
 
@@ -2577,7 +2585,7 @@ def test_a_price_close_to_the_dcf_value_is_fairly_valued_with_no_colour_on_the_u
 
 def test_the_header_says_what_the_verdict_rests_on_and_that_it_is_not_advice(monkeypatch):
     header = header_of(run_page(monkeypatch))
-    assert "more than 15% above is undervalued" in header and "not investment advice" in header
+    assert "with 15% either way" in header and "not investment advice" in header
 
 
 def test_without_a_dcf_the_header_has_no_verdict_and_the_cards_that_need_one_say_so(monkeypatch):
@@ -2621,14 +2629,14 @@ def test_the_price_sparkline_is_drawn_when_yahoo_has_the_prices(monkeypatch):
     page = run_page(monkeypatch, yahoo=yahoo_with_prices())
     assert_footer_and_no_crash(page)
     assert "Share price, last 12 months" in texts(page.caption)
-    assert len(page.get("plotly_chart")) == 9                     # the sparkline, the football field, the three behind the number, the two heatmaps and the two peer charts
+    assert len(page.get("plotly_chart")) == 11                    # the sparkline, the football field, the two history charts, the three behind the number, the two heatmaps and the two peer charts
 
 
 def test_without_price_history_the_header_still_draws_and_just_leaves_the_chart_out(monkeypatch):
     page = run_page(monkeypatch)                                  # the usual fake has no history() at all
     assert_footer_and_no_crash(page)
     assert "Share price, last 12 months" not in texts(page.caption)
-    assert len(page.get("plotly_chart")) == 8                     # no sparkline; the other eight remain
+    assert len(page.get("plotly_chart")) == 10                    # no sparkline; the other ten remain
     assert "▲ UNDERVALUED" in header_of(page)
 
 
@@ -2822,7 +2830,7 @@ def test_adobes_page_has_the_football_field_with_a_headline_and_the_charts_behin
     assert any(line.startswith("**") and "of enterprise value" in line for line in markdown)       # the waterfall headline
     assert any(line.startswith("**Free cash flow is forecast to") for line in markdown)
     assert any(line.startswith("**") and "of the value comes from after year 5." in line for line in markdown)
-    assert len(page.get("plotly_chart")) == 9
+    assert len(page.get("plotly_chart")) == 11
 
 
 def test_the_headline_dollar_signs_reach_the_page_escaped(monkeypatch):
@@ -3131,11 +3139,11 @@ def test_the_header_and_the_footer_sit_outside_the_tabs(monkeypatch):
 
 def test_the_charts_are_spread_over_the_tabs(monkeypatch):
     page = run_page(monkeypatch, yahoo=yahoo_with_prices())
-    assert len(tab_named(page, "Overview").get("plotly_chart")) == 1                # the football field
+    assert len(tab_named(page, "Overview").get("plotly_chart")) == 3                # the football field and the two history charts
     assert len(tab_named(page, "DCF").get("plotly_chart")) == 3                     # the waterfall, free cash flow and the ring
     assert len(tab_named(page, "Multiples").get("plotly_chart")) == 2               # the peer bars and the scatter
     assert len(tab_named(page, "Sensitivity").get("plotly_chart")) == 2             # the two heatmaps
-    assert len(page.get("plotly_chart")) == 9                                       # with the sparkline in the header
+    assert len(page.get("plotly_chart")) == 11                                      # with the sparkline in the header
 
 
 def test_the_peer_table_is_in_the_multiples_tab(monkeypatch):
@@ -3259,13 +3267,13 @@ def test_the_share_price_chart_caption_has_a_question_mark(monkeypatch):
     assert caption.help == app.explanations.help_text("sparkline")
 
 
-def test_the_four_dcf_cards_use_the_glossary_wording(monkeypatch):
+def test_the_dcf_cards_use_the_glossary_wording_and_do_not_repeat_the_header(monkeypatch):
     page = run_page(monkeypatch)
     helps = {metric.label: metric.help for metric in tab_named(page, "DCF").metric}
     assert helps["DCF implied price"] == app.explanations.EXPLANATIONS["implied_share_price"][1]
-    assert helps["Upside vs market"] == app.explanations.EXPLANATIONS["upside_vs_market"][1]
     assert helps["WACC"] == app.explanations.EXPLANATIONS["wacc"][1]
-    assert helps["Market price"] == app.explanations.help_text("current_price")
+    assert helps["Terminal growth"] == app.explanations.EXPLANATIONS["terminal_growth_rate"][1]
+    assert "Market price" not in helps and "Upside vs market" not in helps                # those two are in the header only
 
 
 def test_every_price_box_on_the_multiples_tab_has_a_question_mark(monkeypatch):
@@ -3352,3 +3360,225 @@ def test_a_company_with_no_dcf_still_has_the_explanations_with_reading_the_page(
     page = run_page(monkeypatch, ticker="loss", yahoo=fake_statements_ticker(income=loss))
     assert "##### Reading the page" in texts(tab_named(page, "Explanations").markdown)
     assert header_of(page).count('class="vl-help"') == 4
+
+
+# ---------------------------------------------------------------------------
+# Polish: loading messages, a helpful not-found page, no doubled cards, the History charts, the sources line (Phase 5)
+# ---------------------------------------------------------------------------
+
+class SpinnerLog:
+    """A stand-in for st.spinner that records every message it was given and shows nothing."""
+    def __init__(self):
+        self.messages = []
+
+    def __call__(self, message="", **kwargs):
+        self.messages.append(message)
+        return self
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+def test_a_company_that_loads_shows_a_loading_message_for_the_company_and_another_for_its_history(monkeypatch):
+    log = SpinnerLog()
+    monkeypatch.setattr(st, "spinner", log)
+    page = run_page(monkeypatch)
+    assert_footer_and_no_crash(page)
+    assert log.messages == ["Loading ADBE…", "Loading the history and the last twelve months…"]
+
+
+def test_the_loading_message_names_the_company_the_reader_asked_for(monkeypatch):
+    log = SpinnerLog()
+    monkeypatch.setattr(st, "spinner", log)
+    run_page(monkeypatch, ticker="exmp", yahoo=other_company())
+    assert log.messages[-2:] == ["Loading EXMP…", "Loading the history and the last twelve months…"]   # after the first run, which loads Adobe
+
+
+def test_a_company_that_cannot_be_found_only_shows_the_first_loading_message(monkeypatch):
+    log = SpinnerLog()
+    monkeypatch.setattr(st, "spinner", log)
+    nothing = fake_statements_ticker(income={}, cash_flow={}, balance={}, info={})
+    monkeypatch.setattr("data._start_yahoo_cooldown", lambda: None)
+    run_page(monkeypatch, ticker="nope", yahoo=nothing)
+    # The first run loads Adobe (both messages); the typed ticker is not found, so it shows only the first message.
+    assert log.messages == ["Loading ADBE…", "Loading the history and the last twelve months…", "Loading NOPE…"]
+
+
+def test_the_page_has_a_title_and_an_icon_in_the_browser_tab(monkeypatch):
+    recorded = {}
+    real = st.set_page_config
+    monkeypatch.setattr(st, "set_page_config", lambda **kwargs: (recorded.update(kwargs), real(**kwargs))[1])
+    run_page(monkeypatch)
+    assert recorded == {"page_title": "Valuation Lab", "page_icon": "📈"}
+
+
+def not_found_page(monkeypatch, ticker="appl"):
+    nothing = fake_statements_ticker(income={}, cash_flow={}, balance={}, info={})
+    monkeypatch.setattr("data._start_yahoo_cooldown", lambda: None)
+    return run_page(monkeypatch, ticker=ticker, yahoo=nothing)
+
+
+def hints_of(page):
+    [card] = [element.value for element in page.get("html") if 'class="vl-hints"' in element.value]
+    return card
+
+
+def test_a_company_that_cannot_be_found_keeps_its_message_and_gets_a_list_of_things_to_check(monkeypatch):
+    page = not_found_page(monkeypatch)
+    assert_footer_and_no_crash(page)
+    [error] = texts(page.error)
+    assert error.startswith("Could not value APPL.") and "Yahoo Finance has no figures for APPL" in error
+    card = hints_of(page)
+    assert "Things to check" in card and "Is APPL the ticker" in card
+    assert "Apple is AAPL, Microsoft is MSFT and Coca-Cola is KO" in card
+    assert "AKER.OL for Oslo" in card
+    assert "Try one of these: ADBE, AAPL, MSFT, KO, NVDA." in card
+
+
+def test_the_suggested_tickers_are_real_looking_tickers_and_the_list_is_short():
+    assert 3 <= len(app.EXAMPLE_TICKERS) <= 6
+    assert all(ticker.isalpha() and ticker.isupper() for ticker in app.EXAMPLE_TICKERS)
+    assert app.DEFAULT_TICKER in app.EXAMPLE_TICKERS
+
+
+def test_when_yahoo_is_not_answering_the_hints_say_it_is_not_the_tickers_fault(monkeypatch):
+    class BrokenTicker:
+        def __init__(self, ticker):
+            raise ConnectionError("no internet")
+
+    page = run_page(monkeypatch, ticker="exmp", yahoo=BrokenTicker)
+    assert_footer_and_no_crash(page)
+    card = hints_of(page)
+    assert "What you can do" in card and "This is not about the ticker" in card
+    assert "Wait a few minutes" in card and "Things to check" not in card
+    assert "Try one of these" not in card
+
+
+def test_what_the_reader_typed_cannot_become_page_code_in_the_not_found_page(monkeypatch):
+    page = not_found_page(monkeypatch, ticker="<img src=x onerror=alert(1)>")
+    card = hints_of(page)
+    assert "<img" not in card and "&lt;IMG SRC=X ONERROR=ALERT(1)&gt;" in card
+
+
+def test_the_error_hints_depend_on_what_went_wrong():
+    unknown = app.error_hints("APPL", ValueError("not found"))
+    busy = app.error_hints("APPL", data.SourceUnavailable("busy"))
+    assert any("Apple is AAPL" in hint for hint in unknown) and not any("Apple is AAPL" in hint for hint in busy)
+    assert any("Wait a few minutes" in hint for hint in busy)
+    assert len(unknown) == len(busy) == 3
+
+
+def test_every_page_ends_with_the_sources_and_then_the_not_advice_note(monkeypatch):
+    for page in (
+        run_page(monkeypatch),
+        not_found_page(monkeypatch),
+        run_page(monkeypatch, ticker="loss", yahoo=fake_statements_ticker(income=dict(ADOBE_YAHOO_INCOME, **{"Pretax Income": (-100e6, 50e6)}))),
+    ):
+        captions = texts(page.main.caption)
+        assert captions[-2:] == [app.SOURCES_TEXT, app.FOOTER_TEXT]
+
+
+def test_the_sources_line_names_every_source_and_matches_the_wacc_table(monkeypatch):
+    for name in ("Yahoo Finance", "Financial Modeling Prep", "Damodaran, 1 Nov 2026", "10-K"):
+        assert name in app.SOURCES_TEXT
+    page = run_page(monkeypatch)
+    assert "Damodaran, 1 Nov 2026" in " ".join(wacc_table_of(page)["Where it comes from"])
+
+
+def test_the_dcf_tab_shows_the_terminal_growth_in_use_and_it_follows_the_slider(monkeypatch):
+    page = run_page(monkeypatch)
+    assert {metric.label: metric.value for metric in tab_named(page, "DCF").metric}["Terminal growth"] == "2.5%"
+    page.sidebar.slider[2].set_value(0.03).run()
+    assert {metric.label: metric.value for metric in tab_named(page, "DCF").metric}["Terminal growth"] == "3.0%"
+
+
+def test_the_dcf_tab_has_three_top_cards_and_what_the_market_implies_has_two(monkeypatch):
+    labels = [metric.label for metric in tab_named(run_page(monkeypatch), "DCF").metric]
+    assert labels[:3] == ["DCF implied price", "WACC", "Terminal growth"]
+    assert labels[3:5] == ["Operating margin it implies", "Revenue growth it implies"]
+    assert "Market price" not in labels and "Upside vs market" not in labels
+
+
+def test_the_verdict_line_under_the_name_is_one_short_sentence(monkeypatch):
+    header = header_of(run_page(monkeypatch))
+    line = header.split('class="vl-basis">')[1].split("</div>")[0]
+    assert line == "The model&#x27;s DCF price against today&#x27;s market price, with 15% either way. The model&#x27;s output, not investment advice."
+    assert len(line) < 160
+
+
+def test_the_starting_point_caveat_is_a_calm_note_for_other_companies_and_absent_for_adobe(monkeypatch):
+    assert not run_page(monkeypatch).info
+    [note] = texts(run_page(monkeypatch, ticker="exmp", yahoo=other_company()).info)
+    assert note.startswith("Starting point, not a forecast") and len(note) < 200
+
+
+LONG_HISTORY = dict(HISTORY, years=["FY2022", "FY2023", "FY2024", "FY2025"],
+               revenue=[17_606.0, 19_409.0, 21_505.0, 23_769.0], operating_income=[6_098.0, 6_650.0, 7_741.0, 8_706.0],
+               free_cash_flow=[7_396.0, 6_942.0, 7_873.0, 9_852.0], net_income=[4_756.0, 5_428.0, 5_560.0, 7_130.0],
+               diluted_shares=[471.0, 459.0, 450.0, 427.0])
+
+
+def test_first_and_last_skip_missing_years_and_need_two_figures():
+    assert app.first_and_last([None, 5.0, 6.0, None, 9.0, None]) == (1, 4)
+    assert app.first_and_last([1.0, 2.0]) == (0, 1)
+    assert app.first_and_last([None, 5.0, None]) is None and app.first_and_last([]) is None
+    assert app.first_and_last([float("nan"), 3.0, 4.0]) == (1, 2)
+
+
+def test_the_history_headlines_say_where_revenue_cash_flow_and_margins_went():
+    assert app.history_amounts_headline(LONG_HISTORY) == (
+        "Revenue went from $17.6B in FY2022 to $23.8B in FY2025; reported free cash flow went from $7.4B in FY2022 to $9.9B in FY2025."
+    )
+    assert app.history_margins_headline(LONG_HISTORY) == (
+        "The operating margin went from 34.6% in FY2022 to 36.6% in FY2025; the free cash flow margin went from 42.0% in FY2022 to 41.4% in FY2025."
+    )
+
+
+def test_a_headline_leaves_out_what_has_no_two_years_of_figures_and_is_none_when_nothing_is_left():
+    no_cash_flow = dict(LONG_HISTORY, free_cash_flow=[None, None, None, 9_852.0])
+    assert app.history_amounts_headline(no_cash_flow) == "Revenue went from $17.6B in FY2022 to $23.8B in FY2025."
+    nothing = dict(LONG_HISTORY, revenue=[None] * 4, free_cash_flow=[None] * 4, operating_income=[None] * 4)
+    assert app.history_amounts_headline(nothing) is None and app.history_margins_headline(nothing) is None
+
+
+def test_the_history_amounts_chart_has_blue_revenue_and_grey_reported_free_cash_flow_in_billions():
+    figure = app.history_amounts_figure(LONG_HISTORY)
+    revenue, cash = figure.data
+    assert revenue.marker.color == theme.ACCENT and cash.marker.color == theme.GREY
+    assert list(revenue.x) == LONG_HISTORY["years"] and list(revenue.y) == pytest.approx([17.606, 19.409, 21.505, 23.769])
+    assert list(cash.y) == pytest.approx([7.396, 6.942, 7.873, 9.852])
+    assert figure.layout.yaxis.tickprefix == "$" and figure.layout.yaxis.ticksuffix == "B" and figure.layout.showlegend is True
+
+
+def test_a_missing_year_is_a_gap_in_the_history_amounts_chart_not_a_zero():
+    figure = app.history_amounts_figure(dict(LONG_HISTORY, free_cash_flow=[None, 6_942.0, 7_873.0, 9_852.0]))
+    assert figure.data[1].y[0] is None
+
+
+def test_the_history_margins_chart_has_a_blue_operating_margin_and_a_grey_free_cash_flow_margin():
+    figure = app.history_margins_figure(LONG_HISTORY)
+    operating, fcf = figure.data
+    assert operating.line.color == theme.ACCENT and fcf.line.color == theme.GREY
+    assert list(operating.y) == pytest.approx([6098 / 17606 * 100, 6650 / 19409 * 100, 7741 / 21505 * 100, 8706 / 23769 * 100])
+    assert figure.layout.yaxis.ticksuffix == "%" and figure.layout.showlegend is True
+
+
+def test_the_history_section_has_its_two_charts_with_headlines_and_a_question_mark(monkeypatch):
+    page = run_page(monkeypatch, yahoo=adobe_with_four_years())
+    overview = tab_named(page, "Overview")
+    amounts = next(element for element in overview.markdown if element.value.startswith("**Revenue went from"))
+    margins = next(element for element in overview.markdown if element.value.startswith("**The operating margin went from"))
+    assert amounts.help == app.explanations.help_text("history_amounts")
+    assert margins.help == app.explanations.help_text("history_margins")
+    assert len(overview.get("plotly_chart")) == 3
+
+
+def test_without_a_history_the_section_says_so_and_draws_no_history_charts(monkeypatch):
+    monkeypatch.setattr("data.get_history_any", lambda *args, **kwargs: (_ for _ in ()).throw(ValueError("no history")))
+    page = run_page(monkeypatch)
+    assert_footer_and_no_crash(page)
+    assert any(caption.startswith("The history is not available right now.") for caption in texts(page.caption))
+    assert len(tab_named(page, "Overview").get("plotly_chart")) == 1                   # only the football field

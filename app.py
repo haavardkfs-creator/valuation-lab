@@ -34,6 +34,17 @@ PEER_KEYS = ["peer_tickers", "peer_ev_sales", "peer_ev_ebitda", "peer_pe", "peer
 # Guard rail 13: the footer every page of the app must show.
 FOOTER_TEXT = "Valuation Lab is a learning project, not investment advice."
 
+# Where the numbers come from, shown just above the footer line. The risk-free rate and the equity risk premium are the
+# figures typed in by hand in data.py (the WACC table says the same), Adobe's base case is its own hand-checked set.
+SOURCES_TEXT = (
+    "Sources: share prices, financial statements, peers and news from Yahoo Finance (Financial Modeling Prep as a "
+    "backup when Yahoo is not answering); risk-free rate and equity risk premium from Damodaran, 1 Nov 2026; "
+    "Adobe's base case from its FY2025 10-K."
+)
+
+# A few tickers to suggest when a company cannot be found.
+EXAMPLE_TICKERS = ["ADBE", "AAPL", "MSFT", "KO", "NVDA"]
+
 # How long the page remembers Yahoo's answer. Streamlit reruns the whole page on every
 # slider move, so without this each move would ask Yahoo again. 15 minutes is a judgment
 # call agreed with Haavard, not a rule from Yahoo.
@@ -303,20 +314,21 @@ def draw_explanations_tab():
         st.markdown(f"**{title}**  \n{explanations.help_text(key)}")
 
 
-def draw_dcf(company, dcf, wacc_is_set_by_user):
-    """Draw the DCF section: the implied price next to the market price, the upside, and WACC
-    (labelled as the user's own when it comes from the slider).
+def draw_dcf(company, dcf, wacc_is_set_by_user, terminal_growth_rate):
+    """Draw the top of the DCF tab: the DCF price, the WACC (labelled as the user's own when it comes from the slider)
+    and the terminal growth rate in use. The market price and the upside are in the header and are not repeated.
     """
     st.subheader("Discounted cash flow (DCF)")
-    price_column, market_column, upside_column, wacc_column = st.columns(4)
+    price_column, wacc_column, growth_column = st.columns(3)
     price_column.metric(
         "DCF implied price", dollars(dcf["implied_share_price"]), help=explanations.help_text("implied_share_price")
     )
-    market_column.metric("Market price", dollars(company["share_price"]), help=explanations.help_text("current_price"))
-    upside_column.metric("Upside vs market", percent(dcf["upside"]), help=explanations.help_text("upside_vs_market"))
     wacc_column.metric(
         "WACC (your setting)" if wacc_is_set_by_user else "WACC", percent(dcf["wacc"]),
         help=explanations.help_text("wacc"),
+    )
+    growth_column.metric(
+        "Terminal growth", percent(terminal_growth_rate), help=explanations.help_text("terminal_growth_rate")
     )
 
 
@@ -596,8 +608,7 @@ def draw_reverse_dcf(company, dcf_inputs, terminal_growth_rate, wacc_override, h
         dcf_inputs, company["share_price"], terminal_growth_rate, wacc_override,
         assumptions.REVERSE_DCF_SEARCH_RANGE, assumptions.REVERSE_DCF_TOLERANCE,
     )
-    price_column, margin_column, growth_column = st.columns(3)
-    price_column.metric("Market price", dollars(company["share_price"]), help=explanations.help_text("current_price"))
+    margin_column, growth_column = st.columns(2)
     margin_column.metric(
         "Operating margin it implies",
         "No answer" if answers["margin"] is None else percent(answers["margin"]["implied_average"]),
@@ -1031,6 +1042,96 @@ def history_chart_data(history):
     return amounts, margins
 
 
+def first_and_last(values):
+    """Find the positions of the first and the last figure that is not missing in a list, as (first, last), or None when
+    fewer than two figures exist (there is no movement to describe).
+    """
+    positions = [position for position, value in enumerate(values) if value is not None and value == value]
+    return (positions[0], positions[-1]) if len(positions) >= 2 else None
+
+
+def history_amounts_headline(history):
+    """Say in one sentence how revenue and reported free cash flow moved over the years in the history, from the first
+    year that has a figure to the last. None when neither has two years of figures.
+    """
+    parts = []
+    for name, key in (("Revenue", "revenue"), ("reported free cash flow", "free_cash_flow")):
+        span = first_and_last(history[key])
+        if span:
+            first, last = span
+            parts.append(
+                f"{name} went from {theme.money_short(history[key][first])} in {history['years'][first]} to "
+                f"{theme.money_short(history[key][last])} in {history['years'][last]}"
+            )
+    return "; ".join(parts) + "." if parts else None
+
+
+def history_margins_headline(history):
+    """Say in one sentence how the operating margin and the free cash flow margin moved over the history. None when
+    neither has two years of figures.
+    """
+    ratios = history_ratios(history)
+    parts = []
+    for name, key in (("The operating margin", "operating_margin"), ("the free cash flow margin", "fcf_margin")):
+        span = first_and_last(ratios[key])
+        if span:
+            first, last = span
+            parts.append(
+                f"{name} went from {ratios[key][first]:.1%} in {history['years'][first]} to {ratios[key][last]:.1%} "
+                f"in {history['years'][last]}"
+            )
+    return "; ".join(parts) + "." if parts else None
+
+
+def history_amounts_figure(history):
+    """Draw revenue (the accent colour) and reported free cash flow (grey) for each year of the history, as bars in
+    $ billions, in the same style as the other charts.
+    """
+    amounts, _margins = history_chart_data(history)
+    figure = go.Figure([
+        go.Bar(
+            x=list(amounts.index), y=[None if value != value else value / 1000 for value in amounts[column]],
+            name=name, marker={"color": colour},
+            hovertemplate=f"<b>%{{x}}</b><br>{name} $%{{y:,.1f}} billion<extra></extra>",
+        )
+        for column, name, colour in (
+            ("Revenue", "Revenue", theme.ACCENT), ("Free cash flow (reported)", "Reported free cash flow", theme.GREY),
+        )
+    ])
+    figure.update_yaxes(tickprefix="$", ticksuffix="B", tickformat=",.0f", gridcolor=theme.BORDER, zeroline=False)
+    figure.update_xaxes(showgrid=False)
+    theme.style_figure(figure, height=300)
+    figure.update_layout(
+        barmode="group", showlegend=True, legend={"orientation": "h", "y": 1.15, "x": 0},
+        margin={"l": 0, "r": 0, "t": 30, "b": 0},
+    )
+    return figure
+
+
+def history_margins_figure(history):
+    """Draw the operating margin (the accent colour) and the free cash flow margin (grey) for each year of the history
+    as lines, in percent of revenue, in the same style as the other charts.
+    """
+    _amounts, margins = history_chart_data(history)
+    figure = go.Figure([
+        go.Scatter(
+            x=list(margins.index), y=[None if value != value else value for value in margins[column]],
+            name=name, mode="lines+markers", line={"color": colour, "width": 2}, marker={"size": 6},
+            hovertemplate=f"<b>%{{x}}</b><br>{name} %{{y:.1f}}%<extra></extra>",
+        )
+        for column, name, colour in (
+            ("Operating margin", "Operating margin", theme.ACCENT), ("FCF margin", "Free cash flow margin", theme.GREY),
+        )
+    ])
+    figure.update_yaxes(ticksuffix="%", gridcolor=theme.BORDER, zeroline=False, rangemode="tozero")
+    figure.update_xaxes(showgrid=False)
+    theme.style_figure(figure, height=300)
+    figure.update_layout(
+        showlegend=True, legend={"orientation": "h", "y": 1.15, "x": 0}, margin={"l": 0, "r": 0, "t": 30, "b": 0},
+    )
+    return figure
+
+
 def free_cash_flow_note(history, overview, company_name):
     """Explain how the history's free cash flow (as the company reports it: cash from operations
     minus capital spending) differs from the model's, which is built from operating profit after
@@ -1116,12 +1217,17 @@ def draw_history(history, error, overview, company_name):
         # unescaped dollar signs as a maths formula.
         st.warning(cash_flow_warning.replace("$", "\\$"))
     st.table(history_table(history))
-    amounts, margins = history_chart_data(history)
     amounts_column, margins_column = st.columns(2)
-    amounts_column.markdown("**Revenue and free cash flow**")
-    amounts_column.bar_chart(amounts, stack=False, color=theme.CHART_COLOURS, y_label="$ millions")
-    margins_column.markdown("**Operating margin and free cash flow margin**")
-    margins_column.line_chart(margins, color=theme.CHART_COLOURS, y_label="% of revenue")
+    amounts_headline = history_amounts_headline(history)
+    if amounts_headline:
+        amounts_column.markdown(
+            f"**{dollar_text_for_markdown(amounts_headline)}**", help=explanations.help_text("history_amounts")
+        )
+    amounts_column.plotly_chart(history_amounts_figure(history), width="stretch", config=CHART_CONFIG)
+    margins_headline = history_margins_headline(history)
+    if margins_headline:
+        margins_column.markdown(f"**{margins_headline}**", help=explanations.help_text("history_margins"))
+    margins_column.plotly_chart(history_margins_figure(history), width="stretch", config=CHART_CONFIG)
     # Each dollar sign is escaped with a backslash, because Streamlit reads text between two
     # unescaped dollar signs as a maths formula.
     st.caption(free_cash_flow_note(history, overview, company_name).replace("$", "\\$"))
@@ -2220,10 +2326,9 @@ def draw_source_note(company, source_used):
                 "(a tax benefit), which cannot go on forever, so the forecast uses a normal rate of "
                 f"{precise_percent(assumptions.NORMAL_TAX_RATE)} instead (the US federal rate)."
             )
-        st.warning(
-            f"Starting point, not a forecast: this starts from {company['company_name']}'s own "
-            "last reported year and holds its margins flat. A DCF suits stable, cash-generating "
-            "companies, and is a poor fit for banks, loss-making and early-stage ones."
+        st.info(
+            f"Starting point, not a forecast: this holds {company['company_name']}'s last reported margins flat. A DCF "
+            "suits stable, cash-generating companies, not banks, loss-makers or early-stage ones."
         )
     elif source_used == data.PREFERRED_SOURCE:
         st.caption("Share price and beta are live from Yahoo Finance.")
@@ -2241,12 +2346,41 @@ def draw_source_note(company, source_used):
         )
 
 
+def draw_footer():
+    """Draw the bottom of every page: a thin line, where the numbers come from, and (last, and discreetly) the note
+    that this is a learning project and not investment advice.
+    """
+    st.divider()
+    st.caption(SOURCES_TEXT)
+    st.caption(FOOTER_TEXT)
+
+
+def error_hints(ticker, error):
+    """List what the reader can check when a company could not be valued. When Yahoo was not answering (a problem with
+    the service, not the ticker) it says so and to wait; otherwise it helps with the ticker itself.
+    """
+    if isinstance(error, data.SourceUnavailable):
+        return [
+            "This is not about the ticker: the data source did not answer. Yahoo Finance sometimes limits shared servers.",
+            "Wait a few minutes and try again.",
+            "Adobe (ADBE) still works from a frozen snapshot while the sources are down.",
+        ]
+    return [
+        f"Is {ticker} the ticker, the short code, and not the name? Apple is AAPL, Microsoft is MSFT and Coca-Cola is KO.",
+        "US-listed companies work best. A share listed elsewhere needs its exchange ending, for example AKER.OL for Oslo.",
+        "Try one of these: " + ", ".join(EXAMPLE_TICKERS) + ".",
+    ]
+
+
 def draw_error(ticker, error):
-    """Show why a company could not be valued, in plain words, and still show the footer."""
+    """Show why a company could not be valued, in plain words, with a short list of things to check, and still show the
+    footer.
+    """
     st.title("Valuation Lab")
     st.error(f"Could not value {ticker}. {error}")
-    st.divider()
-    st.caption(FOOTER_TEXT)
+    title = "Things to check" if not isinstance(error, data.SourceUnavailable) else "What you can do"
+    st.html(theme.hints_card_html(title, error_hints(ticker, error)))
+    draw_footer()
 
 
 MARKDOWN_SPECIAL_CHARACTERS = "\\`*_{}[]()#+-.!|<>$~&"      # each gets a backslash in front, so it shows as itself
@@ -2333,10 +2467,7 @@ def verdict_basis_text(verdict):
     if verdict is None:
         return "No DCF could be built for this company, so there is no verdict. The cards show what can be said."
     limit = f"{assumptions.VERDICT_THRESHOLD:.0%}"
-    return (
-        f"The verdict compares the model's DCF price with today's market price: more than {limit} above is "
-        f"undervalued, more than {limit} below is overvalued. It is the model's output, not investment advice."
-    )
+    return f"The model's DCF price against today's market price, with {limit} either way. The model's output, not investment advice."
 
 
 def price_sparkline(prices):
@@ -2435,19 +2566,23 @@ def draw_page():
     growth_shift, margin_shift, terminal_growth_rate, wacc_override = draw_sliders()
     scenario_settings = draw_scenario_boxes()
     adjustment = 0.0
-    try:
-        company, source_used = load_company(ticker)
-        if is_base_case(company):
-            peers, peer_notes = {key: company[key] for key in PEER_KEYS}, []      # Adobe's own peers
-            peers["peer_operating_margin"] = load_adobe_peer_margins(peers["peer_tickers"])
-        else:
-            peers, peer_notes = draw_peer_box(company)
-            if peers is not None:
-                company = dict(company, **peers)
-            adjustment = draw_adjustment_box(company)
-            company = apply_adjustment(company, adjustment)
-    except ValueError as error:
-        draw_error(ticker, error)
+    load_error = None
+    with st.spinner(f"Loading {ticker}…"):            # shown while the company, and its suggested peers, are fetched
+        try:
+            company, source_used = load_company(ticker)
+            if is_base_case(company):
+                peers, peer_notes = {key: company[key] for key in PEER_KEYS}, []      # Adobe's own peers
+                peers["peer_operating_margin"] = load_adobe_peer_margins(peers["peer_tickers"])
+            else:
+                peers, peer_notes = draw_peer_box(company)
+                if peers is not None:
+                    company = dict(company, **peers)
+                adjustment = draw_adjustment_box(company)
+                company = apply_adjustment(company, adjustment)
+        except ValueError as error:
+            load_error = error
+    if load_error is not None:
+        draw_error(ticker, load_error)
         return
     try:
         dcf_inputs = build_dcf_inputs(company, growth_shift, margin_shift)
@@ -2467,15 +2602,16 @@ def draw_page():
     note = adjustment_note(adjustment)
     if note:
         st.warning(note)
-    try:
-        ttm, ttm_error = load_ttm(company["ticker"], company.get("usd_per_statement_unit", 1.0)), None
-    except ValueError as error:
-        ttm, ttm_error = None, str(error)
+    with st.spinner("Loading the history and the last twelve months…"):      # shown under the header while they are fetched
+        try:
+            ttm, ttm_error = load_ttm(company["ticker"], company.get("usd_per_statement_unit", 1.0)), None
+        except ValueError as error:
+            ttm, ttm_error = None, str(error)
+        try:
+            history, history_error = load_history(company["ticker"], company.get("usd_per_statement_unit", 1.0)), None
+        except ValueError as error:
+            history, history_error = None, str(error)
     overview = apply_ttm(overview, company, apply_adjustment_to_ttm(ttm, adjustment), ttm_error)
-    try:
-        history, history_error = load_history(company["ticker"], company.get("usd_per_statement_unit", 1.0)), None
-    except ValueError as error:
-        history, history_error = None, str(error)
     overview = apply_quality(overview, company, history)
     year_labels = assumptions.FORECAST_YEAR_LABELS if is_base_case(company) else assumptions.GENERIC_YEAR_LABELS
     if dcf_error is not None:
@@ -2488,8 +2624,7 @@ def draw_page():
             draw_news_and_management(company["ticker"])
         with explanations_tab:
             draw_explanations_tab()
-        st.divider()
-        st.caption(FOOTER_TEXT)
+        draw_footer()
         return
     overview_tab, dcf_tab, multiples_tab, sensitivity_tab, explanations_tab = st.tabs(PAGE_TABS)
     with overview_tab:
@@ -2498,7 +2633,7 @@ def draw_page():
         draw_history(history, history_error, overview, company["company_name"])
         draw_news_and_management(company["ticker"])
     with dcf_tab:
-        draw_dcf(company, dcf, wacc_override is not None)
+        draw_dcf(company, dcf, wacc_override is not None, terminal_growth_rate)
         draw_reverse_dcf(company, dcf_inputs, terminal_growth_rate, wacc_override, history)
         draw_scenarios(company, dcf_inputs, terminal_growth_rate, wacc_override, scenario_settings)
         draw_assumptions(
@@ -2518,11 +2653,10 @@ def draw_page():
         draw_margin_growth_table(company, dcf_inputs, dcf, terminal_growth_rate, wacc_override)
     with explanations_tab:
         draw_explanations_tab()
-    st.divider()
-    st.caption(FOOTER_TEXT)
+    draw_footer()
 
 
-st.set_page_config(page_title="Valuation Lab")
+st.set_page_config(page_title="Valuation Lab", page_icon="📈")
 theme.inject_theme()
 bridge_fmp_key()
 draw_page()
