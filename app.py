@@ -264,16 +264,6 @@ def draw_sliders():
     return shift_from_points(growth_points), shift_from_points(margin_points), terminal_growth_rate, wacc_override
 
 
-def draw_explanations(section):
-    """Draw a closed box that explains, in plain language, the terms used in one section of
-    the page. The wording comes from explanations.py.
-    """
-    with st.expander("What do these terms mean?"):
-        for term in explanations.SECTION_TERMS[section]:
-            title, text = explanations.EXPLANATIONS[term]
-            st.markdown(f"**{title}**  \n{text}")
-
-
 # The Explanations tab groups the glossary by where its terms appear on the page: the heading and the section of
 # explanations.SECTION_TERMS it takes its terms from.
 EXPLANATION_TOPICS = [
@@ -307,6 +297,10 @@ def draw_explanations_tab():
         for term in others:
             title, text = explanations.EXPLANATIONS[term]
             st.markdown(f"**{title}**  \n{text}")
+    st.markdown("##### Reading the page")
+    st.caption("What the cards, price boxes and charts show: the same texts as the ? next to them.")
+    for key, (title, _text) in explanations.HELP_TEXTS.items():
+        st.markdown(f"**{title}**  \n{explanations.help_text(key)}")
 
 
 def draw_dcf(company, dcf, wacc_is_set_by_user):
@@ -315,11 +309,15 @@ def draw_dcf(company, dcf, wacc_is_set_by_user):
     """
     st.subheader("Discounted cash flow (DCF)")
     price_column, market_column, upside_column, wacc_column = st.columns(4)
-    price_column.metric("DCF implied price", dollars(dcf["implied_share_price"]))
-    market_column.metric("Market price", dollars(company["share_price"]))
-    upside_column.metric("Upside vs market", percent(dcf["upside"]))
-    wacc_column.metric("WACC (your setting)" if wacc_is_set_by_user else "WACC", percent(dcf["wacc"]))
-    draw_explanations("dcf")
+    price_column.metric(
+        "DCF implied price", dollars(dcf["implied_share_price"]), help=explanations.help_text("implied_share_price")
+    )
+    market_column.metric("Market price", dollars(company["share_price"]), help=explanations.help_text("current_price"))
+    upside_column.metric("Upside vs market", percent(dcf["upside"]), help=explanations.help_text("upside_vs_market"))
+    wacc_column.metric(
+        "WACC (your setting)" if wacc_is_set_by_user else "WACC", percent(dcf["wacc"]),
+        help=explanations.help_text("wacc"),
+    )
 
 
 def heat_colour(gap):
@@ -599,7 +597,7 @@ def draw_reverse_dcf(company, dcf_inputs, terminal_growth_rate, wacc_override, h
         assumptions.REVERSE_DCF_SEARCH_RANGE, assumptions.REVERSE_DCF_TOLERANCE,
     )
     price_column, margin_column, growth_column = st.columns(3)
-    price_column.metric("Market price", dollars(company["share_price"]))
+    price_column.metric("Market price", dollars(company["share_price"]), help=explanations.help_text("current_price"))
     margin_column.metric(
         "Operating margin it implies",
         "No answer" if answers["margin"] is None else percent(answers["margin"]["implied_average"]),
@@ -713,13 +711,12 @@ def draw_overview(overview):
     st.markdown("**What the market pays**")
     sales, ebitda, pe = st.columns(3)
     ps, forward_pe, _spare = st.columns(3)
-    sales.metric("EV/Sales", multiple_or_note(overview["ev_sales"]), help="Enterprise value (what the whole business is worth at today's price) divided by revenue.")
-    ebitda.metric("EV/EBITDA", multiple_or_note(overview["ev_ebitda"]), help="Enterprise value divided by operating profit before depreciation and amortisation.")
-    pe.metric("P/E", multiple_or_note(overview["pe"]), help="What the market pays for each dollar of the last full year's net income.")
-    ps.metric("P/S", multiple_or_note(overview["ps"]), help="The market value of the company divided by its revenue: what the market pays for each dollar of sales.")
+    sales.metric("EV/Sales", multiple_or_note(overview["ev_sales"]), help=explanations.help_text("ev_sales"))
+    ebitda.metric("EV/EBITDA", multiple_or_note(overview["ev_ebitda"]), help=explanations.help_text("ev_ebitda"))
+    pe.metric("P/E", multiple_or_note(overview["pe"]), help=explanations.help_text("pe"))
+    ps.metric("P/S", multiple_or_note(overview["ps"]), help=explanations.help_text("ps"))
     forward_pe.metric(
-        "Forward P/E", multiple_or_note(overview["forward_pe"]),
-        help="Today's share price divided by analysts' estimate of next year's earnings per share (their adjusted figure).",
+        "Forward P/E", multiple_or_note(overview["forward_pe"]), help=explanations.help_text("forward_pe"),
     )
     st.markdown("**Growth and profitability**")
     growth, margin, roic = st.columns(3)
@@ -1237,7 +1234,7 @@ def draw_football_field(company, dcf, multiples, dcf_inputs, base_wacc, prices):
         )
     headline = football_field_headline(company["company_name"], *valuation.methods_above_price(rows, company["share_price"]))
     if headline:
-        st.markdown(f"**{headline}**")
+        st.markdown(f"**{headline}**", help=explanations.help_text("football_field"))
     st.plotly_chart(football_field_figure(rows, company["share_price"]), width="stretch", config=CHART_CONFIG)
     st.caption(
         "Each bar is a way of valuing the company: the blue bar is the DCF with the WACC a point either way and terminal growth from 1.5% to 3.5%, "
@@ -1379,15 +1376,19 @@ def draw_charts(dcf, year_labels, terminal_growth_rate, operating_margins, histo
     caution when the price rests mostly on the far future.
     """
     st.subheader("Behind the number")
-    st.markdown(f"**{dollar_text_for_markdown(waterfall_headline(dcf))}**")
+    st.markdown(f"**{dollar_text_for_markdown(waterfall_headline(dcf))}**", help=explanations.help_text("waterfall"))
     st.plotly_chart(valuation_waterfall(dcf), width="stretch", config=CHART_CONFIG)
     cash_flow_column, donut_column = st.columns([3, 2])
-    cash_flow_column.markdown(f"**{dollar_text_for_markdown(cash_flow_headline(dcf, history))}**")
+    cash_flow_column.markdown(
+        f"**{dollar_text_for_markdown(cash_flow_headline(dcf, history))}**", help=explanations.help_text("cash_flow_chart")
+    )
     cash_flow_column.plotly_chart(
         cash_flow_figure(year_labels, dcf, operating_margins, history), width="stretch", config=CHART_CONFIG
     )
     share = valuation.terminal_value_share(dcf["pv_of_terminal_value"], dcf["enterprise_value"])
-    donut_column.markdown(f"**{share:.0%} of the value comes from after year 5.**")
+    donut_column.markdown(
+        f"**{share:.0%} of the value comes from after year 5.**", help=explanations.help_text("terminal_value_ring")
+    )
     donut_column.plotly_chart(terminal_value_donut(dcf), width="stretch", config=CHART_CONFIG)
     st.caption(
         "Grey bars are free cash flow as the company reports it; blue bars are the model's forecast, which starts from "
@@ -1405,7 +1406,6 @@ def draw_charts(dcf, year_labels, terminal_growth_rate, operating_margins, histo
     )
     for caution in terminal_value_cautions(dcf, terminal_growth_rate):
         st.warning(caution)
-    draw_explanations("behind_the_number")
 
 
 def draw_sensitivity_numbers(prices_frame, share_price, base_cell):
@@ -1456,7 +1456,9 @@ def draw_heatmap(company, dcf_inputs, base_wacc):
         assumptions.HEATMAP_WACC_OFFSETS.index(0.0),
         assumptions.HEATMAP_TERMINAL_GROWTH_RATES.index(assumptions.TERMINAL_GROWTH_RATE),
     )
-    st.markdown(f"**{sensitivity_headline(table['prices'], company['share_price'])}**")
+    st.markdown(
+        f"**{sensitivity_headline(table['prices'], company['share_price'])}**", help=explanations.help_text("heatmap_wacc")
+    )
     st.plotly_chart(
         sensitivity_heatmap(
             row_labels, column_labels, table["prices"], company["share_price"], base_cell, "WACC", "Terminal growth"
@@ -1478,7 +1480,6 @@ def draw_heatmap(company, dcf_inputs, base_wacc):
         f"{dollars(company['share_price'])}. The dashed line runs where the model equals the market price, and the blue frame is "
         "the base case. The growth and margin sliders move the whole table.".replace("$", "\\$") + blank_note
     )
-    draw_explanations("sensitivity")
 
 
 def shift_label(average, shift):
@@ -1510,7 +1511,9 @@ def draw_margin_growth_table(company, dcf_inputs, dcf, terminal_growth_rate, wac
         assumptions.MARGIN_GROWTH_TABLE_MARGIN_SHIFTS.index(0.0),
         assumptions.MARGIN_GROWTH_TABLE_GROWTH_SHIFTS.index(0.0),
     )
-    st.markdown(f"**{sensitivity_headline(table['prices'], company['share_price'])}**")
+    st.markdown(
+        f"**{sensitivity_headline(table['prices'], company['share_price'])}**", help=explanations.help_text("heatmap_margin")
+    )
     st.plotly_chart(
         sensitivity_heatmap(
             row_labels, column_labels, table["prices"], company["share_price"], base_cell,
@@ -1828,7 +1831,10 @@ def draw_peer_charts(multiples, peers, own_label, overview, company_name):
     labels = [label for label, _peer, _own, _median in PEER_CHART_MULTIPLES]
     chosen = st.radio("Compare one multiple", labels, index=labels.index("EV/EBITDA"), horizontal=True, key="peer_chart_multiple")
     label, peer_key, own_key, median_key = next(entry for entry in PEER_CHART_MULTIPLES if entry[0] == chosen)
-    st.markdown(f"**{peer_bar_headline(label, company_name, overview[own_key], multiples[median_key])}**")
+    st.markdown(
+        f"**{peer_bar_headline(label, company_name, overview[own_key], multiples[median_key])}**",
+        help=explanations.help_text("peer_bars"),
+    )
     st.plotly_chart(
         peer_bar_figure(
             label, own_label, overview[own_key], peers["peer_tickers"], peers[peer_key], multiples[median_key]
@@ -1840,7 +1846,7 @@ def draw_peer_charts(multiples, peers, own_label, overview, company_name):
         company_name, overview["ev_ebitda"], overview["operating_margin"], multiples["median_ev_ebitda"], median_margin
     )
     if headline:
-        st.markdown(f"**{headline}**")
+        st.markdown(f"**{headline}**", help=explanations.help_text("peer_scatter"))
     st.plotly_chart(
         peer_scatter_figure(
             own_label, overview["ev_ebitda"], overview["operating_margin"], peers["peer_tickers"],
@@ -1870,24 +1876,32 @@ def draw_multiples(multiples, peers, notes, peers_are_suggested, own_label, over
     for kind, text in notes:
         (st.warning if kind == "warning" else st.caption)(text)
     if multiples is None:
-        draw_explanations("multiples")
         return
     margin_warning = margin_gap_warning(company_name, overview["operating_margin"], peers)
     if margin_warning:
         st.warning(margin_warning)
     sales_column, ebitda_column, pe_column = st.columns(3)
-    sales_column.metric("EV/Sales price", price_or_note(multiples["price_ev_sales"]))
-    ebitda_column.metric("EV/EBITDA price", price_or_note(multiples["price_ev_ebitda"]))
-    pe_column.metric("P/E price", price_or_note(multiples["price_pe"]))
+    sales_column.metric(
+        "EV/Sales price", price_or_note(multiples["price_ev_sales"]), help=explanations.help_text("ev_sales_price")
+    )
+    ebitda_column.metric(
+        "EV/EBITDA price", price_or_note(multiples["price_ev_ebitda"]), help=explanations.help_text("ev_ebitda_price")
+    )
+    pe_column.metric("P/E price", price_or_note(multiples["price_pe"]), help=explanations.help_text("pe_price"))
     ps_column, forward_pe_column, _spare_column = st.columns(3)
-    ps_column.metric("P/S price", price_or_note(multiples["price_ps"]))
+    ps_column.metric("P/S price", price_or_note(multiples["price_ps"]), help=explanations.help_text("ps_price"))
     forward_pe_column.metric(
-        "Forward P/E price", forward_price_text(multiples["price_forward_pe"], overview["forward_pe"])
+        "Forward P/E price", forward_price_text(multiples["price_forward_pe"], overview["forward_pe"]),
+        help=explanations.help_text("forward_pe_price"),
     )
     median_column, gap_column = st.columns(2)
-    median_column.metric(middle_price_label(multiples), price_or_note(multiples["median_price"]))
+    median_column.metric(
+        middle_price_label(multiples), price_or_note(multiples["median_price"]), help=explanations.help_text("middle_price")
+    )
     gap = multiples["dcf_vs_multiples"]
-    gap_column.metric("DCF vs multiples", "Not available" if gap is None else percent(gap))
+    gap_column.metric(
+        "DCF vs multiples", "Not available" if gap is None else percent(gap), help=explanations.help_text("dcf_vs_multiples")
+    )
     if middle_price_label(multiples) == "Average of two prices":
         st.warning(
             "Only two of the five multiples gave a price, so this is their average, not a middle: "
@@ -1929,7 +1943,6 @@ def draw_multiples(multiples, peers, notes, peers_are_suggested, own_label, over
                 "you know better."
             )
         )
-    draw_explanations("multiples")
 
 
 @st.cache_data(ttl=LIVE_DATA_CACHE_SECONDS, show_spinner=False)
@@ -2367,28 +2380,32 @@ def draw_header(company, dcf, multiples, prices):
     verdict = valuation.verdict(upside, assumptions.VERDICT_THRESHOLD)
     middle = None if multiples is None else multiples["median_price"]
     cards = [
-        theme.kpi_card_html("Current price", dollars(company["share_price"]), "Market price today"),
+        theme.kpi_card_html(
+            "Current price", dollars(company["share_price"]), "Market price today",
+            help=explanations.help_text("current_price"),
+        ),
         theme.kpi_card_html(
             "DCF value per share", NOT_AVAILABLE if dcf is None else dollars(dcf["implied_share_price"]),
-            "Discounted cash flow", muted=dcf is None,
+            "Discounted cash flow", muted=dcf is None, help=explanations.help_text("implied_share_price"),
         ),
         theme.kpi_card_html(
             "Upside / downside", NOT_AVAILABLE if upside is None else theme.change_text(upside),
             "DCF value against the market price", tone=None if upside is None else theme.tone_of(upside),
-            muted=upside is None,
+            muted=upside is None, help=explanations.help_text("upside_vs_market"),
         ),
         theme.kpi_card_html(
             "Multiples value", NOT_AVAILABLE if middle is None else dollars(middle),
             middle_price_label(multiples) if middle is not None else "No peer figures to work it out from",
-            muted=middle is None,
+            muted=middle is None, help=explanations.help_text("multiples_value"),
         ),
     ]
     st.html(theme.header_html(
-        company["company_name"], company["ticker"], verdict, cards, verdict_basis_text(verdict)
+        company["company_name"], company["ticker"], verdict, cards, verdict_basis_text(verdict),
+        verdict_help=explanations.help_text("verdict"),
     ))
     if prices is None:
         return
-    st.caption("Share price, last 12 months")
+    st.caption("Share price, last 12 months", help=explanations.help_text("sparkline"))
     st.plotly_chart(price_sparkline(prices), width="stretch", config=CHART_CONFIG)
 
 

@@ -1,12 +1,19 @@
-"""The plain-language text shown under each section of the app.
+"""The plain-language text shown on the page: the glossary, and the help on cards and charts.
 
-Every explanation here is copied word for word from docs/glossary.md, which Haavard writes in
-his own words; test_explanations.py checks that each one still appears there. Only the
-definition sentences are used. The glossary's "in this model..." sentences are left out,
-because they quote base-case numbers (like $305.60) that the sliders change.
+There are two kinds of text here.
+- EXPLANATIONS is the glossary. Every one is copied word for word from docs/glossary.md, which Haavard writes in
+  his own words; test_explanations.py checks that each one still appears there. Only the definition sentences
+  are used. The glossary's "in this model..." sentences are left out, because they quote base-case numbers
+  (like $305.60) that the sliders change.
+- HELP_TEXTS is the short "how to read this" text behind the ? on the cards, price boxes and charts that have
+  no glossary entry. Claude drafted them (from Haavard's own explanations) for him to review; they may quote the
+  model's fixed limits (like the 15% of the verdict), which are filled in from assumptions.py so they cannot go
+  stale.
 
-This file only holds text; it never calculates.
+help_text(key) gives the text behind a ?, from either. This file holds text; it only looks numbers up.
 """
+
+import assumptions
 
 # Each term: its name as the glossary headline writes it, and its explanation.
 EXPLANATIONS = {
@@ -76,6 +83,16 @@ EXPLANATIONS = {
         "Earnings are after interest, so P/E is paired with the share price (equity value), "
         "not enterprise value.",
     ),
+    "ps": (
+        "P/S (Price to Sales)",
+        "P/S shows how much investors are paying for each dollar of a company’s revenue. A higher P/S "
+        "means the market places a higher value on the company’s sales.",
+    ),
+    "forward_pe": (
+        "Forward P/E",
+        "Forward P/E shows the share price compared with the earnings analysts expect over the next year. "
+        "It tells you how much investors are paying today for a dollar of forecast earnings.",
+    ),
     "upside_vs_market": (
         "Upside vs market",
         "The percentage difference between the DCF price and the current market price. A "
@@ -116,5 +133,137 @@ SECTION_TERMS = {
         "terminal_value",
     ],
     "sensitivity": ["sensitivity_analysis", "terminal_growth_rate", "wacc"],
-    "multiples": ["ev_sales", "ev_ebitda", "pe", "peer_median", "dcf_vs_multiples"],
+    "multiples": ["ev_sales", "ev_ebitda", "pe", "ps", "forward_pe", "peer_median", "dcf_vs_multiples"],
 }
+
+
+# The model's fixed limits, written the way the help texts show them. {name} in a help text is replaced by the value.
+LIMITS = {
+    "verdict_limit": f"{assumptions.VERDICT_THRESHOLD:.0%}",
+    "terminal_limit": f"{assumptions.TERMINAL_VALUE_SHARE_WARNING:.0%}",
+    "growth_low": f"{min(assumptions.HEATMAP_TERMINAL_GROWTH_RATES):.1%}",
+    "growth_high": f"{max(assumptions.HEATMAP_TERMINAL_GROWTH_RATES):.1%}",
+    "wacc_points": f"{max(assumptions.FOOTBALL_FIELD_WACC_OFFSETS) * 100:g}",
+}
+
+# The help behind the ? where there is no glossary entry: its title (for the Explanations tab) and its text.
+HELP_TEXTS = {
+    "current_price": (
+        "Current price",
+        "The price of one share today, from Yahoo Finance: the market's own opinion of what the company is worth "
+        "per share.",
+    ),
+    "multiples_value": (
+        "Multiples value",
+        "The middle of the prices you get by valuing the company at its peers' multiples (EV/Sales, EV/EBITDA, P/E, "
+        "P/S and forward P/E). It answers: what would the company be worth if it traded the way its peers do?",
+    ),
+    "verdict": (
+        "Verdict",
+        "The model's DCF price compared with today's market price: more than {verdict_limit} above it is "
+        "undervalued, more than {verdict_limit} below it is overvalued, anything in between is fairly valued. It is "
+        "the model's output, not investment advice.",
+    ),
+    "ev_sales_price": (
+        "EV/Sales price",
+        "What one share would be worth if the company traded at the middle EV/Sales of its peers: its revenue times "
+        "that multiple, less net debt, divided by the shares.",
+    ),
+    "ev_ebitda_price": (
+        "EV/EBITDA price",
+        "What one share would be worth if the company traded at the middle EV/EBITDA of its peers: its EBITDA times "
+        "that multiple, less net debt, divided by the shares.",
+    ),
+    "pe_price": (
+        "P/E price",
+        "What one share would be worth if the company traded at the middle P/E of its peers: its net income times "
+        "that multiple, divided by the shares.",
+    ),
+    "ps_price": (
+        "P/S price",
+        "What one share would be worth if the company traded at the middle P/S of its peers: its revenue times that "
+        "multiple, divided by the shares.",
+    ),
+    "forward_pe_price": (
+        "Forward P/E price",
+        "What one share would be worth if the company traded at the middle forward P/E of its peers: analysts' "
+        "estimate of its earnings per share next year times that multiple. It says No estimate when analysts have "
+        "none.",
+    ),
+    "middle_price": (
+        "Middle of the prices",
+        "The middle one of the prices from the peer multiples (the average of the two in the middle when there is an "
+        "even number). One extreme price cannot drag it far, which is why the middle is used and not the average.",
+    ),
+    "sparkline": (
+        "Share price chart",
+        "The share price over the last 12 months (daily closing prices, in US dollars). Hover to see the date and "
+        "the price.",
+    ),
+    "football_field": (
+        "Football field",
+        "Each bar is a way of valuing the company, as a range of prices per share. Blue is the DCF, with the WACC "
+        "{wacc_points} point either way and terminal growth from {growth_low} to {growth_high}. Grey bars are the "
+        "peers' multiples (the middle half of the peers) and the share's own 52-week range. The white tick is the "
+        "middle value and the dashed line is today's market price: a bar mostly to the right of the line says that "
+        "method values the company above today's price.",
+    ),
+    "waterfall": (
+        "How the DCF value is built",
+        "The present value of the five forecast years plus the present value of everything after year 5 (the "
+        "terminal value) is the enterprise value. Net cash is added to it (net debt would be taken away) to get the "
+        "equity value, and dividing that by the shares gives the price per share. Blue steps add value, a red step "
+        "takes value away, and the white bars are the totals.",
+    ),
+    "cash_flow_chart": (
+        "Free cash flow chart",
+        "Free cash flow year by year: grey bars are what the company reported, blue bars are the model's forecast, "
+        "and the white line is the operating margin (right-hand axis). The two kinds of free cash flow are not built "
+        "the same way, so a small jump between grey and blue is normal.",
+    ),
+    "terminal_value_ring": (
+        "Terminal value ring",
+        "How much of the company's value comes from the terminal value, everything after year 5, against the five "
+        "forecast years. Above {terminal_limit} the ring turns red: the price then rests mostly on the far future, so "
+        "a small change in the WACC or terminal growth can move it a lot.",
+    ),
+    "heatmap_wacc": (
+        "WACC and terminal growth heatmap",
+        "Each cell is the DCF price for one pairing of WACC (down the side) and terminal growth (along the top), with "
+        "how far it is above (green, up arrow) or below (red, down arrow) today's market price. The dashed line marks "
+        "the combinations where the model equals the market price: the boundary between assumptions that imply "
+        "upside and those that imply downside. The blue frame is the base case, the assumptions the DCF uses. A "
+        "blank cell has no answer, because its growth rate is at or above its WACC.",
+    ),
+    "heatmap_margin": (
+        "Margin and growth heatmap",
+        "Each cell is the DCF price when the operating margin (down the side) and the revenue growth (along the top) "
+        "of every forecast year are moved by the points shown, with how far it is above (green, up arrow) or below "
+        "(red, down arrow) today's market price. The dashed line marks the combinations where the model equals the "
+        "market price: the boundary between assumptions that imply upside and those that imply downside. The blue "
+        "frame is the base case, the assumptions the DCF uses.",
+    ),
+    "peer_bars": (
+        "Peer bars",
+        "One multiple for the company (blue) and for each of its peers (grey), highest at the top. The dashed line is "
+        "the peers' median, their middle value. Use the switch to change the multiple. A bar is missing when that "
+        "company has no usable figure, for example no P/E for a company that lost money.",
+    ),
+    "peer_scatter": (
+        "Peer scatter",
+        "Each peer is a dot: how expensive it is (EV/EBITDA, up the side) against how profitable it is (operating "
+        "margin, along the bottom). The company is blue, and the dashed lines are the peers' middle values. A dot low "
+        "and to the right earns a high margin and trades at a low multiple, so it looks cheap for its profitability; "
+        "one high and to the left looks expensive for it. It compares, it does not give a verdict.",
+    ),
+}
+
+
+def help_text(key):
+    """Give the text behind a ?: the glossary's explanation if the key is a glossary term, otherwise the help text
+    of that name, with the model's fixed limits filled in. A key that is neither is an error, so a mistyped one
+    cannot silently show nothing.
+    """
+    if key in EXPLANATIONS:
+        return EXPLANATIONS[key][1]
+    return HELP_TEXTS[key][1].format(**LIMITS)
