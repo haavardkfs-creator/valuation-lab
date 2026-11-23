@@ -213,7 +213,7 @@ HELP_TEXTS = {
         "The present value of the five forecast years plus the present value of everything after year 5 (the "
         "terminal value) is the enterprise value. Net cash is added to it (net debt would be taken away) to get the "
         "equity value, and dividing that by the shares gives the price per share. Gold steps add value, a red step "
-        "takes value away, and the cream bars are the totals.",
+        "takes value away, and the light sand bars are the totals.",
     ),
     "cash_flow_chart": (
         "Free cash flow chart",

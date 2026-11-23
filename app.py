@@ -1692,7 +1692,7 @@ def waterfall_headline(dcf):
 def valuation_waterfall(dcf):
     """Draw how the DCF value is built: the present value of the five forecast years and of the terminal value
     add up to the enterprise value, net cash adds (or net debt takes away) and what is left is the equity value.
-    Bars are in $ billions; the gold steps add, the red one subtracts, and the cream bars are the totals.
+    Bars are in $ billions; the gold steps add, the red one subtracts, and the light sand bars are the totals.
     """
     net_debt = dcf["net_debt"]
     steps = [
@@ -1711,7 +1711,7 @@ def valuation_waterfall(dcf):
         textfont={"color": theme.TEXT},
         increasing={"marker": {"color": theme.ACCENT}},
         decreasing={"marker": {"color": theme.DOWN}},
-        totals={"marker": {"color": theme.TEXT}},
+        totals={"marker": {"color": theme.SAND}},
         connector={"line": {"color": theme.GREY, "width": 1}},
         hovertemplate="<b>%{x}</b><br>$%{y:,.1f} billion<extra></extra>",
     ))
@@ -1841,15 +1841,15 @@ def draw_charts(dcf, year_labels, terminal_growth_rate, operating_margins, histo
 
 def draw_sensitivity_numbers(prices_frame, share_price, base_cell):
     """Under a sensitivity heatmap, a closed box with the same prices as a plain table, so the exact figures are
-    always there to read or copy. Cells are tinted like the heatmap and the base case is bold; a blank cell
+    always there to read or copy. Cells are tinted like the heatmap and the base case is in the medium weight; a blank cell
     (no answer) shows a dash.
     """
     base_row, base_column = base_cell
 
     def style_cells(values):
-        """Colour every cell and put the base case in bold."""
+        """Colour every cell and put the base case in the medium weight (the page uses no bold)."""
         styles = values.map(lambda price: "" if pd.isna(price) else tint(price, share_price))
-        styles.iloc[base_row, base_column] += "; font-weight: bold"
+        styles.iloc[base_row, base_column] += f"; font-weight: {theme.WEIGHT_MEDIUM}"
         return styles
 
     with st.expander("Show the numbers as a table"):

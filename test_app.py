@@ -2754,7 +2754,7 @@ def test_the_waterfall_colours_mean_something():
     waterfall = app.valuation_waterfall(DCF_RESULT).data[0]
     assert waterfall.increasing.marker.color == theme.ACCENT          # adds value
     assert waterfall.decreasing.marker.color == theme.DOWN            # takes value away
-    assert waterfall.totals.marker.color == theme.TEXT                # the results
+    assert waterfall.totals.marker.color == theme.SAND                # the results, light but calmer than the cream text
 
 
 def test_the_waterfall_headline_says_how_enterprise_value_becomes_a_share_price():
