@@ -138,11 +138,50 @@ CARD_CSS = f"""
 .vl-kpi-value.vl-muted {{ color: {GREY}; font-size: 1.125rem; font-weight: {WEIGHT_REGULAR}; line-height: 2rem; }}
 .vl-kpi-note {{ color: {GREY}; font-size: 0.75rem; line-height: 1.125rem; margin-top: 0.25rem; }}
 
+/* The header: a thin top bar with the app's name, then one large number (the DCF value) with its change beside it,
+   and the quieter numbers to the right, divided by thin lines. A faint brass glow sits behind the large number only. */
+.vl-topbar {{ display: flex; align-items: center; justify-content: space-between; height: 3rem; border-bottom: 1px solid {BORDER}; }}
+.vl-brand-name {{ display: inline-flex; align-items: center; gap: 0.625rem; }}
+.vl-mark {{ position: relative; display: inline-block; width: 18px; height: 18px; box-sizing: border-box; border: 1.5px solid {ACCENT}; border-radius: 4px; }}
+.vl-mark::after {{ content: ""; position: absolute; left: 3px; top: 7px; width: 10px; height: 1.5px; background: {TEXT}; border-radius: 1px; transform: rotate(-35deg); }}
+.vl-brand-name .vl-brand {{ color: {TEXT}; font-size: 0.875rem; letter-spacing: 0.01em; text-transform: none; }}
+.vl-hero-row {{ display: flex; justify-content: space-between; align-items: flex-end; gap: 1.5rem 3rem; flex-wrap: wrap; padding: 2.5rem 0 1rem 0; }}
+.vl-hero {{ position: relative; display: flex; flex-direction: column; gap: 0.75rem; min-width: 0; }}
+.vl-hero::before {{
+    content: ""; position: absolute; left: -2.5rem; top: -1rem; width: 26rem; height: 13rem; pointer-events: none;
+    background: radial-gradient(closest-side, rgba(212, 178, 122, 0.08), rgba(212, 178, 122, 0));
+}}
+.vl-hero > * {{ position: relative; }}
+.vl-hero .vl-name {{ margin: 0; gap: 0.625rem; }}
+.vl-hero .vl-name h1 {{ font-size: 1.25rem; line-height: 1.75rem; letter-spacing: 0; }}
+.vl-hero .vl-kpis {{ display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.75rem 2rem; margin: 0; }}
+.vl-header > .vl-basis {{ margin: 0 0 1.5rem 0; color: {GREY}; font-size: 0.8125rem; line-height: 1.25rem; }}
+.vl-kpi-hero, .vl-kpi-change, .vl-kpi-stat {{ background: transparent; border: 0; border-radius: 0; padding: 0; }}
+.vl-kpi-hero .vl-kpi-value {{ font-size: 3.5rem; line-height: 3.75rem; letter-spacing: -0.02em; margin-top: 0.5rem; }}
+.vl-kpi-hero .vl-kpi-value.vl-muted {{ font-size: 1.75rem; line-height: 3.75rem; }}
+.vl-kpi-change {{ padding-bottom: 0.25rem; }}
+.vl-kpi-change .vl-kpi-value {{ font-size: 1.25rem; line-height: 1.75rem; }}
+.vl-kpi-hero .vl-kpi-note, .vl-kpi-change .vl-kpi-note {{ display: none; }}
+.vl-stats {{ display: flex; padding-bottom: 0.375rem; }}
+.vl-kpi-stat {{ padding: 0 2rem; border-left: 1px solid {BORDER}; }}
+.vl-kpi-stat .vl-kpi-value {{ font-size: 1.25rem; line-height: 1.75rem; margin-top: 0.375rem; }}
+.vl-kpi-stat:hover, .vl-kpi-hero:hover, .vl-kpi-change:hover {{ border-color: {BORDER}; }}
+
+/* The strip of sliders under the header: one card, the sliders side by side, slim brass tracks. */
+.st-key-assumption_strip {{ background: {SURFACE}; border-color: {BORDER}; padding: 1.25rem 1.5rem; margin-bottom: 1rem; }}
+.st-key-assumption_strip [data-testid="stWidgetLabel"] p {{ color: {SAND}; font-size: 0.8125rem; }}
+.st-key-assumption_strip [data-testid="stSliderThumbValue"] {{ font-size: 0.8125rem; }}
+
 /* On a phone: the 16 px gutter, and a little less padding in the cards so the numbers are not squeezed. */
 @media (max-width: 640px) {{
     .block-container {{ padding-left: 1rem; padding-right: 1rem; padding-top: 2rem; }}
     [data-testid="stMetric"], .vl-kpi {{ padding: 1rem; }}
     .vl-name h1 {{ font-size: 1.75rem; }}
+    .vl-hero-row {{ gap: 1.5rem; padding: 1.5rem 0; }}
+    .vl-kpi-hero .vl-kpi-value {{ font-size: 2.5rem; line-height: 2.75rem; }}
+    .vl-stats {{ width: 100%; }}
+    .vl-kpi-stat {{ flex: 1; padding: 0 1rem; }}
+    .vl-kpi-stat:first-child {{ padding-left: 0; border-left: 0; }}
 }}
 </style>
 """
@@ -246,16 +285,18 @@ def help_mark_html(help_text):
     return f'<span class="vl-help" title="{html.escape(help_text, quote=True)}">?</span>'
 
 
-def kpi_card_html(label, value, note=None, tone=None, muted=False, help=None):
-    """Write one headline card: a small grey label (with a ? that explains it, when `help` is given), a big value (in
-    the up colour or the down colour when `tone` is "up" or "down") and, if given, a small grey note underneath. A
-    `muted` card is one with no number to show ("Not available"): its value is written small and grey, so a gap
-    never looks like a result.
+def kpi_card_html(label, value, note=None, tone=None, muted=False, help=None, size=None):
+    """Write one headline number: a small label (with a ? that explains it, when `help` is given), a big value (in
+    the up colour or the down colour when `tone` is "up" or "down") and, if given, a small note underneath. A
+    `muted` card is one with no number to show ("Not available"): its value is written small and in the label colour, so
+    a gap never looks like a result. `size` picks the look: None is a card with a border, "hero" is the one large number
+    at the top of the page, "change" is the coloured change beside it, and "stat" is a quiet number at the side.
     """
     tone_class = " vl-muted" if muted else (f" vl-{tone}" if tone in ("up", "down") else "")
+    size_class = f" vl-kpi-{size}" if size in ("hero", "change", "stat") else ""
     note_html = f'<div class="vl-kpi-note">{html.escape(note)}</div>' if note else ""
     return (
-        f'<div class="vl-kpi"><div class="vl-kpi-label">{html.escape(label)}{help_mark_html(help)}</div>'
+        f'<div class="vl-kpi{size_class}"><div class="vl-kpi-label">{html.escape(label)}{help_mark_html(help)}</div>'
         f'<div class="vl-kpi-value{tone_class}">{html.escape(value)}</div>{note_html}</div>'
     )
 
@@ -287,18 +328,26 @@ def hints_card_html(title, items):
     return f'<div class="vl-hints"><div class="vl-hints-title">{html.escape(title)}</div><ul>{bullets}</ul></div>'
 
 
-def header_html(company_name, ticker, verdict, cards, basis, verdict_help=None):
-    """Write the whole header: the small app name, the company's name with its ticker badge and the verdict
-    badge (with its tooltip, when `verdict_help` is given), a line saying what the verdict is based on, and then the
-    headline cards (a list of the HTML that kpi_card_html wrote).
+# The small mark beside the app's name: a rounded square in the accent with a rising cream stroke, drawn with CSS
+# (Streamlit removes inline SVG from st.html). Fixed text, hidden from screen readers.
+BRAND_MARK = '<span class="vl-mark" aria-hidden="true"></span>'
+
+
+def header_html(company_name, ticker, verdict, cards, basis, verdict_help=None, side_cards=()):
+    """Write the whole header: the app's name, the company's name with its ticker and the verdict badge (with its
+    tooltip, when `verdict_help` is given), then the headline numbers (`cards`, the HTML that kpi_card_html wrote) with
+    the quieter `side_cards` to the right, and a line under them saying what the verdict is based on.
     """
+    side = f'<div class="vl-stats">{"".join(side_cards)}</div>' if side_cards else ""
     return (
         '<div class="vl-header">'
-        '<div class="vl-brand">Valuation Lab</div>'
+        f'<div class="vl-topbar"><span class="vl-brand-name">{BRAND_MARK}<span class="vl-brand">Valuation Lab</span></span></div>'
+        '<div class="vl-hero-row"><div class="vl-hero">'
         f'<div class="vl-name"><h1>{html.escape(company_name)}</h1>'
         f'<span class="vl-badge vl-badge-ticker">{html.escape(ticker)}</span>{verdict_badge_html(verdict, verdict_help)}</div>'
-        f'<div class="vl-basis">{html.escape(basis)}</div>'
         f'<div class="vl-kpis">{"".join(cards)}</div>'
+        f"</div>{side}</div>"
+        f'<div class="vl-basis">{html.escape(basis)}</div>'
         "</div>"
     )
 

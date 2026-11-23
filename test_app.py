@@ -803,8 +803,8 @@ def test_the_assumptions_line_says_where_they_come_from_and_what_the_sliders_do(
 
 def test_moving_a_slider_changes_the_table_by_that_many_points(monkeypatch):
     page = run_page(monkeypatch)
-    page.sidebar.slider[0].set_value(1.5).run()                  # growth: +1.5 points
-    page.sidebar.slider[1].set_value(-2.0).run()                 # margin: -2.0 points
+    page.slider[0].set_value(1.5).run()                  # growth: +1.5 points
+    page.slider[1].set_value(-2.0).run()                 # margin: -2.0 points
     assert not page.exception
     table = assumptions_on(page)
     assert table["Revenue growth"].tolist() == ["10.50%", "10.50%", "9.50%", "9.00%", "8.50%"]
@@ -816,9 +816,9 @@ def test_moving_a_slider_changes_the_table_by_that_many_points(monkeypatch):
 
 def test_the_shift_sliders_are_in_points_and_start_at_zero(monkeypatch):
     page = run_page(monkeypatch)
-    growth, margin = page.sidebar.slider[0], page.sidebar.slider[1]
-    assert growth.label == "Revenue growth: change every year by" and growth.value == 0.0
-    assert margin.label == "Operating margin: change every year by" and margin.value == 0.0
+    growth, margin = page.slider[0], page.slider[1]
+    assert growth.label == "Revenue growth, every year" and growth.value == 0.0
+    assert margin.label == "Operating margin, every year" and margin.value == 0.0
     assert (growth.min, growth.max, growth.step) == (-5.0, 5.0, 0.5)
 
 
@@ -835,7 +835,7 @@ def test_another_company_gets_the_table_with_numbered_years_and_the_faded_path(m
 def test_the_line_says_whose_wacc_it_is(monkeypatch):
     page = run_page(monkeypatch)
     assert any("the model's own WACC" in caption for caption in texts(page.caption))
-    page.sidebar.checkbox[0].check().run()
+    page.checkbox[0].check().run()
     assert any("the WACC you set" in caption for caption in texts(page.caption))
 
 
@@ -947,7 +947,7 @@ def test_a_company_with_no_debt_is_explained_as_all_equity():
 def test_when_the_reader_sets_a_wacc_the_page_still_shows_the_models_own_build(monkeypatch):
     page = run_page(monkeypatch)
     own = wacc_table_of(page).loc["WACC", "Value"]
-    page.sidebar.checkbox[0].check().run()                                                 # "Set the WACC myself"
+    page.checkbox[0].check().run()                                                 # "Set the WACC myself"
     assert not page.exception
     assert wacc_table_of(page).loc["WACC", "Value"] == own                                 # the build is unchanged
     [line] = [c for c in texts(page.caption) if "You have set the WACC to 11.00%" in c]    # the slider's start
@@ -1428,13 +1428,13 @@ def test_the_pages_implied_figures_match_the_solver_for_the_pages_price(monkeypa
 def test_the_implied_figures_move_with_the_sliders_and_the_wacc(monkeypatch):
     page = run_page(monkeypatch, yahoo=adobe_with_four_years())
     before = metrics(page)["Operating margin it implies"]
-    page.sidebar.slider[1].set_value(-2.0).run()                     # a margin 2 points lower in the model
+    page.slider[1].set_value(-2.0).run()                     # a margin 2 points lower in the model
     assert not page.exception
     # The implied margin is an absolute figure: a lower modelled margin does not change what the price needs...
     assert metrics(page)["Operating margin it implies"] == before
     # ...but the WACC does: a higher discount rate needs a higher margin to justify the same price.
-    page.sidebar.checkbox[0].check().run()
-    page.sidebar.slider[3].set_value(0.13).run()
+    page.checkbox[0].check().run()
+    page.slider[3].set_value(0.13).run()
     after = float(metrics(page)["Operating margin it implies"].rstrip("%"))
     assert after > float(before.rstrip("%"))
 
@@ -1514,7 +1514,7 @@ def test_the_tables_prices_are_the_models_for_each_pair_of_shifts(monkeypatch):
 def test_the_growth_slider_moves_the_table_and_its_labels(monkeypatch):
     page = run_page(monkeypatch)
     before = margin_growth_table_of(page).iloc[2, 2]
-    page.sidebar.slider[0].set_value(1.0).run()                                    # growth +1 point
+    page.slider[0].set_value(1.0).run()                                    # growth +1 point
     assert not page.exception
     table = margin_growth_table_of(page)
     assert table.iloc[2, 2] > before                                               # the middle moves with the sliders
@@ -1524,8 +1524,8 @@ def test_the_growth_slider_moves_the_table_and_its_labels(monkeypatch):
 
 def test_the_table_uses_the_wacc_the_reader_set(monkeypatch):
     page = run_page(monkeypatch)
-    page.sidebar.checkbox[0].check().run()
-    page.sidebar.slider[3].set_value(0.13).run()
+    page.checkbox[0].check().run()
+    page.slider[3].set_value(0.13).run()
     table = margin_growth_table_of(page)
     assert app.dollars(table.iloc[2, 2]) == metrics(page)["DCF implied price"]     # the DCF price at the reader's WACC
 
@@ -2114,7 +2114,7 @@ def test_probabilities_that_do_not_add_to_100_give_a_plain_warning_and_no_prices
 def test_scenarios_move_with_the_sliders_because_the_base_is_the_current_dcf(monkeypatch):
     page = run_page(monkeypatch)
     before = dollars_to_number(scenario_rows(page)["Base"]["Price"])
-    page.sidebar.slider[0].set_value(2.0).run()                                      # growth +2 points
+    page.slider[0].set_value(2.0).run()                                      # growth +2 points
     after = dollars_to_number(scenario_rows(page)["Base"]["Price"])
     assert after > before
     assert scenario_rows(page)["Base"]["Price"] == metrics(page)["DCF implied price"]
@@ -2558,7 +2558,7 @@ def test_the_header_cards_agree_with_the_dcf_tab_and_with_each_other(monkeypatch
     assert cards["DCF value per share"] == shown["DCF implied price"]                  # the DCF tab's own card
     price, dcf_price = (float(cards[label].lstrip("$").replace(",", "")) for label in ("Current price", "DCF value per share"))
     assert cards["Upside / downside"] == theme.change_text(dcf_price / price - 1)       # the upside follows from the two prices
-    assert list(cards) == ["Current price", "DCF value per share", "Upside / downside", "Multiples value"]
+    assert list(cards) == ["DCF value per share", "Upside / downside", "Current price", "Multiples value"]   # the large number first
 
 
 def test_the_header_multiples_value_is_the_middle_of_the_multiples_prices(monkeypatch):
@@ -2623,7 +2623,7 @@ def test_the_company_name_from_yahoo_is_shown_as_text_and_can_never_become_page_
 def test_the_header_follows_the_sliders(monkeypatch):
     page = run_page(monkeypatch)
     before = card_values(header_of(page))["DCF value per share"]
-    page.sidebar.slider[1].set_value(-2.0).run()                  # an operating margin 2 points lower, every year
+    page.slider[1].set_value(-2.0).run()                  # an operating margin 2 points lower, every year
     after = card_values(header_of(page))["DCF value per share"]
     assert after != before
     assert after == metrics(page)["DCF implied price"]
@@ -2984,7 +2984,7 @@ def test_the_wacc_heatmap_now_spans_three_points_each_way_and_its_base_cell_is_t
 def test_the_sliders_move_both_heatmaps(monkeypatch):
     page = run_page(monkeypatch)
     before = next(element.value for element in page.dataframe if element.value.index.name == "WACC").iloc[3, 2]
-    page.sidebar.slider[1].set_value(-2.0).run()
+    page.slider[1].set_value(-2.0).run()
     after = next(element.value for element in page.dataframe if element.value.index.name == "WACC").iloc[3, 2]
     assert after < before and app.dollars(after) == metrics(page)["DCF implied price"]
 
@@ -3240,9 +3240,10 @@ def test_a_term_that_is_in_no_section_is_added_after_the_sections_under_more_ter
 
 def test_the_sidebar_has_its_headings_in_order(monkeypatch):
     page = run_page(monkeypatch)
-    assert texts(page.sidebar.header) == ["Company", "Assumptions"]                       # Adobe has no peer box
+    # The sliders moved out of the sidebar into the strip under the header (redesign, 23 Nov 2026).
+    assert texts(page.sidebar.header) == ["Company"]                                      # Adobe has no peer box
     other = run_example_page(monkeypatch)
-    assert texts(other.sidebar.header) == ["Company", "Assumptions", "Peers", "One-off items"]
+    assert texts(other.sidebar.header) == ["Company", "Peers", "One-off items"]
 
 
 # ---------------------------------------------------------------------------
@@ -3266,7 +3267,7 @@ def test_the_four_header_cards_and_the_verdict_badge_have_a_question_mark(monkey
 
 def test_the_header_cards_still_read_back_with_their_marks(monkeypatch):
     cards = card_values(header_of(run_page(monkeypatch)))
-    assert list(cards) == ["Current price", "DCF value per share", "Upside / downside", "Multiples value"]
+    assert list(cards) == ["DCF value per share", "Upside / downside", "Current price", "Multiples value"]   # the large number first
 
 
 def test_the_share_price_chart_caption_has_a_question_mark(monkeypatch):
@@ -3499,7 +3500,7 @@ def test_the_sources_line_names_every_source_and_matches_the_wacc_table(monkeypa
 def test_the_dcf_tab_shows_the_terminal_growth_in_use_and_it_follows_the_slider(monkeypatch):
     page = run_page(monkeypatch)
     assert {metric.label: metric.value for metric in tab_named(page, "DCF").metric}["Terminal growth"] == "2.5%"
-    page.sidebar.slider[2].set_value(0.03).run()
+    page.slider[2].set_value(0.03).run()
     assert {metric.label: metric.value for metric in tab_named(page, "DCF").metric}["Terminal growth"] == "3.0%"
 
 
@@ -3631,7 +3632,7 @@ def test_the_sidebar_has_a_search_by_name_box_right_under_the_ticker_box(monkeyp
     assert [box.label for box in page.sidebar.text_input] == ["Company ticker", "Search by company name"]
     assert page.sidebar.text_input(key="ticker_box").value == "ADBE"
     assert page.sidebar.text_input(key="name_search").value == ""
-    assert texts(page.sidebar.header) == ["Company", "Assumptions"]                        # no new heading
+    assert texts(page.sidebar.header) == ["Company"]                                       # no new heading
 
 
 def test_an_empty_search_box_asks_nobody(monkeypatch):
@@ -4145,11 +4146,11 @@ def test_opening_a_link_sets_the_sliders_the_wacc_and_the_company(monkeypatch):
     assert_footer_and_no_crash(page)
     assert page.sidebar.text_input(key=app.TICKER_BOX_KEY).value == "EXMP"          # a ticker is always in capitals
     assert "Example Corp" in header_of(page)
-    assert page.sidebar.slider(key=app.GROWTH_KEY).value == 1.5
-    assert page.sidebar.slider(key=app.MARGIN_KEY).value == -2.0
-    assert page.sidebar.slider(key=app.TERMINAL_GROWTH_KEY).value == 0.03
-    assert page.sidebar.checkbox(key=app.WACC_TICK_KEY).value is True
-    assert page.sidebar.slider(key=app.WACC_KEY).value == 0.095
+    assert page.slider(key=app.GROWTH_KEY).value == 1.5
+    assert page.slider(key=app.MARGIN_KEY).value == -2.0
+    assert page.slider(key=app.TERMINAL_GROWTH_KEY).value == 0.03
+    assert page.checkbox(key=app.WACC_TICK_KEY).value is True
+    assert page.slider(key=app.WACC_KEY).value == 0.095
 
 
 def test_opening_a_link_with_peers_and_a_one_off_amount_fills_those_boxes_for_that_company(monkeypatch):
@@ -4162,8 +4163,8 @@ def test_opening_a_link_with_peers_and_a_one_off_amount_fills_those_boxes_for_th
 def test_a_linked_view_gives_the_same_price_as_setting_the_boxes_by_hand(monkeypatch):
     linked = run_linked(monkeypatch, {"growth": "1.5", "margin": "-2"})
     by_hand = run_page(monkeypatch)
-    by_hand.sidebar.slider[0].set_value(1.5).run()
-    by_hand.sidebar.slider[1].set_value(-2.0).run()
+    by_hand.slider[0].set_value(1.5).run()
+    by_hand.slider[1].set_value(-2.0).run()
     assert metrics(linked)["DCF implied price"] == metrics(by_hand)["DCF implied price"]
     assert metrics(linked)["DCF implied price"] != metrics(run_page(monkeypatch))["DCF implied price"]
 
@@ -4172,8 +4173,8 @@ def test_garbage_in_the_address_starts_the_usual_page(monkeypatch):
     page = run_linked(monkeypatch, {"growth": "abc", "ticker": "<script>", "wacc": "999", "peers": "x;y"})
     assert_footer_and_no_crash(page)
     assert page.sidebar.text_input(key=app.TICKER_BOX_KEY).value == app.DEFAULT_TICKER
-    assert page.sidebar.slider(key=app.GROWTH_KEY).value == 0.0
-    assert page.sidebar.checkbox(key=app.WACC_TICK_KEY).value is False
+    assert page.slider(key=app.GROWTH_KEY).value == 0.0
+    assert page.checkbox(key=app.WACC_TICK_KEY).value is False
 
 
 def test_the_page_with_no_link_leaves_the_address_plain(monkeypatch):
@@ -4184,21 +4185,21 @@ def test_the_page_with_no_link_leaves_the_address_plain(monkeypatch):
 
 def test_changing_a_box_writes_it_into_the_address_and_changing_it_back_takes_it_out(monkeypatch):
     page = run_page(monkeypatch)
-    page.sidebar.slider(key=app.GROWTH_KEY).set_value(-1.0).run()
+    page.slider(key=app.GROWTH_KEY).set_value(-1.0).run()
     assert address_of(page) == {"growth": "-1"}
-    page.sidebar.checkbox(key=app.WACC_TICK_KEY).check().run()
-    page.sidebar.slider(key=app.WACC_KEY).set_value(0.1).run()
+    page.checkbox(key=app.WACC_TICK_KEY).check().run()
+    page.slider(key=app.WACC_KEY).set_value(0.1).run()
     assert address_of(page) == {"growth": "-1", "wacc": "10"}
-    page.sidebar.slider(key=app.GROWTH_KEY).set_value(0.0).run()
-    page.sidebar.checkbox(key=app.WACC_TICK_KEY).uncheck().run()
+    page.slider(key=app.GROWTH_KEY).set_value(0.0).run()
+    page.checkbox(key=app.WACC_TICK_KEY).uncheck().run()
     assert address_of(page) == {}
 
 
 def test_the_link_is_read_once_so_a_readers_changes_are_never_undone(monkeypatch):
     page = run_linked(monkeypatch, {"growth": "1.5"})
-    page.sidebar.slider(key=app.GROWTH_KEY).set_value(-3.0).run()
-    page.sidebar.slider(key=app.MARGIN_KEY).set_value(1.0).run()
-    assert page.sidebar.slider(key=app.GROWTH_KEY).value == -3.0
+    page.slider(key=app.GROWTH_KEY).set_value(-3.0).run()
+    page.slider(key=app.MARGIN_KEY).set_value(1.0).run()
+    assert page.slider(key=app.GROWTH_KEY).value == -3.0
     assert address_of(page) == {"growth": "-3", "margin": "1"}
 
 
@@ -4375,13 +4376,13 @@ def run_snapshot_with_live_rate(monkeypatch, percent=4.5, tick=True):
     monkeypatch.setattr("data.get_macro_backdrop", lambda: macro_rows_with_yield(percent))
     page = run_page(monkeypatch, yahoo=BrokenYahoo)
     if tick:
-        page.sidebar.checkbox(key=app.LIVE_RF_KEY).check().run()
+        page.checkbox(key=app.LIVE_RF_KEY).check().run()
     return page
 
 
 def test_the_live_rate_is_off_until_it_is_ticked_and_then_the_snapshot_page_is_unchanged(monkeypatch):
     page = run_snapshot_with_live_rate(monkeypatch, tick=False)
-    assert page.sidebar.checkbox(key=app.LIVE_RF_KEY).value is False
+    assert page.checkbox(key=app.LIVE_RF_KEY).value is False
     assert metrics(page)["DCF implied price"] == "$305.60"
     assert wacc_table_of(page)["Where it comes from"].to_dict()["Risk-free rate"] == "Damodaran, 1 Nov 2026 (typed in by hand)"
 
@@ -4406,7 +4407,7 @@ def test_the_wacc_table_says_the_rate_is_the_ten_year_yield_from_fred_with_its_d
 
 def test_the_sidebar_says_which_rates_are_swapped_and_warns_about_the_risk_premium(monkeypatch):
     page = run_snapshot_with_live_rate(monkeypatch, 4.5)
-    [note] = [c for c in texts(page.sidebar.caption) if c.startswith("Risk-free rate 4.50%")]
+    [note] = [c for c in texts(page.caption) if c.startswith("Risk-free rate 4.50%")]
     assert "the 10-year yield on 19 Nov 2026, from FRED" in note
     assert "instead of 5.29% (Damodaran)" in note
     assert "4.41% equity risk premium was worked out with the older rate" in note
@@ -4415,20 +4416,20 @@ def test_the_sidebar_says_which_rates_are_swapped_and_warns_about_the_risk_premi
 def test_a_yield_fred_cannot_give_leaves_the_models_own_rate_and_says_so(monkeypatch):
     monkeypatch.setattr("data.get_macro_backdrop", lambda: (_ for _ in ()).throw(data.SourceUnavailable("No FRED key is set.")))
     page = run_page(monkeypatch, yahoo=BrokenYahoo)
-    page.sidebar.checkbox(key=app.LIVE_RF_KEY).check().run()
+    page.checkbox(key=app.LIVE_RF_KEY).check().run()
     assert_footer_and_no_crash(page)
-    assert "Today's yield is not available (No FRED key is set.) so the model's own risk-free rate is used." in texts(page.sidebar.warning)
+    assert "Today's yield is not available (No FRED key is set.) so the model's own risk-free rate is used." in texts(page.warning)
     assert metrics(page)["DCF implied price"] == "$305.60"
 
 
 def test_a_typed_in_wacc_still_wins_over_the_live_rate(monkeypatch):
     """With the WACC typed in, the risk-free rate no longer matters to the price: the same 11% gives the same price either way."""
     with_live = run_snapshot_with_live_rate(monkeypatch, 4.5)
-    with_live.sidebar.checkbox(key=app.WACC_TICK_KEY).check().run()
-    with_live.sidebar.slider(key=app.WACC_KEY).set_value(0.11).run()
+    with_live.checkbox(key=app.WACC_TICK_KEY).check().run()
+    with_live.slider(key=app.WACC_KEY).set_value(0.11).run()
     without = run_snapshot_with_live_rate(monkeypatch, tick=False)
-    without.sidebar.checkbox(key=app.WACC_TICK_KEY).check().run()
-    without.sidebar.slider(key=app.WACC_KEY).set_value(0.11).run()
+    without.checkbox(key=app.WACC_TICK_KEY).check().run()
+    without.slider(key=app.WACC_KEY).set_value(0.11).run()
     assert metrics(with_live)["DCF implied price"] == metrics(without)["DCF implied price"]
     assert metrics(with_live)["DCF implied price"] != "$336.18"
 
@@ -4477,7 +4478,7 @@ def test_the_live_rate_is_part_of_the_link(monkeypatch):
     assert app.link_from_state({app.LIVE_RF_KEY: False}) == {}
     monkeypatch.setattr("data.get_macro_backdrop", lambda: macro_rows_with_yield(4.5))
     page = run_linked(monkeypatch, {"live_rf": "1"}, yahoo=BrokenYahoo)
-    assert page.sidebar.checkbox(key=app.LIVE_RF_KEY).value is True
+    assert page.checkbox(key=app.LIVE_RF_KEY).value is True
     assert metrics(page)["DCF implied price"] == "$336.18"
     assert address_of(page) == {"live_rf": "1"}
 

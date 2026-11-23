@@ -242,7 +242,8 @@ PEERS_KEY_START = "peers_"
 ONE_OFF_KEY_START = "oneoff_"
 LINK_LOADED_KEY = "link_loaded"
 COMPARE_KEY = "compare_ticker"          # the box in the Compare tab where the second company is typed
-LIVE_RF_KEY = "live_risk_free"          # the sidebar tick box that swaps in today's 10-year Treasury yield
+STRIP_KEY = "assumption_strip"          # the bordered strip of sliders under the header (its CSS class is st-key-assumption_strip)
+LIVE_RF_KEY = "live_risk_free"          # the tick box that swaps in today's 10-year Treasury yield
 
 LINK_TICKER_PATTERN = re.compile(r"[A-Za-z0-9.^=\-]+")
 LINK_PEERS_PATTERN = re.compile(r"[A-Za-z0-9.^=\-, ]+")
@@ -372,18 +373,20 @@ def write_link():
 def draw_link_note():
     """Say, at the bottom of the sidebar, how to share the view: the address holds it."""
     st.sidebar.caption(
-        "To share this view, copy the page's address from your browser: it holds the company and the settings above."
+        "To share this view, copy the page's address from your browser: it holds the company and every setting on the page."
     )
 
 
 def draw_sliders():
-    """Draw the sliders in the sidebar and return what they are set to: the growth shift,
-    the margin shift, the terminal growth rate and the WACC the user chose (None when the
-    box is unticked, meaning the model uses its own). Each starts at the base case.
+    """Draw the assumption strip under the header and return what it is set to: the growth shift, the margin shift, the
+    terminal growth rate, the WACC the user chose (None when the box is unticked, meaning the model uses its own) and
+    today's risk-free rate when that box is ticked (None otherwise). Three sliders sit side by side; the WACC and the
+    risk-free rate are behind a "WACC and rates" button, because they are changed less often. Each starts at the base case.
     """
-    st.sidebar.header("Assumptions")
-    growth_points = st.sidebar.slider(
-        "Revenue growth: change every year by",
+    strip = st.container(border=True, key=STRIP_KEY)
+    growth_column, margin_column, terminal_column, more_column = strip.columns([1, 1, 1, 0.8], gap="large", vertical_alignment="bottom")
+    growth_points = growth_column.slider(
+        "Revenue growth, every year",
         min_value=assumptions.GROWTH_SHIFT_MIN_POINTS,
         max_value=assumptions.GROWTH_SHIFT_MAX_POINTS,
         value=0.0,
@@ -392,8 +395,8 @@ def draw_sliders():
         format="%+.1f pts",
         help="Adds this many percentage points to every forecast year's growth. 0 is the base case; the table 'What the model assumes' shows the result.",
     )
-    margin_points = st.sidebar.slider(
-        "Operating margin: change every year by",
+    margin_points = margin_column.slider(
+        "Operating margin, every year",
         min_value=assumptions.MARGIN_SHIFT_MIN_POINTS,
         max_value=assumptions.MARGIN_SHIFT_MAX_POINTS,
         value=0.0,
@@ -402,7 +405,7 @@ def draw_sliders():
         format="%+.1f pts",
         help="Adds this many percentage points to every forecast year's operating margin. 0 is the base case; the table 'What the model assumes' shows the result.",
     )
-    terminal_growth_rate = st.sidebar.slider(
+    terminal_growth_rate = terminal_column.slider(
         "Terminal growth",
         min_value=assumptions.TERMINAL_GROWTH_MIN,
         max_value=assumptions.TERMINAL_GROWTH_MAX,
@@ -412,13 +415,14 @@ def draw_sliders():
         format="percent",
         help="How fast cash flow is assumed to grow forever after year 5. The base case is 2.5%.",
     )
+    rates = more_column.popover("WACC and rates", width="stretch")
     wacc_override = None
-    if st.sidebar.checkbox(
+    if rates.checkbox(
         "Set the WACC myself",
         key=WACC_TICK_KEY,
         help="Unticked, the model works out its own WACC from the company's figures. Ticked, the slider sets it.",
     ):
-        wacc_override = st.sidebar.slider(
+        wacc_override = rates.slider(
             "WACC",
             min_value=assumptions.WACC_SLIDER_MIN,
             max_value=assumptions.WACC_SLIDER_MAX,
@@ -428,16 +432,19 @@ def draw_sliders():
             format="percent",
             help="The rate that cash flows are discounted at. Higher means a lower price.",
         )
-    return shift_from_points(growth_points), shift_from_points(margin_points), terminal_growth_rate, wacc_override
+    live_risk_free = draw_live_risk_free(rates)
+    return (
+        shift_from_points(growth_points), shift_from_points(margin_points), terminal_growth_rate, wacc_override, live_risk_free,
+    )
 
 
-def draw_live_risk_free():
-    """Draw the tick box "Use today's 10-year Treasury yield as the risk-free rate" under the WACC controls and return what to
+def draw_live_risk_free(box):
+    """Draw, in `box`, the tick box "Use today's 10-year Treasury yield as the risk-free rate" under the WACC controls and return what to
     use: {"rate", "date"} when it is ticked and FRED answered, otherwise None (the model's own typed-in rate stays). When ticked
     it says what changes, and that Damodaran's equity risk premium was worked out with the older rate. When FRED cannot give
     the yield it says so and the model's own rate is used.
     """
-    ticked = st.sidebar.checkbox(
+    ticked = box.checkbox(
         "Use today's 10-year Treasury yield as the risk-free rate", key=LIVE_RF_KEY,
         help=explanations.help_text("live_risk_free"),
     )
@@ -446,9 +453,9 @@ def draw_live_risk_free():
     try:
         live = data.risk_free_from_macro(load_macro_backdrop())
     except ValueError as error:
-        st.sidebar.warning(f"Today's yield is not available ({error}) so the model's own risk-free rate is used.")
+        box.warning(f"Today's yield is not available ({error}) so the model's own risk-free rate is used.")
         return None
-    st.sidebar.caption(
+    box.caption(
         f"Risk-free rate {precise_percent(live['rate'])} (the 10-year yield on {day_text(live['date'])}, "
         f"from FRED) instead of {precise_percent(data.RISK_FREE_RATE)} (Damodaran). His {precise_percent(data.EQUITY_RISK_PREMIUM)} equity risk "
         "premium was worked out with the older rate, so the two do not quite fit together."
@@ -843,7 +850,7 @@ def draw_scenario_boxes():
     with st.sidebar.expander("Scenarios"):
         st.caption(
             "Each scenario moves every forecast year's operating margin and revenue growth, in percentage "
-            "points, on top of the sliders above. The base case is the DCF itself."
+            "points, on top of the sliders under the header. The base case is the DCF itself."
         )
         bear_margin = shift_box("Bear: operating margin (points)", "scenario_bear_margin", assumptions.SCENARIO_BEAR_MARGIN_POINTS, -limit, 0.0)
         bear_growth = shift_box("Bear: revenue growth (points)", "scenario_bear_growth", assumptions.SCENARIO_BEAR_GROWTH_POINTS, -limit, 0.0)
@@ -2906,7 +2913,7 @@ def draw_macro_backdrop():
     st.caption(
         "From FRED, the Federal Reserve Bank of St. Louis. These are US numbers: a company that lives on another country's "
         "rates (Aker on Norway's, for instance) is moved more by those. They are background for the valuation, not an input "
-        "to it, unless you tick \"Use today's 10-year Treasury yield\" in the sidebar: the WACC's risk-free rate is otherwise typed in from Damodaran."
+        "to it, unless you tick \"Use today's 10-year Treasury yield\" under \"WACC and rates\": the WACC's risk-free rate is otherwise typed in from Damodaran."
     )
 
 
@@ -2972,38 +2979,40 @@ def analyst_view_or_none(company):
 
 
 def draw_header(company, dcf, multiples, prices):
-    """Draw the top of the page, the answer first: the company's name and ticker, a verdict badge, four headline
-    cards (the market price, the DCF value per share, the upside or downside, and the middle of the multiples
-    prices) and a small chart of the share price over the last year. When no DCF could be built (`dcf` is None)
+    """Draw the top of the page, the answer first: the company's name and ticker, a verdict badge, one large number
+    (the DCF value per share) with the upside or downside beside it, two quieter numbers to the right (the market price
+    and the middle of the multiples prices) and a small chart of the share price over the last year. When no DCF could be built (`dcf` is None)
     the badge says so and the cards that need it say "Not available". `prices` is the year of share prices, or
     None, and then the chart is left out; nothing else depends on it.
     """
     upside = None if dcf is None else dcf["upside"]
     verdict = valuation.verdict(upside, assumptions.VERDICT_THRESHOLD)
     middle = None if multiples is None else multiples["median_price"]
-    cards = [
-        theme.kpi_card_html(
-            "Current price", dollars(company["share_price"]), "Market price today",
-            help=explanations.help_text("current_price"),
-        ),
+    hero_cards = [
         theme.kpi_card_html(
             "DCF value per share", NOT_AVAILABLE if dcf is None else dollars(dcf["implied_share_price"]),
-            "Discounted cash flow", muted=dcf is None, help=explanations.help_text("implied_share_price"),
+            "Discounted cash flow", muted=dcf is None, help=explanations.help_text("implied_share_price"), size="hero",
         ),
         theme.kpi_card_html(
             "Upside / downside", NOT_AVAILABLE if upside is None else theme.change_text(upside),
             "DCF value against the market price", tone=None if upside is None else theme.tone_of(upside),
-            muted=upside is None, help=explanations.help_text("upside_vs_market"),
+            muted=upside is None, help=explanations.help_text("upside_vs_market"), size="change",
+        ),
+    ]
+    side_cards = [
+        theme.kpi_card_html(
+            "Current price", dollars(company["share_price"]), "Market price today",
+            help=explanations.help_text("current_price"), size="stat",
         ),
         theme.kpi_card_html(
             "Multiples value", NOT_AVAILABLE if middle is None else dollars(middle),
             middle_price_label(multiples) if middle is not None else "No peer figures to work it out from",
-            muted=middle is None, help=explanations.help_text("multiples_value"),
+            muted=middle is None, help=explanations.help_text("multiples_value"), size="stat",
         ),
     ]
     st.html(theme.header_html(
-        company["company_name"], company["ticker"], verdict, cards, verdict_basis_text(verdict),
-        verdict_help=explanations.help_text("verdict"),
+        company["company_name"], company["ticker"], verdict, hero_cards, verdict_basis_text(verdict),
+        verdict_help=explanations.help_text("verdict"), side_cards=side_cards,
     ))
     if prices is None:
         return
@@ -3184,8 +3193,8 @@ def draw_page():
     load_link()
     ticker = draw_ticker_box()
     draw_name_search()
-    growth_shift, margin_shift, terminal_growth_rate, wacc_override = draw_sliders()
-    live_risk_free = draw_live_risk_free()
+    header_area = st.container()                       # filled once the numbers are known, so the header sits above the sliders
+    growth_shift, margin_shift, terminal_growth_rate, wacc_override, live_risk_free = draw_sliders()
     scenario_settings = draw_scenario_boxes()
     adjustment = 0.0
     load_error = None
@@ -3205,7 +3214,11 @@ def draw_page():
         except ValueError as error:
             load_error = error
     if load_error is not None:
-        draw_error(ticker, load_error)
+        with header_area:
+            draw_error(ticker, load_error)
+        # Nothing to move on this page, so the sliders are hidden; they are still drawn, so they keep their settings
+        # for when a company is found again.
+        st.html(f"<style>.st-key-{STRIP_KEY} {{ display: none; }}</style>")
         return
     try:
         dcf_inputs = build_dcf_inputs(company, growth_shift, margin_shift)
@@ -3221,7 +3234,8 @@ def draw_page():
 
     prices = price_history_or_none(company)
     analysts = analyst_view_or_none(company)
-    draw_header(company, dcf, multiples, prices)
+    with header_area:
+        draw_header(company, dcf, multiples, prices)
     draw_source_note(company, source_used)
     note = adjustment_note(adjustment)
     if note:
