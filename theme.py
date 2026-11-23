@@ -39,6 +39,11 @@ BRONZE = "#6E6253"      # peer bars in charts (never used for text: it is too da
 # The colours charts use, in order: the company in the accent, the comparison in the label colour.
 CHART_COLOURS = [ACCENT, GREY]
 
+# In Plotly charts, the filled shapes that stand for peers and history (bars, dots, a ring's slice) are bronze: quiet
+# enough that the company's brass is the hero, and still 3.2 against the page (the web standard for shapes is 3).
+# Lines and anything with text on it keep the lighter label colour.
+COMPARISON = BRONZE
+
 # Rounded corners: cards are 10 px, input boxes and buttons 6 px. The input value is the one in
 # .streamlit/config.toml (baseRadius), because Streamlit gives every box and button that corner.
 CARD_RADIUS = "0.625rem"
@@ -230,16 +235,28 @@ def readable_text_on(background):
 
 
 # ---------------------------------------------------------------------------
-# Number formats for the new cards and charts
+# Number formats: one rule each, the same everywhere on the page
 # ---------------------------------------------------------------------------
+
+# The true minus sign, as typeset finance writes it: as wide as the plus sign and the digits, so a column of
+# signed numbers lines up, where the short hyphen does not. Plotly's charts already use it for their axes and hovers.
+MINUS = "\u2212"
+
+
+def with_true_minus(number_text):
+    """Swap the short hyphen in a written number ("-12.3%", "-$281M") for the true minus sign. Only for text that is
+    a number, never for words, which can hold real hyphens.
+    """
+    return number_text.replace("-", MINUS)
+
 
 def money_short(amount_in_millions):
     """Write a dollar amount, given in $ millions, the short way a dashboard does: $1.2B, $345M or $2.1T.
-    A missing amount is a dash and a negative one keeps its minus sign in front of the dollar sign.
+    A missing amount is a dash and a negative one has the true minus sign in front of the dollar sign.
     """
     if amount_in_millions is None:
         return "–"
-    sign = "-" if amount_in_millions < 0 else ""
+    sign = MINUS if amount_in_millions < 0 else ""
     amount = abs(amount_in_millions)
     # The limits sit just below 1,000 and 1,000,000 so that an amount which would round up to "1,000" moves
     # up to the next unit instead ($999.6M would otherwise read $1,000M).
@@ -254,13 +271,13 @@ def money_short(amount_in_millions):
 
 def change_text(change, digits=1):
     """Write a change as a signed percentage with the arrow that goes with it, so it reads without colour:
-    "▲ +41.3%" for up, "▼ -12.0%" for down. Exactly zero has no arrow: "0.0%". `digits` is how many decimals to
+    "▲ +41.3%" for up, "▼ −12.0%" for down (with the true minus sign). Exactly zero has no arrow: "0.0%". `digits` is how many decimals to
     show (0 gives "▲ +41%", for the small cells of a heatmap).
     """
     text = f"{change:+.{digits}%}"
     if float(text.rstrip("%")) == 0:
         return f"{0:.{digits}f}%"            # too small to show a direction
-    return ("▲ " if change > 0 else "▼ ") + text
+    return ("▲ " if change > 0 else "▼ ") + with_true_minus(text)
 
 
 def tone_of(change):
@@ -362,17 +379,39 @@ def with_opacity(colour, opacity):
     return f"rgba({red}, {green}, {blue}, {opacity})"
 
 
+# What every chart shares, as a Plotly template: the explicit settings of a chart win over it, so a chart that needs
+# something different (no gridlines, a reversed axis) still says so itself.
+CHART_AXIS = {
+    "gridcolor": BORDER, "gridwidth": 1, "linecolor": BORDER_STRONG, "zeroline": False, "ticks": "", "automargin": True,
+    "tickfont": {"family": FONT_FAMILY, "color": GREY, "size": 11}, "title": {"font": {"color": GREY, "size": 12}},
+}
+CHART_TEMPLATE = {
+    "layout": {
+        "font": {"family": FONT_FAMILY, "color": TEXT, "size": 12},
+        "xaxis": CHART_AXIS,
+        "yaxis": CHART_AXIS,
+        "legend": {"font": {"color": SAND, "size": 12}, "bgcolor": "rgba(0, 0, 0, 0)"},
+        "bargap": 0.35,
+    },
+}
+
+
 def style_figure(figure, height):
-    """Give a Plotly figure the page's look: transparent so the dark page shows through, the cream Inter text,
-    no outer margin, and a hover label in the card colours.
+    """Give a Plotly figure the page's look: transparent so the dark page shows through, the cream Inter text, quiet
+    11 px axis labels and thin gridlines (the shared template above), no outer margin, and a hover label on the raised
+    surface.
     """
     figure.update_layout(
+        template=CHART_TEMPLATE,
         height=height,
         margin={"l": 0, "r": 0, "t": 0, "b": 0},
         paper_bgcolor="rgba(0, 0, 0, 0)",
         plot_bgcolor="rgba(0, 0, 0, 0)",
         font={"family": FONT_FAMILY, "color": TEXT},
-        hoverlabel={"bgcolor": RAISED, "bordercolor": BORDER_STRONG, "font": {"family": FONT_FAMILY, "color": TEXT}},
+        hoverlabel={
+            "bgcolor": RAISED, "bordercolor": BORDER_STRONG,
+            "font": {"family": FONT_FAMILY, "color": TEXT, "size": 12},
+        },
         showlegend=False,
     )
     return figure

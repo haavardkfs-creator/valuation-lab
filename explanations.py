@@ -203,7 +203,7 @@ HELP_TEXTS = {
     "football_field": (
         "Football field",
         "Each bar is a way of valuing the company, as a range of prices per share. Gold is the DCF, with the WACC "
-        "{wacc_points} point either way and terminal growth from {growth_low} to {growth_high}. Grey bars are the "
+        "{wacc_points} point either way and terminal growth from {growth_low} to {growth_high}. Brown bars are the "
         "peers' multiples (the middle half of the peers), the analysts' price targets and the share's own 52-week range. The cream tick is the "
         "middle value and the dashed line is today's market price: a bar mostly to the right of the line says that "
         "method values the company above today's price.",
@@ -217,9 +217,9 @@ HELP_TEXTS = {
     ),
     "cash_flow_chart": (
         "Free cash flow chart",
-        "Free cash flow year by year: grey bars are what the company reported, gold bars are the model's forecast, "
+        "Free cash flow year by year: brown bars are what the company reported, gold bars are the model's forecast, "
         "and the cream line is the operating margin (right-hand axis). The two kinds of free cash flow are not built "
-        "the same way, so a small jump between grey and gold is normal.",
+        "the same way, so a small jump between brown and gold is normal.",
     ),
     "terminal_value_ring": (
         "Terminal value ring",
@@ -295,7 +295,7 @@ HELP_TEXTS = {
     ),
     "history_amounts": (
         "Revenue and free cash flow by year",
-        "Revenue (gold) and free cash flow as the company reports it (grey) for each year Yahoo Finance has, in US "
+        "Revenue (gold) and free cash flow as the company reports it (brown) for each year Yahoo Finance has, in US "
         "dollars. Reported free cash flow adds back share-based pay, so it can sit higher than the model's own figure.",
     ),
     "history_margins": (
@@ -306,7 +306,7 @@ HELP_TEXTS = {
     ),
     "peer_bars": (
         "Peer bars",
-        "One multiple for the company (gold) and for each of its peers (grey), highest at the top. The dashed line is "
+        "One multiple for the company (gold) and for each of its peers (brown), highest at the top. The dashed line is "
         "the peers' median, their middle value. Use the switch to change the multiple. A bar is missing when that "
         "company has no usable figure, for example no P/E for a company that lost money.",
     ),

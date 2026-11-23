@@ -283,7 +283,7 @@ def test_a_loss_maker_with_a_negative_operating_margin_shows_its_overview_number
     assert_footer_and_no_crash(page)
     assert "Could not value LOSS." in texts(page.error)[0]
     shown = metrics(page)
-    assert shown["Operating margin"] == "-1.7%"                  # -400 / 23,769, shown as it is
+    assert shown["Operating margin"] == "−1.7%"                  # -400 / 23,769, shown as it is
     assert shown["P/E"] == app.NOT_MEANINGFUL                    # no P/E for a company that lost money
 
 
@@ -811,7 +811,7 @@ def test_moving_a_slider_changes_the_table_by_that_many_points(monkeypatch):
     assert table["Operating margin"].tolist() == ["34.80%", "34.95%", "35.50%", "36.00%", "37.00%"]
     assert table["Tax rate"].tolist() == ["18.00%"] * 5          # the sliders leave everything else alone
     line = [caption for caption in texts(page.caption) if caption.startswith("Adobe's assumptions")][0]
-    assert "growth by +1.5 points" in line and "operating margin by -2.0 points" in line
+    assert "growth by +1.5 points" in line and "operating margin by −2.0 points" in line
 
 
 def test_the_shift_sliders_are_in_points_and_start_at_zero(monkeypatch):
@@ -844,7 +844,7 @@ def test_the_line_says_whose_wacc_it_is(monkeypatch):
 def test_a_rate_too_small_to_show_is_never_written_as_negative_zero():
     assert app.percent(-0.00004) == "0.0%" and app.percent(0.0) == "0.0%"
     assert app.precise_percent(-0.000001) == "0.00%"
-    assert app.percent(-0.123) == "-12.3%" and app.precise_percent(-0.0001) == "-0.01%"      # real values are kept
+    assert app.percent(-0.123) == "−12.3%" and app.precise_percent(-0.0001) == "−0.01%"      # real values are kept
 
 
 def test_shift_from_points_turns_points_into_a_decimal_and_a_zero_stays_zero():
@@ -856,7 +856,7 @@ def test_shift_from_points_turns_points_into_a_decimal_and_a_zero_stays_zero():
 
 def test_points_text_writes_a_sign_and_never_negative_zero():
     assert app.points_text(0.015) == "+1.5 points"
-    assert app.points_text(-0.02) == "-2.0 points"
+    assert app.points_text(-0.02) == "−2.0 points"
     assert app.points_text(0.0) == "+0.0 points" and app.points_text(-0.0) == "+0.0 points"
 
 
@@ -1195,7 +1195,7 @@ def test_the_history_table_matches_the_history_sheet(monkeypatch):
     assert table.loc["Free cash flow (reported)"].tolist() == ["$7,396m", "$6,942m", "$7,873m", "$9,852m"]
     assert table.loc["Free cash flow margin"].tolist() == ["42.0%", "35.8%", "36.6%", "41.4%"]      # C17:F17
     assert table.loc["Diluted average shares"].tolist() == ["471m", "459m", "450m", "427m"]
-    assert table.loc["Yearly change in shares"].tolist() == ["–", "-2.5%", "-2.0%", "-5.1%"]        # D18:F18
+    assert table.loc["Yearly change in shares"].tolist() == ["–", "−2.5%", "−2.0%", "−5.1%"]        # D18:F18
 
 
 def test_the_note_quotes_reported_free_cash_flow_against_the_models(monkeypatch):
@@ -1239,9 +1239,9 @@ def test_a_loss_shows_as_a_negative_amount_and_margin_in_the_table():
         "net_income": [-44.0, 831.0], "free_cash_flow": [-30.0, -785.0], "diluted_shares": [107.0, 107.0],
     }
     table = app.history_table(history)
-    assert table.loc["Operating income"].tolist() == ["-$281m", "$886m"]
-    assert table.loc["Operating margin"].tolist() == ["-10.7%", "26.7%"]
-    assert table.loc["Free cash flow (reported)"].tolist() == ["-$30m", "-$785m"]
+    assert table.loc["Operating income"].tolist() == ["−$281m", "$886m"]
+    assert table.loc["Operating margin"].tolist() == ["−10.7%", "26.7%"]
+    assert table.loc["Free cash flow (reported)"].tolist() == ["−$30m", "−$785m"]
 
 
 def test_the_chart_data_has_amounts_in_millions_and_margins_in_percent():
@@ -1258,7 +1258,7 @@ def test_the_chart_data_has_amounts_in_millions_and_margins_in_percent():
 
 
 def test_the_helpers_write_amounts_with_signs_and_dashes():
-    assert app.millions_text(23769.0) == "$23,769m" and app.millions_text(-281.4) == "-$281m"
+    assert app.millions_text(23769.0) == "$23,769m" and app.millions_text(-281.4) == "−$281m"
     assert app.millions_text(None) == "–" and app.rate_text(None) == "–" and app.rate_text(0.105) == "10.5%"
 
 
@@ -1296,7 +1296,7 @@ def test_a_margin_far_above_its_history_is_called_a_possible_peak_and_a_wide_swi
         "(16.4%). This year may be a peak, so a forecast that holds it flat could be too optimistic."
     )
     assert swing == (
-        "The operating margin has swung by 43.8 points between its best (33.1%) and worst (-10.7%) year. "
+        "The operating margin has swung by 43.8 points between its best (33.1%) and worst (−10.7%) year. "
         "One year is a poor guide for a margin like that, so look at the whole history."
     )
 
@@ -1469,7 +1469,7 @@ def margin_growth_table_of(page):
 
 def test_the_shift_labels_show_the_average_and_the_shift_or_base():
     assert app.shift_label(0.3765, 0.0) == "37.65% (base)"                      # two decimals, like the assumptions table
-    assert app.shift_label(0.2765, -0.10) == "27.65% (-10 pts)"
+    assert app.shift_label(0.2765, -0.10) == "27.65% (−10 pts)"
     assert app.shift_label(0.1010, 0.02) == "10.10% (+2 pts)"
     assert app.shift_label(0.4265, 0.05) == "42.65% (+5 pts)"
 
@@ -1485,10 +1485,10 @@ def test_the_tables_rows_and_columns_are_the_average_margins_and_growth_with_the
     page = run_page(monkeypatch, yahoo=adobe_with_four_years())
     table = margin_growth_table_of(page)
     assert table.index.tolist() == [
-        "27.65% (-10 pts)", "32.65% (-5 pts)", "37.65% (base)", "42.65% (+5 pts)", "47.65% (+10 pts)",
+        "27.65% (−10 pts)", "32.65% (−5 pts)", "37.65% (base)", "42.65% (+5 pts)", "47.65% (+10 pts)",
     ]
     assert table.columns.tolist() == [
-        "4.10% (-4 pts)", "6.10% (-2 pts)", "8.10% (base)", "10.10% (+2 pts)", "12.10% (+4 pts)",
+        "4.10% (−4 pts)", "6.10% (−2 pts)", "8.10% (base)", "10.10% (+2 pts)", "12.10% (+4 pts)",
     ]
     assert table.columns.name == "Average revenue growth"
 
@@ -1779,7 +1779,7 @@ def test_the_quality_row_matches_the_history_sheets_quality_block(monkeypatch):
     assert shown["ROIC"] == "63.2%"                                             # history C32
     assert shown["Cash conversion"] == "1.38x"                                  # F25
     assert shown["Interest cover"] == "33.1x"                                   # C34
-    assert shown["Share count change"] == "-9.3%"                               # C35, with "over 3 years" beneath it
+    assert shown["Share count change"] == "−9.3%"                               # C35, with "over 3 years" beneath it
     [share_metric] = [metric for metric in page.metric if metric.label == "Share count change"]
     assert share_metric.delta == "over 3 years"
 
@@ -1856,7 +1856,7 @@ def test_the_interest_cover_text_tells_no_interest_from_not_known():
 
 
 def test_the_share_count_text_gives_the_years_it_covers():
-    assert app.share_count_text({"share_count_change": -0.0934, "share_count_years": 3}) == ("-9.3%", "over 3 years")
+    assert app.share_count_text({"share_count_change": -0.0934, "share_count_years": 3}) == ("−9.3%", "over 3 years")
     assert app.share_count_text({"share_count_change": 0.05, "share_count_years": 1}) == ("5.0%", "over 1 year")
     assert app.share_count_text({"share_count_change": None, "share_count_years": None}) == ("Not available", None)
     assert app.share_count_text({}) == ("Not available", None)
@@ -2053,7 +2053,7 @@ def test_the_page_has_a_scenarios_section_with_a_row_for_each_case(monkeypatch):
     assert_footer_and_no_crash(page)
     assert "Scenarios" in texts(page.subheader)
     rows = scenario_rows(page)
-    assert rows["Bear"]["Operating margin"] == "-5.0 points" and rows["Bear"]["Revenue growth"] == "-2.0 points"
+    assert rows["Bear"]["Operating margin"] == "−5.0 points" and rows["Bear"]["Revenue growth"] == "−2.0 points"
     assert rows["Base"]["Operating margin"] == "+0.0 points" and rows["Base"]["Probability"] == "50%"
     assert rows["Bull"]["Operating margin"] == "+5.0 points" and rows["Bull"]["Revenue growth"] == "+2.0 points"
 
@@ -2145,7 +2145,7 @@ def test_a_negative_tax_rate_is_replaced_and_the_page_says_so(monkeypatch):
     page = run_page(monkeypatch, ticker="exmp", yahoo=negative_tax_company())
     assert_footer_and_no_crash(page)
     assert any(
-        "tax rate last year was -3.54%" in warning and "normal rate of 21.00%" in warning
+        "tax rate last year was −3.54%" in warning and "normal rate of 21.00%" in warning
         for warning in texts(page.warning)
     )
     wacc = wacc_table_of(page)
@@ -2335,7 +2335,7 @@ def test_what_is_reported_stays_as_reported(monkeypatch):
 def test_the_yellow_note_says_what_changed_and_what_did_not(monkeypatch):
     page = run_exmp_with_quarters(monkeypatch, -1000)
     [note] = [w for w in texts(page.warning) if w.startswith("You have adjusted operating income by")]
-    assert "by -$1,000m a year" in note
+    assert "by −$1,000m a year" in note
     assert "The DCF, the margins, EV/EBITDA" in note
     assert "The History, the P/E, cash conversion and revenue growth are as reported" in note
 
@@ -2382,7 +2382,7 @@ def test_apply_adjustment_to_ttm_changes_only_operating_income_and_copes_without
 
 def test_the_note_is_none_without_an_adjustment_and_names_the_amount_with_one():
     assert app.adjustment_note(0) is None and app.adjustment_note(0.0) is None
-    assert "by -$1,000m a year" in app.adjustment_note(-1000)
+    assert "by −$1,000m a year" in app.adjustment_note(-1000)
     assert "by $250m a year" in app.adjustment_note(250)
 
 
@@ -2577,7 +2577,7 @@ def test_a_price_far_above_the_dcf_value_is_overvalued_in_the_down_colour(monkey
     page = run_page(monkeypatch, yahoo=fake_statements_ticker(info=dict(ADOBE_YAHOO_INFO, currentPrice=900.0)))
     header = header_of(page)
     assert "▼ OVERVALUED" in header and "vl-badge vl-badge-down" in header
-    assert 'class="vl-kpi-value vl-down">▼ -' in header
+    assert 'class="vl-kpi-value vl-down">▼ −' in header
 
 
 def test_a_price_close_to_the_dcf_value_is_fairly_valued_with_no_colour_on_the_upside(monkeypatch):
@@ -2703,7 +2703,7 @@ def test_the_football_field_has_one_bar_per_method_from_its_low_to_its_high():
 
 def test_only_the_dcf_bar_is_in_the_accent_colour_and_every_other_bar_is_grey():
     bars = app.football_field_figure(FIELD_ROWS, 217.71).data[0]
-    assert list(bars.marker.color) == [theme.GREY, theme.ACCENT, theme.GREY]
+    assert list(bars.marker.color) == [theme.COMPARISON, theme.ACCENT, theme.COMPARISON]
 
 
 def test_a_white_tick_marks_the_middle_of_every_method_that_has_one():
@@ -2747,7 +2747,7 @@ def test_the_waterfall_takes_net_debt_away_and_says_net_debt():
     in_debt = dict(DCF_RESULT, net_debt=8_468.0, equity_value=118_181.0)
     waterfall = app.valuation_waterfall(in_debt).data[0]
     assert waterfall.x[3] == "Net debt" and waterfall.y[3] == pytest.approx(-8.468)
-    assert waterfall.text[3] == "-$8.5B"
+    assert waterfall.text[3] == "−$8.5B"
 
 
 def test_the_waterfall_colours_mean_something():
@@ -2775,7 +2775,7 @@ def test_dollar_signs_in_a_headline_are_escaped_so_streamlit_does_not_read_a_for
 def test_the_cash_flow_chart_has_grey_reported_bars_blue_forecast_bars_and_a_margin_line():
     figure = app.cash_flow_figure(["Year 1", "Year 2", "Year 3", "Year 4", "Year 5"], DCF_RESULT, [0.37, 0.38, 0.38, 0.39, 0.39], HISTORY)
     reported, forecast, margin = figure.data
-    assert reported.marker.color == theme.GREY and forecast.marker.color == theme.ACCENT
+    assert reported.marker.color == theme.COMPARISON and forecast.marker.color == theme.ACCENT
     assert list(reported.x) == ["FY2024", "FY2025"] and list(reported.y) == pytest.approx([7.0, 9.852])      # $ billions
     assert list(forecast.y) == pytest.approx([9.0, 10.0, 11.0, 12.0, 13.0])
     assert list(margin.x) == ["FY2024", "FY2025", "Year 1", "Year 2", "Year 3", "Year 4", "Year 5"]
@@ -2812,16 +2812,16 @@ def test_the_terminal_value_ring_shows_the_share_in_the_middle_and_stays_blue_be
     ring = app.terminal_value_donut(DCF_RESULT)           # 88,882 of 126,649 is 70%
     pie = ring.data[0]
     assert list(pie.values) == [37_767.0, 88_882.0] and list(pie.labels) == ["Years 1-5", "Terminal value"]
-    assert list(pie.marker.colors) == [theme.GREY, theme.ACCENT]
+    assert list(pie.marker.colors) == [theme.COMPARISON, theme.ACCENT]
     assert "70%" in ring.layout.annotations[0].text
 
 
 def test_the_terminal_value_ring_turns_red_above_the_warning_limit():
     top_heavy = dict(DCF_RESULT, pv_of_forecast=20_000.0, pv_of_terminal_value=80_000.0, enterprise_value=100_000.0)
     pie = app.terminal_value_donut(top_heavy).data[0]                    # 80% is above 75%
-    assert list(pie.marker.colors) == [theme.GREY, theme.DOWN]
+    assert list(pie.marker.colors) == [theme.COMPARISON, theme.DOWN]
     exactly_at_limit = dict(DCF_RESULT, pv_of_forecast=25_000.0, pv_of_terminal_value=75_000.0, enterprise_value=100_000.0)
-    assert list(app.terminal_value_donut(exactly_at_limit).data[0].marker.colors) == [theme.GREY, theme.ACCENT]
+    assert list(app.terminal_value_donut(exactly_at_limit).data[0].marker.colors) == [theme.COMPARISON, theme.ACCENT]
 
 
 def test_adobes_page_has_the_football_field_with_a_headline_and_the_charts_behind_the_number(monkeypatch):
@@ -2918,7 +2918,7 @@ def test_every_heatmap_cell_shows_its_price_and_upside_with_an_arrow_and_a_blank
     heat = a_heatmap().data[0]
     assert [list(row) for row in heat.text] == [
         ["$150<br>▲ +50%", "$120<br>▲ +20%", ""],
-        ["$100<br>0%", "$80<br>▼ -20%", "$50<br>▼ -50%"],
+        ["$100<br>0%", "$80<br>▼ −20%", "$50<br>▼ −50%"],
     ]
     assert heat.z[0][0] == pytest.approx(0.5) and heat.z[1][1] == pytest.approx(-0.2) and heat.z[0][2] is None
     assert heat.zmin == -app.HEATMAP_FULL_TINT_GAP and heat.zmax == app.HEATMAP_FULL_TINT_GAP
@@ -3005,7 +3005,7 @@ def test_the_peer_bars_are_sorted_highest_first_with_the_company_in_the_accent_c
     figure = app.peer_bar_figure("EV/EBITDA", "ME (this company)", 14.9, ["A", "B", "C"], [28.5, 61.9, 5.8], 28.5)
     bars = figure.data[0]
     assert list(bars.y) == ["B", "A", "ME (this company)", "C"] and list(bars.x) == [61.9, 28.5, 14.9, 5.8]
-    assert list(bars.marker.color) == [theme.GREY, theme.GREY, theme.ACCENT, theme.GREY]
+    assert list(bars.marker.color) == [theme.COMPARISON, theme.COMPARISON, theme.ACCENT, theme.COMPARISON]
     assert list(bars.text) == ["61.9x", "28.5x", "14.9x", "5.8x"]
     assert figure.layout.yaxis.autorange == "reversed"
 
@@ -3048,7 +3048,7 @@ def test_the_scatter_puts_the_company_in_the_accent_colour_and_the_peers_in_grey
     figure = app.peer_scatter_figure("ME", 14.9, 0.652, ["A", "B"], [28.5, 61.9], [0.49, 0.178], 28.5, 0.617)
     peers, company = figure.data
     assert list(peers.text) == ["A", "B"] and list(peers.x) == [0.49, 0.178] and list(peers.y) == [28.5, 61.9]
-    assert peers.marker.color == theme.GREY and company.marker.color == theme.ACCENT
+    assert peers.marker.color == theme.COMPARISON and company.marker.color == theme.ACCENT
     assert company.marker.size > peers.marker.size and list(company.x) == [0.652] and list(company.y) == [14.9]
     assert len(figure.layout.shapes) == 2 and all(shape.line.dash == "dash" for shape in figure.layout.shapes)
 
@@ -3556,7 +3556,7 @@ def test_a_headline_leaves_out_what_has_no_two_years_of_figures_and_is_none_when
 def test_the_history_amounts_chart_has_blue_revenue_and_grey_reported_free_cash_flow_in_billions():
     figure = app.history_amounts_figure(LONG_HISTORY)
     revenue, cash = figure.data
-    assert revenue.marker.color == theme.ACCENT and cash.marker.color == theme.GREY
+    assert revenue.marker.color == theme.ACCENT and cash.marker.color == theme.COMPARISON
     assert list(revenue.x) == LONG_HISTORY["years"] and list(revenue.y) == pytest.approx([17.606, 19.409, 21.505, 23.769])
     assert list(cash.y) == pytest.approx([7.396, 6.942, 7.873, 9.852])
     assert figure.layout.yaxis.tickprefix == "$" and figure.layout.yaxis.ticksuffix == "B" and figure.layout.showlegend is True
@@ -3923,7 +3923,7 @@ def test_the_football_field_gets_a_grey_analysts_bar_with_a_tick_at_the_mean(mon
         {"label": "DCF", "kind": "dcf", "low": 253.0, "middle": 305.6, "high": 390.1},
     ]
     figure = app.football_field_figure(rows, 217.71)
-    assert list(figure.data[0].marker.color) == [theme.GREY, theme.ACCENT]
+    assert list(figure.data[0].marker.color) == [theme.COMPARISON, theme.ACCENT]
     assert list(figure.data[1].y) == ["Analysts", "DCF"] and list(figure.data[1].x) == [266.9, 305.6]
 
 
