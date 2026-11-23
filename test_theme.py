@@ -428,3 +428,39 @@ def test_everything_in_the_hints_card_is_escaped_including_what_the_reader_typed
 
 def test_the_hints_card_is_styled_like_the_other_cards():
     assert ".vl-hints" in theme.CARD_CSS and f"border-radius: {theme.CARD_RADIUS}" in theme.CARD_CSS
+
+
+# ---------------------------------------------------------------------------
+# The header's one large number and the strip of sliders (redesign step 5, pull request 2)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("size", ["hero", "change", "stat"])
+def test_a_card_can_be_the_large_number_its_change_or_a_quiet_side_number(size):
+    card = theme.kpi_card_html("DCF value per share", "$305.60", size=size)
+    assert card.startswith(f'<div class="vl-kpi vl-kpi-{size}">')
+    assert 'class="vl-kpi-value">$305.60</div>' in card                # read back the same way as any card
+
+
+def test_an_unknown_size_is_an_ordinary_card():
+    assert theme.kpi_card_html("a", "b", size="giant").startswith('<div class="vl-kpi">')
+
+
+def test_the_header_puts_the_side_numbers_to_the_right_and_leaves_them_out_when_there_are_none():
+    header = theme.header_html("Adobe Inc.", "ADBE", "fair", ["<HERO>"], "Basis.", side_cards=["<S1>", "<S2>"])
+    assert '<div class="vl-stats"><S1><S2></div>' in header
+    assert header.index("<HERO>") < header.index("<S1>")
+    assert "vl-stats" not in theme.header_html("Adobe Inc.", "ADBE", "fair", ["<HERO>"], "Basis.")
+
+
+def test_the_large_number_is_56_px_and_only_it_gets_the_faint_glow():
+    assert ".vl-kpi-hero .vl-kpi-value { font-size: 3.5rem" in theme.CARD_CSS
+    assert theme.CARD_CSS.count("radial-gradient") == 1 and ".vl-hero::before" in theme.CARD_CSS
+
+
+def test_the_brand_mark_is_fixed_text_hidden_from_screen_readers():
+    assert 'aria-hidden="true"' in theme.BRAND_MARK and "<script" not in theme.BRAND_MARK
+    assert theme.BRAND_MARK in theme.header_html("A", "B", None, [], "C")
+
+
+def test_the_strip_css_targets_the_container_the_app_draws():
+    assert f".st-key-{app.STRIP_KEY} " in theme.CARD_CSS

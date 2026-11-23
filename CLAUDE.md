@@ -11,8 +11,9 @@ changes small enough to review, and never build ahead of what's been asked for.
 
 ## How we work
 
-- Claude works on its own machine and opens a pull request. Haavard reads the diff and
-  merges on GitHub himself.
+- Claude works on its own machine and opens a pull request. Once the tests pass on GitHub,
+  Claude merges it and reports what changed; Haavard can read every diff on GitHub
+  (Haavard's choice, 23 Nov 2026).
 - Claude never pushes to `main`.
 - Haavard writes LEARNING.md himself, on GitHub. Claude never edits it.
 - Before writing any files, Claude states in two or three plain sentences what it's about
