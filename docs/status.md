@@ -389,11 +389,13 @@
 - Done (merged, #69 "True minus signs and one chart template"): redesign pull request 3 of 6. Negative numbers
   use the true minus sign (−) everywhere the page formats a number; every Plotly chart shares one template; peers and history
   are bronze in charts; the margin axis shows one decimal (no more 37%, 37%, 38%).
-- Done (in the open pull request "Section labels and finding headlines on every tab"): redesign pull request 4 of 6. Each
+- Done (merged, #70 "Section labels and finding headlines on every tab"): redesign pull request 4 of 6. Each
   section starts with a small label and its finding as a 20 px heading; quieter tabs; plain tables at 13 px with numbers on the
   right; waterfall totals in sand; no bold in the heatmap tables.
-- Next (redesign): empty and fallback states
-  (the yellow "Yahoo could not be reached" banner becomes a small pill); the phone layout.
+- Done (in the open pull request "Calm notes, empty states and the error page"): redesign pull request 5 of 6. The source
+  note sits under the header as a small outlined line with a dot; other notes are calm cards; an empty section shows its
+  reason in a dashed card; the error page has the top bar instead of a big title.
+- Next (redesign): the phone layout (pull request 6 of 6).
 - Next: check the macro numbers on the live app after the merge; the live FMP check with Yahoo switched
   off; the small items below. CLAUDE.md still needs Haavard's edits (the theme line, and rows for theme.py and test_theme.py).
 - Open:

@@ -113,7 +113,7 @@ CARD_CSS = f"""
 }}
 [data-testid="stElementContainer"]:has(h3) {{ margin-top: 3rem; margin-bottom: 0.5rem; }}
 [data-testid="stTabPanel"] > div > [data-testid="stVerticalBlock"] > [data-testid="stElementContainer"]:first-child:has(h3) {{ margin-top: 1rem; }}
-[data-testid="stElementContainer"]:has(h3) + [data-testid="stElementContainer"] > [data-testid="stMarkdown"] p {{
+[data-testid="stElementContainer"]:has(h3) + [data-testid="stElementContainer"]:not(:has([data-testid="stCaptionContainer"])) > [data-testid="stMarkdown"] p {{
     font-size: 1.25rem; line-height: 1.75rem; font-weight: {WEIGHT_MEDIUM}; color: {TEXT};
 }}
 /* Small section headings inside a section (the Explanations tab's groups) are quiet labels too. */
@@ -139,6 +139,44 @@ CARD_CSS = f"""
 [data-testid="stTable"] tbody tr:hover td, [data-testid="stTable"] tbody tr:hover th {{ background: {RAISED}; }}
 /* Long captions and notes under charts stay narrow enough to read in one go. */
 [data-testid="stCaptionContainer"] p {{ max-width: 52rem; line-height: 1.25rem; }}
+
+/* Empty states: when a section has nothing to show, the one quiet line that says why (a caption right under the section's
+   name) sits in a dashed card, so a gap reads as "nothing here yet", never as a broken page. */
+[data-testid="stElementContainer"]:has(h3) + [data-testid="stElementContainer"]:has([data-testid="stCaptionContainer"]) [data-testid="stCaptionContainer"] {{
+    border: 1px dashed {BORDER_STRONG}; border-radius: {CARD_RADIUS}; padding: 1rem 1.25rem; color: {GREY};
+}}
+
+/* Every other note (a warning about a forecast, an error) is a calm card instead of a bright coloured banner: the surface
+   colour, one thin line, the text in cream, and only the small icon and the line take the colour of the kind of note. */
+.stApp [data-testid="stAlertContainer"] {{ background: {SURFACE}; border: 1px solid {BORDER}; color: {TEXT}; }}
+.stApp [data-testid="stAlertContainer"] p {{ color: {TEXT}; }}
+.stApp [data-testid="stAlertContentWarning"] svg {{ color: {ACCENT}; fill: {ACCENT}; }}
+.stApp [data-testid="stAlertContentInfo"] svg {{ color: {GREY}; fill: {GREY}; }}
+.stApp [data-testid="stAlertContentError"] svg {{ color: {DOWN}; fill: {DOWN}; }}
+.stApp [data-testid="stAlertContentSuccess"] svg {{ color: {UP}; fill: {UP}; }}
+.stApp [data-testid="stAlertContainer"]:has([data-testid="stAlertContentError"]) {{ border-color: {DOWN}; }}
+.stApp [data-testid="stAlertContainer"]:has([data-testid="stAlertContentWarning"]) {{ border-color: {BORDER_STRONG}; }}
+
+/* Where the figures came from, under the header: small quiet notes with a coloured dot instead of big coloured banners.
+   A warning (the frozen snapshot, an estimated cost of debt) gets a brass dot, an information note a taupe one, and the
+   "live" line a sage one. The words still say it all; the dot only adds to them. */
+.st-key-source_note {{ gap: 0.5rem; margin: -0.75rem 0 1.25rem 0; }}
+.st-key-source_note [data-testid="stAlertContainer"] {{
+    background: transparent; border: 1px solid {BORDER}; border-radius: {CARD_RADIUS}; padding: 0.5rem 0.875rem;
+    display: block; width: fit-content; max-width: 100%; min-height: 0;
+}}
+.st-key-source_note [data-testid="stAlertContainer"] * {{ padding: 0; margin: 0; min-height: 0; gap: 0; }}
+.st-key-source_note [data-testid="stAlertContainer"] p, .st-key-source_note [data-testid="stCaptionContainer"] p {{
+    color: {SAND}; font-size: 0.8125rem; line-height: 1.25rem; margin: 0;
+}}
+.st-key-source_note [data-testid="stAlertContainer"] [data-testid="stAlertDynamicIcon"], .st-key-source_note [data-testid="stAlertContainer"] svg {{ display: none; }}
+.st-key-source_note [data-testid="stAlertContainer"] p::before, .st-key-source_note [data-testid="stCaptionContainer"] p::before {{
+    content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin: 0 0.5rem 0.1rem 0; vertical-align: middle;
+    background: {GREY};
+}}
+.st-key-source_note [data-testid="stAlertContentWarning"] p::before {{ background: {ACCENT}; }}
+.st-key-source_note [data-testid="stCaptionContainer"] p::before {{ background: {UP}; }}
+.st-key-source_note [data-testid="stCaptionContainer"] {{ color: {SAND}; }}
 
 /* The card that helps when a company cannot be found: a title and a short list of things to check. */
 .vl-hints {{
@@ -181,6 +219,7 @@ CARD_CSS = f"""
 /* The header: a thin top bar with the app's name, then one large number (the DCF value) with its change beside it,
    and the quieter numbers to the right, divided by thin lines. A faint brass glow sits behind the large number only. */
 .vl-topbar {{ display: flex; align-items: center; justify-content: space-between; height: 3rem; border-bottom: 1px solid {BORDER}; }}
+.vl-header-error {{ margin-bottom: 2rem; }}
 .vl-brand-name {{ display: inline-flex; align-items: center; gap: 0.625rem; }}
 .vl-mark {{ position: relative; display: inline-block; width: 18px; height: 18px; box-sizing: border-box; border: 1.5px solid {ACCENT}; border-radius: 4px; }}
 .vl-mark::after {{ content: ""; position: absolute; left: 3px; top: 7px; width: 10px; height: 1.5px; background: {TEXT}; border-radius: 1px; transform: rotate(-35deg); }}
@@ -385,6 +424,11 @@ def hints_card_html(title, items):
 BRAND_MARK = '<span class="vl-mark" aria-hidden="true"></span>'
 
 
+def topbar_html():
+    """Write the thin bar at the very top of every page: the small mark and the app's name. Fixed text."""
+    return f'<div class="vl-topbar"><span class="vl-brand-name">{BRAND_MARK}<span class="vl-brand">Valuation Lab</span></span></div>'
+
+
 def header_html(company_name, ticker, verdict, cards, basis, verdict_help=None, side_cards=()):
     """Write the whole header: the app's name, the company's name with its ticker and the verdict badge (with its
     tooltip, when `verdict_help` is given), then the headline numbers (`cards`, the HTML that kpi_card_html wrote) with
@@ -393,7 +437,7 @@ def header_html(company_name, ticker, verdict, cards, basis, verdict_help=None, 
     side = f'<div class="vl-stats">{"".join(side_cards)}</div>' if side_cards else ""
     return (
         '<div class="vl-header">'
-        f'<div class="vl-topbar"><span class="vl-brand-name">{BRAND_MARK}<span class="vl-brand">Valuation Lab</span></span></div>'
+        f"{topbar_html()}"
         '<div class="vl-hero-row"><div class="vl-hero">'
         f'<div class="vl-name"><h1>{html.escape(company_name)}</h1>'
         f'<span class="vl-badge vl-badge-ticker">{html.escape(ticker)}</span>{verdict_badge_html(verdict, verdict_help)}</div>'

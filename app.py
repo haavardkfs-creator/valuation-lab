@@ -243,6 +243,7 @@ PEERS_KEY_START = "peers_"
 ONE_OFF_KEY_START = "oneoff_"
 LINK_LOADED_KEY = "link_loaded"
 COMPARE_KEY = "compare_ticker"          # the box in the Compare tab where the second company is typed
+SOURCE_NOTE_KEY = "source_note"        # the box under the header that says where the figures came from (CSS class st-key-source_note)
 STRIP_KEY = "assumption_strip"          # the bordered strip of sliders under the header (its CSS class is st-key-assumption_strip)
 LIVE_RF_KEY = "live_risk_free"          # the tick box that swaps in today's 10-year Treasury yield
 
@@ -2794,7 +2795,7 @@ def draw_error(ticker, error):
     """Show why a company could not be valued, in plain words, with a short list of things to check, and still show the
     footer.
     """
-    st.title("Valuation Lab")
+    st.html(f'<div class="vl-header vl-header-error">{theme.topbar_html()}</div>')    # the same top bar as every page
     st.error(f"Could not value {ticker}. {error}")
     busy = isinstance(error, data.SourceUnavailable)
     st.html(theme.hints_card_html("What you can do" if busy else "Things to check", error_hints(ticker, error)))
@@ -3237,7 +3238,8 @@ def draw_page():
     analysts = analyst_view_or_none(company)
     with header_area:
         draw_header(company, dcf, multiples, prices)
-    draw_source_note(company, source_used)
+        with st.container(key=SOURCE_NOTE_KEY):            # styled as small quiet notes under the header (see theme.py)
+            draw_source_note(company, source_used)
     note = adjustment_note(adjustment)
     if note:
         st.warning(note)
