@@ -105,6 +105,41 @@ CARD_CSS = f"""
 [data-testid="stDataFrame"], [data-testid="stTable"] {{ border-radius: {CARD_RADIUS}; }}
 [data-testid="stCaptionContainer"] {{ color: {GREY}; }}
 
+/* Sections, as the design system draws them: the section's name is a small quiet label (Streamlit's subheader, an h3),
+   and the sentence right under it, which says the finding, is the 20 px heading. 72 px between sections. */
+.stApp [data-testid="stHeadingWithActionElements"] h3, .stApp h3 {{
+    color: {SAND}; font-size: 0.8125rem; line-height: 1.25rem; font-weight: {WEIGHT_MEDIUM}; letter-spacing: 0.08em;
+    text-transform: uppercase; padding: 0; margin: 0;
+}}
+[data-testid="stElementContainer"]:has(h3) {{ margin-top: 3rem; margin-bottom: 0.5rem; }}
+[data-testid="stTabPanel"] > div > [data-testid="stVerticalBlock"] > [data-testid="stElementContainer"]:first-child:has(h3) {{ margin-top: 1rem; }}
+[data-testid="stElementContainer"]:has(h3) + [data-testid="stElementContainer"] > [data-testid="stMarkdown"] p {{
+    font-size: 1.25rem; line-height: 1.75rem; font-weight: {WEIGHT_MEDIUM}; color: {TEXT};
+}}
+/* Small section headings inside a section (the Explanations tab's groups) are quiet labels too. */
+.stApp h5 {{ color: {GREY}; font-size: 0.6875rem; letter-spacing: 0.08em; text-transform: uppercase; font-weight: {WEIGHT_MEDIUM}; }}
+/* No link icons beside headings: they are noise on a dashboard. */
+[data-testid="stHeaderActionElements"] {{ display: none; }}
+/* The tabs: quiet until chosen, the chosen one in cream with the brass line under it. */
+[data-baseweb="tab"] p {{ font-size: 0.875rem; }}
+[data-baseweb="tab"][aria-selected="false"] p {{ color: {GREY}; }}
+[data-baseweb="tab"]:hover p {{ color: {TEXT}; }}
+[data-baseweb="tab-list"] {{ gap: 2rem; }}
+/* Closed boxes: a quiet header line, the content inside a card. */
+[data-testid="stExpander"] summary p {{ font-size: 0.875rem; color: {TEXT}; }}
+[data-testid="stExpander"] summary:hover {{ background: {RAISED}; }}
+/* Plain tables (st.table): 13 px, numbers right-aligned, quiet headers, thin lines between rows, a hovered row lifts. */
+[data-testid="stTable"] table {{ font-size: 0.8125rem; line-height: 1.25rem; border-collapse: collapse; }}
+[data-testid="stTable"] th {{ color: {GREY}; font-weight: {WEIGHT_MEDIUM}; font-size: 0.75rem; text-align: right; border-color: {BORDER}; }}
+[data-testid="stTable"] td {{ text-align: right; border-color: {BORDER}; }}
+[data-testid="stTable"] p {{ font-size: inherit; line-height: inherit; margin: 0; }}
+[data-testid="stTable"] td [data-testid="stMarkdownContainer"], [data-testid="stTable"] thead th [data-testid="stMarkdownContainer"] {{ text-align: right; }}
+[data-testid="stTable"] tbody th [data-testid="stMarkdownContainer"], [data-testid="stTable"] thead th:first-child [data-testid="stMarkdownContainer"] {{ text-align: left; }}
+[data-testid="stTable"] tbody th, [data-testid="stTable"] thead th:first-child {{ text-align: left; color: {SAND}; }}
+[data-testid="stTable"] tbody tr:hover td, [data-testid="stTable"] tbody tr:hover th {{ background: {RAISED}; }}
+/* Long captions and notes under charts stay narrow enough to read in one go. */
+[data-testid="stCaptionContainer"] p {{ max-width: 52rem; line-height: 1.25rem; }}
+
 /* The card that helps when a company cannot be found: a title and a short list of things to check. */
 .vl-hints {{
     background: {SURFACE}; border: 1px solid {BORDER}; border-radius: {CARD_RADIUS}; padding: 1.25rem 1.5rem; margin: 0.75rem 0 1rem 0;

@@ -386,10 +386,13 @@
   the DCF value per share at 56 px and its upside, with the market price and the multiples value to the right; the three
   sliders sit in a strip under the header, the WACC and the live risk-free boxes behind a "WACC and rates" button. CLAUDE.md
   now says Claude merges once the tests pass.
-- Done (in the open pull request "True minus signs and one chart template"): redesign pull request 3 of 6. Negative numbers
+- Done (merged, #69 "True minus signs and one chart template"): redesign pull request 3 of 6. Negative numbers
   use the true minus sign (−) everywhere the page formats a number; every Plotly chart shares one template; peers and history
   are bronze in charts; the margin axis shows one decimal (no more 37%, 37%, 38%).
-- Next (redesign): the tabs; empty and fallback states
+- Done (in the open pull request "Section labels and finding headlines on every tab"): redesign pull request 4 of 6. Each
+  section starts with a small label and its finding as a 20 px heading; quieter tabs; plain tables at 13 px with numbers on the
+  right; waterfall totals in sand; no bold in the heatmap tables.
+- Next (redesign): empty and fallback states
   (the yellow "Yahoo could not be reached" banner becomes a small pill); the phone layout.
 - Next: check the macro numbers on the live app after the merge; the live FMP check with Yahoo switched
   off; the small items below. CLAUDE.md still needs Haavard's edits (the theme line, and rows for theme.py and test_theme.py).
