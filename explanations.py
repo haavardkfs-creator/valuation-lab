@@ -202,9 +202,9 @@ HELP_TEXTS = {
     ),
     "football_field": (
         "Football field",
-        "Each bar is a way of valuing the company, as a range of prices per share. Blue is the DCF, with the WACC "
+        "Each bar is a way of valuing the company, as a range of prices per share. Gold is the DCF, with the WACC "
         "{wacc_points} point either way and terminal growth from {growth_low} to {growth_high}. Grey bars are the "
-        "peers' multiples (the middle half of the peers), the analysts' price targets and the share's own 52-week range. The white tick is the "
+        "peers' multiples (the middle half of the peers), the analysts' price targets and the share's own 52-week range. The cream tick is the "
         "middle value and the dashed line is today's market price: a bar mostly to the right of the line says that "
         "method values the company above today's price.",
     ),
@@ -212,14 +212,14 @@ HELP_TEXTS = {
         "How the DCF value is built",
         "The present value of the five forecast years plus the present value of everything after year 5 (the "
         "terminal value) is the enterprise value. Net cash is added to it (net debt would be taken away) to get the "
-        "equity value, and dividing that by the shares gives the price per share. Blue steps add value, a red step "
-        "takes value away, and the white bars are the totals.",
+        "equity value, and dividing that by the shares gives the price per share. Gold steps add value, a red step "
+        "takes value away, and the cream bars are the totals.",
     ),
     "cash_flow_chart": (
         "Free cash flow chart",
-        "Free cash flow year by year: grey bars are what the company reported, blue bars are the model's forecast, "
-        "and the white line is the operating margin (right-hand axis). The two kinds of free cash flow are not built "
-        "the same way, so a small jump between grey and blue is normal.",
+        "Free cash flow year by year: grey bars are what the company reported, gold bars are the model's forecast, "
+        "and the cream line is the operating margin (right-hand axis). The two kinds of free cash flow are not built "
+        "the same way, so a small jump between grey and gold is normal.",
     ),
     "terminal_value_ring": (
         "Terminal value ring",
@@ -232,7 +232,7 @@ HELP_TEXTS = {
         "Each cell is the DCF price for one pairing of WACC (down the side) and terminal growth (along the top), with "
         "how far it is above (green, up arrow) or below (red, down arrow) today's market price. The dashed line marks "
         "the combinations where the model equals the market price: the boundary between assumptions that imply "
-        "upside and those that imply downside. The blue frame is the base case, the assumptions the DCF uses. A "
+        "upside and those that imply downside. The gold frame is the base case, the assumptions the DCF uses. A "
         "blank cell has no answer, because its growth rate is at or above its WACC.",
     ),
     "heatmap_margin": (
@@ -240,7 +240,7 @@ HELP_TEXTS = {
         "Each cell is the DCF price when the operating margin (down the side) and the revenue growth (along the top) "
         "of every forecast year are moved by the points shown, with how far it is above (green, up arrow) or below "
         "(red, down arrow) today's market price. The dashed line marks the combinations where the model equals the "
-        "market price: the boundary between assumptions that imply upside and those that imply downside. The blue "
+        "market price: the boundary between assumptions that imply upside and those that imply downside. The gold "
         "frame is the base case, the assumptions the DCF uses.",
     ),
     "live_risk_free": (
@@ -295,25 +295,25 @@ HELP_TEXTS = {
     ),
     "history_amounts": (
         "Revenue and free cash flow by year",
-        "Revenue (blue) and free cash flow as the company reports it (grey) for each year Yahoo Finance has, in US "
+        "Revenue (gold) and free cash flow as the company reports it (grey) for each year Yahoo Finance has, in US "
         "dollars. Reported free cash flow adds back share-based pay, so it can sit higher than the model's own figure.",
     ),
     "history_margins": (
         "Margins by year",
-        "The operating margin (blue) is operating profit as a share of revenue; the free cash flow margin (grey) is "
+        "The operating margin (gold) is operating profit as a share of revenue; the free cash flow margin (grey) is "
         "reported free cash flow as a share of revenue. A line that moves a lot says one year is a poor guide to the "
         "next.",
     ),
     "peer_bars": (
         "Peer bars",
-        "One multiple for the company (blue) and for each of its peers (grey), highest at the top. The dashed line is "
+        "One multiple for the company (gold) and for each of its peers (grey), highest at the top. The dashed line is "
         "the peers' median, their middle value. Use the switch to change the multiple. A bar is missing when that "
         "company has no usable figure, for example no P/E for a company that lost money.",
     ),
     "peer_scatter": (
         "Peer scatter",
         "Each peer is a dot: how expensive it is (EV/EBITDA, up the side) against how profitable it is (operating "
-        "margin, along the bottom). The company is blue, and the dashed lines are the peers' middle values. A dot low "
+        "margin, along the bottom). The company is gold, and the dashed lines are the peers' middle values. A dot low "
         "and to the right earns a high margin and trades at a low multiple, so it looks cheap for its profitability; "
         "one high and to the left looks expensive for it. It compares, it does not give a verdict.",
     ),

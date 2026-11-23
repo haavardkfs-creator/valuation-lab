@@ -11,107 +11,145 @@ from that file and cannot import Python. test_theme.py checks that the two files
 import html
 
 # ---------------------------------------------------------------------------
-# The palette: six colours, and every colour always means something
+# The palette: cream on dark brown (the redesign of 23 Nov 2026, "Valuation Lab redesign" canvas in Claude
+# Design). The page is a warm near-black, the text is cream, and every colour always means something.
 # ---------------------------------------------------------------------------
 
-NAVY = "#0B1F3A"        # the page background
-TEXT = "#E8EDF5"        # main text: off-white, easier on the eyes than pure white on navy
-ACCENT = "#4C9AFF"      # "this company", the thing you can interact with (sliders, links, the main series)
-UP = "#3DDC97"          # good news / above the market price (mint green)
-DOWN = "#F2674A"        # bad news / below the market price (vermilion red)
-GREY = "#8A94A6"        # secondary information: peers, history, captions
+CANVAS = "#0F0D0B"      # the page background: a warm near-black
+TEXT = "#F3EDE2"        # main text and key numbers: cream, warmer and calmer than pure white
+SAND = "#B9AD9B"        # body text and secondary values: a softer cream
+GREY = "#948775"        # small labels, captions, peers and history ("taupe" on the canvas; warm, never a cold grey)
+ACCENT = "#D4B27A"      # brass: "this company", and the things you can touch (sliders, links, the main series)
+UP = "#9CC497"          # good news / above the market price (a muted sage green)
+DOWN = "#D07D67"        # bad news / below the market price (a muted terracotta red)
 
-# Two tints of the navy, so cards stand out from the page. They are shades of the base, not extra colours.
-SURFACE = "#132B4D"     # cards, the sidebar, input boxes
-BORDER = "#24426E"      # thin lines around cards
+# Tints of the canvas. Cards sit one step lighter than the page, hovered things one more, and thin lines are
+# lighter again. They are shades of the same warm brown, not extra colours.
+SURFACE = "#1D1915"     # cards, input boxes
+RAISED = "#262019"      # a hovered row, an open menu
+BORDER = "#3A3129"      # the one thin line around cards, and chart gridlines
+BORDER_STRONG = "#4D4237"  # a stronger line: chart axes, the edge of a focused box
+BRONZE = "#6E6253"      # peer bars in charts (never used for text: it is too dark to read)
 
 # Red and green alone are hard to tell apart for colour-blind readers. UP and DOWN were chosen to differ
-# clearly in lightness too (a contrast ratio of 1.7 between them, checked in test_theme.py), and anything that
-# is up or down will also carry an arrow or a sign (from Phase 2 on), so colour is never the only signal.
+# clearly in lightness too (a contrast ratio of about 1.6 between them, checked in test_theme.py), and anything
+# that is up or down also carries an arrow or a sign, so colour is never the only signal. The mockup's sage
+# (#8FB58A) and terracotta (#E0907A) were almost equally light, so the sage was lifted and the terracotta deepened.
 
-# The colours charts use, in order: the company in the accent, the comparison in grey.
+# The colours charts use, in order: the company in the accent, the comparison in the label colour.
 CHART_COLOURS = [ACCENT, GREY]
 
-# Rounded corners of cards, boxes and buttons. The same value is in .streamlit/config.toml (baseRadius).
-CARD_RADIUS = "0.75rem"
+# Rounded corners: cards are 10 px, input boxes and buttons 6 px. The input value is the one in
+# .streamlit/config.toml (baseRadius), because Streamlit gives every box and button that corner.
+CARD_RADIUS = "0.625rem"
+INPUT_RADIUS = "0.375rem"
+
+# The font: Inter, in two weights only. Size and colour do the ranking, so nothing on the page is bold.
+FONT_FAMILY = "Inter, sans-serif"
+WEIGHT_REGULAR = 400
+WEIGHT_MEDIUM = 500
 
 
 # ---------------------------------------------------------------------------
-# Card styling: the one place that needs a little CSS, because Streamlit's theme cannot draw a card
+# Page styling: the one place that needs CSS, because Streamlit's theme cannot draw a card or switch on
+# tabular figures. The type scale (sizes in px) is 56 hero, 40 display, 28 metric, 20 heading, 14 body, 13 table,
+# 11 label; the spacing steps are 4, 8, 12, 16, 24, 32, 48 and 72 px.
 # ---------------------------------------------------------------------------
 
 CARD_CSS = f"""
 <style>
-/* Less empty space at the top and a comfortable reading width. */
-.block-container {{ padding-top: 4rem; padding-bottom: 3rem; max-width: 1200px; }}
+/* Tabular figures everywhere: every digit is the same width, so $305.60 and $111.11 line up in a column and a
+   number does not jiggle when a slider moves it. Only digits change; letters look the same. */
+.stApp, .stApp * {{ font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; }}
 
-/* Each headline number (st.metric) becomes a card: rounded corners, a thin border and a soft shadow. */
+/* A comfortable reading width with the 48 px page gutter (16 px on a phone, below). */
+.block-container {{ padding-top: 3rem; padding-bottom: 3rem; padding-left: 3rem; padding-right: 3rem; max-width: 1344px; }}
+
+/* Two weights only: headings and strong text are medium (500), never heavier. */
+.stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp strong, .stApp b {{ font-weight: {WEIGHT_MEDIUM}; }}
+.stApp h1, .stApp h2, .stApp h3 {{ letter-spacing: -0.01em; }}
+
+/* Keyboard users always see where they are: a 2 px brass ring, never removed. */
+.stApp :focus-visible {{ outline: 2px solid {ACCENT}; outline-offset: 2px; }}
+
+/* Colour changes on hover and focus are quick and quiet (120 ms), never bouncy. */
+.stApp a, .stApp button, [data-baseweb="tab"], .vl-kpi {{ transition: color 120ms ease-out, background-color 120ms ease-out, border-color 120ms ease-out; }}
+.stApp a {{ color: {ACCENT}; text-decoration: none; }}
+.stApp a:hover {{ color: {TEXT}; }}
+
+/* Each headline number (st.metric) becomes a card: rounded corners and one thin line, no shadow. Height comes
+   from the surface being one step lighter than the page. */
 [data-testid="stMetric"] {{
     background: {SURFACE};
     border: 1px solid {BORDER};
     border-radius: {CARD_RADIUS};
-    padding: 1rem 1.25rem;
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+    padding: 1.25rem 1.5rem;
 }}
-[data-testid="stMetricLabel"] {{ color: {GREY}; }}
+/* Small labels are quiet: 11 px capitals with wide spacing, in the label colour. */
+[data-testid="stMetricLabel"], .vl-kpi-label, .vl-brand {{
+    color: {GREY}; font-size: 0.6875rem; line-height: 1rem; font-weight: {WEIGHT_MEDIUM};
+    letter-spacing: 0.08em; text-transform: uppercase;
+}}
 /* A long label wraps onto a second line instead of being cut off with dots ("Net debt ÷ EBITDA" in a narrow card). */
 [data-testid="stMetricLabel"], [data-testid="stMetricLabel"] * {{ white-space: normal !important; overflow: visible !important; text-overflow: clip !important; }}
+[data-testid="stMetricValue"] {{ letter-spacing: -0.01em; }}
 
-/* Closed "What do these terms mean?" boxes and the tables get the same rounded look. */
-[data-testid="stExpander"] {{ border-radius: {CARD_RADIUS}; border: 1px solid {BORDER}; }}
+/* Bordered boxes, closed boxes and tables: the card corner and the same thin line. */
+[data-testid="stExpander"] details, [data-testid="stExpander"] {{ border-radius: {CARD_RADIUS}; border-color: {BORDER}; }}
+[data-testid="stVerticalBlockBorderWrapper"] {{ border-radius: {CARD_RADIUS}; }}
 [data-testid="stDataFrame"], [data-testid="stTable"] {{ border-radius: {CARD_RADIUS}; }}
+[data-testid="stCaptionContainer"] {{ color: {GREY}; }}
 
 /* The card that helps when a company cannot be found: a title and a short list of things to check. */
 .vl-hints {{
-    background: {SURFACE}; border: 1px solid {BORDER}; border-radius: {CARD_RADIUS}; padding: 1rem 1.25rem; margin: 0.75rem 0 1rem 0;
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+    background: {SURFACE}; border: 1px solid {BORDER}; border-radius: {CARD_RADIUS}; padding: 1.25rem 1.5rem; margin: 0.75rem 0 1rem 0;
 }}
-.vl-hints-title {{ color: {TEXT}; font-weight: 700; margin-bottom: 0.4rem; }}
-.vl-hints ul {{ margin: 0; padding-left: 1.2rem; color: {GREY}; }}
+.vl-hints-title {{ color: {TEXT}; font-weight: {WEIGHT_MEDIUM}; margin-bottom: 0.5rem; }}
+.vl-hints ul {{ margin: 0; padding-left: 1.2rem; color: {SAND}; }}
 .vl-hints li {{ margin: 0.25rem 0; }}
 
 /* The "answer first" header at the top of the page. */
-.vl-brand {{ color: {GREY}; font-size: 0.8rem; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; }}
-.vl-name {{ display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; margin: 0.25rem 0 0.6rem 0; }}
-.vl-name h1 {{ margin: 0; padding: 0; font-size: 2.4rem; line-height: 1.15; color: {TEXT}; }}
+.vl-name {{ display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; margin: 0.25rem 0 0.75rem 0; }}
+.vl-name h1 {{ margin: 0; padding: 0; font-size: 2.5rem; line-height: 1.1; font-weight: {WEIGHT_MEDIUM}; letter-spacing: -0.02em; color: {TEXT}; }}
 .vl-badge {{
-    display: inline-block; padding: 0.2rem 0.7rem; border-radius: 999px; font-size: 0.85rem; font-weight: 700;
-    letter-spacing: 0.04em; border: 1px solid {BORDER}; background: {SURFACE}; color: {GREY};
+    display: inline-block; padding: 0.2rem 0.65rem; border-radius: 999px; font-size: 0.6875rem; font-weight: {WEIGHT_MEDIUM};
+    letter-spacing: 0.06em; border: 1px solid {BORDER}; background: transparent; color: {SAND};
 }}
-.vl-badge-ticker {{ color: {ACCENT}; border-color: {ACCENT}; }}
+.vl-badge-ticker {{ color: {ACCENT}; border-color: {BORDER_STRONG}; }}
 .vl-badge-up {{ color: {UP}; border-color: {UP}; }}
 .vl-badge-down {{ color: {DOWN}; border-color: {DOWN}; }}
-.vl-basis {{ color: {GREY}; font-size: 0.85rem; margin: 0 0 1rem 0; }}
+.vl-basis {{ color: {SAND}; font-size: 0.875rem; line-height: 1.375rem; margin: 0 0 1.5rem 0; max-width: 46rem; }}
 
 /* Four headline cards in a row; on a phone they wrap onto as many rows as they need. */
-.vl-kpis {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.9rem; margin-bottom: 0.75rem; }}
+.vl-kpis {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem; margin-bottom: 1rem; }}
 .vl-kpi {{
-    background: {SURFACE}; border: 1px solid {BORDER}; border-radius: {CARD_RADIUS}; padding: 1rem 1.25rem;
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+    background: {SURFACE}; border: 1px solid {BORDER}; border-radius: {CARD_RADIUS}; padding: 1.25rem 1.5rem;
 }}
-.vl-kpi-label {{ color: {GREY}; font-size: 0.85rem; }}
+.vl-kpi:hover {{ border-color: {BORDER_STRONG}; }}
 /* The small ? next to a label: hovering it shows what the number means (the browser's own tooltip). */
 .vl-help {{
-    display: inline-block; width: 1.15em; height: 1.15em; margin-left: 0.4em; border: 1px solid {GREY}; border-radius: 50%;
-    text-align: center; font-size: 0.75em; line-height: 1.1em; color: {GREY}; cursor: help;
+    display: inline-block; width: 1.3em; height: 1.3em; margin-left: 0.5em; border: 1px solid {BORDER_STRONG}; border-radius: 50%;
+    text-align: center; font-size: 0.8em; line-height: 1.25em; color: {GREY}; cursor: help; letter-spacing: 0; text-transform: none;
 }}
-.vl-kpi-value {{ color: {TEXT}; font-size: 1.7rem; font-weight: 700; line-height: 1.25; white-space: nowrap; }}
+.vl-help:hover {{ color: {TEXT}; border-color: {GREY}; }}
+.vl-kpi-value {{ color: {TEXT}; font-size: 1.75rem; font-weight: {WEIGHT_MEDIUM}; line-height: 2rem; letter-spacing: -0.01em; margin-top: 0.5rem; white-space: nowrap; }}
 .vl-kpi-value.vl-up {{ color: {UP}; }}
 .vl-kpi-value.vl-down {{ color: {DOWN}; }}
-.vl-kpi-value.vl-muted {{ color: {GREY}; font-size: 1.1rem; font-weight: 500; line-height: 2.2rem; }}
-.vl-kpi-note {{ color: {GREY}; font-size: 0.8rem; }}
+.vl-kpi-value.vl-muted {{ color: {GREY}; font-size: 1.125rem; font-weight: {WEIGHT_REGULAR}; line-height: 2rem; }}
+.vl-kpi-note {{ color: {GREY}; font-size: 0.75rem; line-height: 1.125rem; margin-top: 0.25rem; }}
 
-/* On a phone the cards get a little less padding, so the numbers are not squeezed. */
+/* On a phone: the 16 px gutter, and a little less padding in the cards so the numbers are not squeezed. */
 @media (max-width: 640px) {{
-    [data-testid="stMetric"], .vl-kpi {{ padding: 0.75rem 0.9rem; }}
-    .vl-name h1 {{ font-size: 1.8rem; }}
+    .block-container {{ padding-left: 1rem; padding-right: 1rem; padding-top: 2rem; }}
+    [data-testid="stMetric"], .vl-kpi {{ padding: 1rem; }}
+    .vl-name h1 {{ font-size: 1.75rem; }}
 }}
 </style>
 """
 
 
 def inject_theme():
-    """Apply the card styling to the page. Call it once, at the top, after st.set_page_config. The CSS is
+    """Apply the page styling. Call it once, at the top, after st.set_page_config. The CSS is
     fixed text written in this file, never anything from a company or a reader.
     """
     import streamlit as st
@@ -146,10 +184,10 @@ def contrast_ratio(colour_a, colour_b):
 
 
 def readable_text_on(background):
-    """Pick the text colour that is easier to read on a background: the off-white TEXT on dark ones, the NAVY on
-    light ones (a bright green cell, for example, reads better with navy text than with off-white).
+    """Pick the text colour that is easier to read on a background: the cream TEXT on dark ones, the dark CANVAS
+    brown on light ones (a bright green cell, for example, reads better with dark text than with cream).
     """
-    return TEXT if contrast_ratio(TEXT, background) >= contrast_ratio(NAVY, background) else NAVY
+    return TEXT if contrast_ratio(TEXT, background) >= contrast_ratio(CANVAS, background) else CANVAS
 
 
 # ---------------------------------------------------------------------------
@@ -276,7 +314,7 @@ def with_opacity(colour, opacity):
 
 
 def style_figure(figure, height):
-    """Give a Plotly figure the page's look: transparent so the navy shows through, the off-white Inter text,
+    """Give a Plotly figure the page's look: transparent so the dark page shows through, the cream Inter text,
     no outer margin, and a hover label in the card colours.
     """
     figure.update_layout(
@@ -284,8 +322,8 @@ def style_figure(figure, height):
         margin={"l": 0, "r": 0, "t": 0, "b": 0},
         paper_bgcolor="rgba(0, 0, 0, 0)",
         plot_bgcolor="rgba(0, 0, 0, 0)",
-        font={"family": "Inter, sans-serif", "color": TEXT},
-        hoverlabel={"bgcolor": SURFACE, "bordercolor": BORDER, "font": {"family": "Inter, sans-serif", "color": TEXT}},
+        font={"family": FONT_FAMILY, "color": TEXT},
+        hoverlabel={"bgcolor": RAISED, "bordercolor": BORDER_STRONG, "font": {"family": FONT_FAMILY, "color": TEXT}},
         showlegend=False,
     )
     return figure

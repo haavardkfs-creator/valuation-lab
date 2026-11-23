@@ -1557,9 +1557,9 @@ def draw_football_field(company, dcf, multiples, dcf_inputs, base_wacc, prices, 
         st.markdown(f"**{headline}**", help=explanations.help_text("football_field"))
     st.plotly_chart(football_field_figure(rows, company["share_price"]), width="stretch", config=CHART_CONFIG)
     st.caption(
-        "Each bar is a way of valuing the company: the blue bar is the DCF with the WACC a point either way and terminal growth from 1.5% to 3.5%, "
+        "Each bar is a way of valuing the company: the gold bar is the DCF with the WACC a point either way and terminal growth from 1.5% to 3.5%, "
         "the grey bars cover the middle half of the peers' multiples (25th to 75th percentile), the analysts' price "
-        "targets (when Yahoo Finance has them) and the share's own 52-week range. The white tick is the middle value "
+        "targets (when Yahoo Finance has them) and the share's own 52-week range. The cream tick is the middle value "
         "(the mean, for the analysts), and the dashed line is today's market price."
     )
 
@@ -1612,7 +1612,7 @@ def analyst_split_figure(counts):
         go.Bar(
             y=[""], x=[number], name=name, orientation="h", marker={"color": colour},
             text=[f"{name} {number}" if number else ""], textposition="inside", insidetextanchor="middle",
-            textfont={"color": theme.NAVY},
+            textfont={"color": theme.CANVAS},
             hovertemplate=f"<b>{name}</b><br>{detail}<extra></extra>",
         )
         for name, number, colour, detail in groups
@@ -1684,7 +1684,7 @@ def waterfall_headline(dcf):
 def valuation_waterfall(dcf):
     """Draw how the DCF value is built: the present value of the five forecast years and of the terminal value
     add up to the enterprise value, net cash adds (or net debt takes away) and what is left is the equity value.
-    Bars are in $ billions; the blue steps add, the red one subtracts, and the white bars are the totals.
+    Bars are in $ billions; the gold steps add, the red one subtracts, and the cream bars are the totals.
     """
     net_debt = dcf["net_debt"]
     steps = [
@@ -1779,7 +1779,7 @@ def terminal_value_donut(dcf):
         sort=False,
         direction="clockwise",
         marker={"colors": [theme.GREY, theme.DOWN if share > assumptions.TERMINAL_VALUE_SHARE_WARNING else theme.ACCENT],
-                "line": {"color": theme.NAVY, "width": 2}},
+                "line": {"color": theme.CANVAS, "width": 2}},
         textinfo="none",
         hovertemplate="<b>%{label}</b><br>$%{value:,.0f} million (%{percent})<extra></extra>",
     ))
@@ -1814,7 +1814,7 @@ def draw_charts(dcf, year_labels, terminal_growth_rate, operating_margins, histo
     )
     donut_column.plotly_chart(terminal_value_donut(dcf), width="stretch", config=CHART_CONFIG)
     st.caption(
-        "Grey bars are free cash flow as the company reports it; blue bars are the model's forecast, which starts from "
+        "Grey bars are free cash flow as the company reports it; gold bars are the model's forecast, which starts from "
         "operating profit, so the two are not built the same way."
     )
     # Each dollar sign is escaped with a backslash, because Streamlit reads text between two
@@ -1900,7 +1900,7 @@ def draw_heatmap(company, dcf_inputs, base_wacc):
     )
     st.caption(
         f"Each cell shows the price and how far it is above (▲, green) or below (▼, red) today's market price of "
-        f"{dollars(company['share_price'])}. The dashed line runs where the model equals the market price, and the blue frame is "
+        f"{dollars(company['share_price'])}. The dashed line runs where the model equals the market price, and the gold frame is "
         "the base case. The growth and margin sliders move the whole table.".replace("$", "\\$") + blank_note
     )
 
@@ -1957,7 +1957,7 @@ def draw_margin_growth_table(company, dcf_inputs, dcf, terminal_growth_rate, wac
             f"Each cell moves the operating margin and the revenue growth of every forecast year by the "
             f"points shown, and shows the price and how far it is above (▲, green) or below (▼, red) today's market "
             f"price of {dollars(company['share_price'])}. The dashed line runs where the model equals the market price, "
-            f"and the blue frame is the base case, {dollars(dcf['implied_share_price'])}, the DCF above. The "
+            f"and the gold frame is the base case, {dollars(dcf['implied_share_price'])}, the DCF above. The "
             "table uses the WACC and terminal growth in use, and the sliders move it."
         ).replace("$", "\\$")
     )
@@ -2278,7 +2278,7 @@ def draw_peer_charts(multiples, peers, own_label, overview, company_name):
         width="stretch", config=CHART_CONFIG,
     )
     st.caption(
-        "Blue is this company, grey the peers, and dashed lines the peers' middle values. In the scatter, a dot low on "
+        "Gold is this company, grey the peers, and dashed lines the peers' middle values. In the scatter, a dot low on "
         "the chart is cheap for its profitability, and one far to the right earns a high margin."
     )
 
@@ -3115,7 +3115,7 @@ def method_upsides(valued):
 def compare_figure(first, second):
     """Draw each way of valuing the two companies as a bar of how far its price is above (right) or below (left) the
     company's own market price. Because each bar is measured against its own company's price, a $50 stock and a $500 stock
-    can be compared. The first company is blue (the one on the page), the second off-white; the numbers are written on the
+    can be compared. The first company is gold (the one on the page), the second cream; the numbers are written on the
     bars and the exact prices are in the hover, so colour is never the only signal.
     """
     figure = go.Figure()

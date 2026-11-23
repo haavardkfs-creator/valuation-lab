@@ -1,28 +1,33 @@
 # Colours, font and corners for the whole app. The same colours are written in theme.py (Streamlit reads this
 # file, but it cannot import Python); test_theme.py checks that the two agree.
-# Palette: navy base, off-white text, one blue accent, mint green for up, vermilion red for down, grey for
-# secondary information. See docs/decisions.md ("A design system").
+# Palette: cream on dark brown, one brass accent, a muted sage for up and a muted terracotta for down, a warm
+# taupe for labels. See docs/decisions.md ("Cream on dark: the redesign's colours and type").
 
 [theme]
 base = "dark"
-primaryColor = "#4C9AFF"                    # ACCENT: the company, sliders, links
-backgroundColor = "#0B1F3A"                 # NAVY: the page
-secondaryBackgroundColor = "#132B4D"        # SURFACE: cards, sidebar, input boxes
-textColor = "#E8EDF5"                       # TEXT
+primaryColor = "#D4B27A"                    # ACCENT (brass): the company, sliders, links
+backgroundColor = "#0F0D0B"                 # CANVAS: the page
+secondaryBackgroundColor = "#1D1915"        # SURFACE: cards, sidebar, input boxes
+textColor = "#F3EDE2"                       # TEXT (cream)
+linkColor = "#D4B27A"                       # ACCENT
+linkUnderline = false
 
-greenColor = "#3DDC97"                      # UP
-redColor = "#F2674A"                        # DOWN
-blueColor = "#4C9AFF"                       # ACCENT
-grayColor = "#8A94A6"                       # GREY
+greenColor = "#9CC497"                      # UP (sage)
+redColor = "#D07D67"                        # DOWN (terracotta)
+blueColor = "#D4B27A"                       # ACCENT: Streamlit's "blue" notes and badges take the brass
+grayColor = "#948775"                       # GREY (taupe)
 
-borderColor = "#24426E"                     # BORDER: thin lines around cards
-dataframeBorderColor = "#24426E"
-baseRadius = "0.75rem"                      # CARD_RADIUS: rounded corners
+borderColor = "#3A3129"                     # BORDER: the one thin line around cards
+dataframeBorderColor = "#3A3129"
+dataframeHeaderBackgroundColor = "#1D1915"  # SURFACE
+baseRadius = "0.375rem"                     # INPUT_RADIUS: 6 px corners on boxes and buttons (cards get 10 px in theme.py)
 showSidebarBorder = false
-metricValueFontSize = "1.6rem"                # big enough to read at a glance, small enough that $307.59 is never cut off
+metricValueFontSize = "1.75rem"             # 28 px, the "metric" step of the type scale; $307.59 is never cut off
+metricValueFontWeight = 500                 # two weights only: nothing is bold
+headingFontWeights = 500
 
 # Inter, loaded by the reader's browser from Google Fonts; if that fails the browser's own sans-serif is used.
-font = "Inter:https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap, sans-serif"
+font = "Inter:https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap, sans-serif"
 
-# Built-in charts draw their series in this order: the company in the accent, the comparison in grey.
-chartCategoricalColors = ["#4C9AFF", "#8A94A6"]
+# Built-in charts draw their series in this order: the company in the accent, the comparison in taupe.
+chartCategoricalColors = ["#D4B27A", "#948775"]

@@ -3328,7 +3328,7 @@ def test_both_heatmaps_have_a_question_mark_that_explains_the_dashed_line_and_th
     assert wacc.help == app.explanations.help_text("heatmap_wacc")
     assert margin.help == app.explanations.help_text("heatmap_margin")
     for help_text in (wacc.help, margin.help):
-        assert "dashed line" in help_text and "blue frame" in help_text
+        assert "dashed line" in help_text and "gold frame" in help_text
 
 
 def test_the_peer_bars_and_the_scatter_each_have_a_question_mark(monkeypatch):
