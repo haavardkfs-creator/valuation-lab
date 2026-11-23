@@ -508,10 +508,31 @@ def test_a_chart_that_turns_its_gridlines_off_keeps_them_off():
 
 def test_a_section_name_is_a_quiet_label_and_the_sentence_under_it_is_the_heading():
     assert ".stApp h3 {" in theme.CARD_CSS
-    assert ':has(h3) + [data-testid="stElementContainer"] > [data-testid="stMarkdown"] p' in theme.CARD_CSS
+    assert ':has(h3) + [data-testid="stElementContainer"]:not(:has([data-testid="stCaptionContainer"])) > [data-testid="stMarkdown"] p' in theme.CARD_CSS
     assert "text-transform: uppercase" in theme.CARD_CSS and "font-size: 1.25rem" in theme.CARD_CSS
 
 
 def test_headings_have_no_link_icons_and_tables_put_numbers_on_the_right():
     assert '[data-testid="stHeaderActionElements"] { display: none; }' in theme.CARD_CSS
     assert '[data-testid="stTable"] td { text-align: right;' in theme.CARD_CSS
+
+
+# ---------------------------------------------------------------------------
+# Empty, fallback and error states (redesign step 5, pull request 5)
+# ---------------------------------------------------------------------------
+
+def test_every_page_has_the_same_top_bar_and_the_header_uses_it():
+    assert theme.topbar_html() in theme.header_html("A", "B", None, [], "C")
+    assert "Valuation Lab" in theme.topbar_html() and theme.BRAND_MARK in theme.topbar_html()
+
+
+def test_an_empty_section_is_a_dashed_card_not_a_heading():
+    assert '[data-testid="stCaptionContainer"] {\n    border: 1px dashed' in theme.CARD_CSS
+    assert ':not(:has([data-testid="stCaptionContainer"]))' in theme.CARD_CSS      # its line is never the big heading
+
+
+def test_notes_are_calm_cards_and_the_source_note_targets_the_box_the_app_draws():
+    assert f".st-key-{app.SOURCE_NOTE_KEY} " in theme.CARD_CSS
+    assert f'.stApp [data-testid="stAlertContainer"] {{ background: {theme.SURFACE}' in theme.CARD_CSS
+    assert f'[data-testid="stAlertContentWarning"] p::before {{ background: {theme.ACCENT}; }}' in theme.CARD_CSS
+

@@ -254,6 +254,7 @@ def test_a_ticker_yahoo_knows_nothing_about_shows_a_plain_error(monkeypatch):
     assert error.startswith("Could not value NOPE.")
     assert "Yahoo Finance has no figures for NOPE" in error
     assert "Check that the ticker is right" in error
+    assert not page.title                                         # the quiet top bar, not a big "Valuation Lab" title (redesign)
     assert not page.metric
 
 
