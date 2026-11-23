@@ -392,13 +392,19 @@
 - Done (merged, #70 "Section labels and finding headlines on every tab"): redesign pull request 4 of 6. Each
   section starts with a small label and its finding as a 20 px heading; quieter tabs; plain tables at 13 px with numbers on the
   right; waterfall totals in sand; no bold in the heatmap tables.
-- Done (in the open pull request "Calm notes, empty states and the error page"): redesign pull request 5 of 6. The source
+- Done (merged, #71 "Calm notes, empty states and the error page"): redesign pull request 5 of 6. The source
   note sits under the header as a small outlined line with a dot; other notes are calm cards; an empty section shows its
   reason in a dashed card; the error page has the top bar instead of a big title.
-- Next (redesign): the phone layout (pull request 6 of 6).
+- Done (in the open pull request "The phone layout"): redesign pull request 6 of 6, the last of the build. 16 px gutter, the
+  large number and its upside side by side, the sliders stacked in the strip, no sideways scrolling at 390 px.
+- Next (redesign): Haavard reviews the live site on desktop and phone and says what to change.
 - Next: check the macro numbers on the live app after the merge; the live FMP check with Yahoo switched
   off; the small items below. CLAUDE.md still needs Haavard's edits (the theme line, and rows for theme.py and test_theme.py).
 - Open:
+  - Redesign (23 Nov 2026): on a phone the heatmap cells are tight, since Plotly's text does not shrink; the numbers are in
+    the table box under each. Could switch to a table-only view below 640 px. The sidebar still holds the ticker box, name
+    search, Scenarios, Peers and One-off items; the canvas put the ticker search in the top bar, which would need a bigger
+    change to the page's layout (ask first). The interactive tables (`st.dataframe`) follow the colours only.
   - Ideas from Haavard (20 Nov 2026): (1) group the overview by type of multiple: done in Phase 4a; (2) a ? help on every
     multiple and every chart, like the overview has: done in Phase 4b; (3) search
     by company name that lists several matching tickers, like Nordnet's search: done (price and day change in the list would cost
