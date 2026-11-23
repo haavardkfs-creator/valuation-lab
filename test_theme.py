@@ -18,10 +18,13 @@ CONFIG_FILE = Path(__file__).parent / ".streamlit" / "config.toml"
 APP_FILE = str(Path(__file__).parent / "app.py")
 
 PALETTE = {
-    "navy": theme.NAVY, "text": theme.TEXT, "accent": theme.ACCENT,
+    "canvas": theme.CANVAS, "text": theme.TEXT, "sand": theme.SAND, "accent": theme.ACCENT,
     "up": theme.UP, "down": theme.DOWN, "grey": theme.GREY,
 }
-TINTS = {"surface": theme.SURFACE, "border": theme.BORDER}
+TINTS = {
+    "surface": theme.SURFACE, "raised": theme.RAISED, "border": theme.BORDER,
+    "border_strong": theme.BORDER_STRONG, "bronze": theme.BRONZE,
+}
 
 
 def relative_luminance(colour):
@@ -41,7 +44,7 @@ def contrast_ratio(colour_a, colour_b):
 
 
 # ---------------------------------------------------------------------------
-# The palette: six colours, each readable, and the two files that hold it agree
+# The palette: seven colours, each readable, and the two files that hold it agree
 # ---------------------------------------------------------------------------
 
 def test_every_colour_is_a_proper_six_digit_hex_code():
@@ -49,23 +52,36 @@ def test_every_colour_is_a_proper_six_digit_hex_code():
         assert re.fullmatch(r"#[0-9A-Fa-f]{6}", colour)
 
 
-def test_the_palette_has_six_different_colours_and_the_tints_are_not_extra_colours():
-    assert len({colour.lower() for colour in PALETTE.values()}) == 6
+def test_the_palette_has_seven_different_colours_and_the_tints_are_not_extra_colours():
+    assert len({colour.lower() for colour in PALETTE.values()}) == 7
+    assert len({colour.lower() for colour in TINTS.values()}) == len(TINTS)
     assert not {colour.lower() for colour in TINTS.values()} & {colour.lower() for colour in PALETTE.values()}
 
 
-def test_the_card_and_border_tints_are_shades_of_the_navy_not_new_hues():
-    # A tint keeps the navy's tilt towards blue: blue is the strongest channel and red the weakest.
-    for colour in TINTS.values():
+def test_the_card_and_border_tints_are_shades_of_the_warm_brown_not_new_hues():
+    # A tint keeps the canvas's warm tilt: red is the strongest channel and blue the weakest. The canvas and the
+    # cream text lean the same way, so nothing on the page is a cold grey.
+    for colour in [*TINTS.values(), theme.CANVAS, theme.TEXT, theme.SAND, theme.GREY]:
         red, green, blue = theme.hex_to_rgb(colour)
-        assert blue > green > red
+        assert red > green > blue, colour
 
 
-@pytest.mark.parametrize("name", ["text", "accent", "up", "down", "grey"])
-def test_text_in_every_palette_colour_is_readable_on_the_cards_and_the_page(name):
-    # 4.5 is the web accessibility standard (WCAG AA) for normal-sized text.
+def test_the_tints_get_lighter_step_by_step_from_the_page_to_the_strong_border():
+    steps = [theme.CANVAS, theme.SURFACE, theme.RAISED, theme.BORDER, theme.BORDER_STRONG, theme.BRONZE]
+    lightness = [relative_luminance(colour) for colour in steps]
+    assert lightness == sorted(lightness) and len(set(lightness)) == len(steps)
+
+
+@pytest.mark.parametrize("name", ["text", "sand", "accent", "up", "down", "grey"])
+def test_text_in_every_palette_colour_is_readable_on_the_cards_the_page_and_a_hovered_row(name):
+    # 4.5 is the web accessibility standard (WCAG AA) for normal-sized text, even for the small 11 px labels.
     assert contrast_ratio(PALETTE[name], theme.SURFACE) >= 4.5
-    assert contrast_ratio(PALETTE[name], theme.NAVY) >= 4.5
+    assert contrast_ratio(PALETTE[name], theme.CANVAS) >= 4.5
+    assert contrast_ratio(PALETTE[name], theme.RAISED) >= 4.5
+
+
+def test_text_colours_get_quieter_in_order_cream_then_sand_then_the_label_colour():
+    assert contrast_ratio(theme.TEXT, theme.SURFACE) > contrast_ratio(theme.SAND, theme.SURFACE) > contrast_ratio(theme.GREY, theme.SURFACE)
 
 
 def test_up_and_down_differ_in_lightness_so_colour_blind_readers_can_tell_them_apart():
@@ -73,13 +89,13 @@ def test_up_and_down_differ_in_lightness_so_colour_blind_readers_can_tell_them_a
 
 
 def test_the_cards_stand_out_from_the_page_but_stay_close_to_it():
-    assert 1.1 <= contrast_ratio(theme.SURFACE, theme.NAVY) <= 1.5
+    assert 1.1 <= contrast_ratio(theme.SURFACE, theme.CANVAS) <= 1.5
 
 
 def test_config_toml_and_theme_py_agree_on_every_colour():
     settings = tomllib.loads(CONFIG_FILE.read_text())["theme"]
     assert settings["base"] == "dark"
-    assert settings["backgroundColor"].lower() == theme.NAVY.lower()
+    assert settings["backgroundColor"].lower() == theme.CANVAS.lower()
     assert settings["secondaryBackgroundColor"].lower() == theme.SURFACE.lower()
     assert settings["textColor"].lower() == theme.TEXT.lower()
     assert settings["primaryColor"].lower() == theme.ACCENT.lower()
@@ -89,7 +105,9 @@ def test_config_toml_and_theme_py_agree_on_every_colour():
     assert settings["grayColor"].lower() == theme.GREY.lower()
     assert settings["borderColor"].lower() == theme.BORDER.lower()
     assert settings["dataframeBorderColor"].lower() == theme.BORDER.lower()
-    assert settings["baseRadius"] == theme.CARD_RADIUS
+    assert settings["dataframeHeaderBackgroundColor"].lower() == theme.SURFACE.lower()
+    assert settings["linkColor"].lower() == theme.ACCENT.lower()
+    assert settings["baseRadius"] == theme.INPUT_RADIUS
     assert [colour.lower() for colour in settings["chartCategoricalColors"]] == [
         colour.lower() for colour in theme.CHART_COLOURS
     ]
@@ -115,11 +133,32 @@ def test_the_chart_colours_are_the_accent_for_the_company_then_grey():
 # The card styling
 # ---------------------------------------------------------------------------
 
-def test_the_card_css_styles_the_metric_cards_with_rounded_corners_and_a_shadow():
+def test_the_card_css_styles_the_metric_cards_with_rounded_corners_and_a_thin_line_not_a_shadow():
+    # The redesign (23 Nov 2026) replaced the soft shadows with one thin line: see docs/decisions.md.
     assert '[data-testid="stMetric"]' in theme.CARD_CSS
     assert f"border-radius: {theme.CARD_RADIUS}" in theme.CARD_CSS
-    assert "box-shadow" in theme.CARD_CSS
+    assert f"border: 1px solid {theme.BORDER}" in theme.CARD_CSS
+    assert "box-shadow" not in theme.CARD_CSS
     assert "@media (max-width: 640px)" in theme.CARD_CSS              # the phone version
+
+
+def test_every_number_uses_tabular_figures_so_columns_line_up():
+    assert "font-variant-numeric: tabular-nums" in theme.CARD_CSS
+    assert '.stApp, .stApp *' in theme.CARD_CSS                       # the whole page, not one element
+
+
+def test_nothing_is_bold_two_weights_only():
+    weights = {int(weight) for weight in re.findall(r"font-weight: (\d+)", theme.CARD_CSS)}
+    assert weights and weights <= {theme.WEIGHT_REGULAR, theme.WEIGHT_MEDIUM}
+    assert "bold" not in theme.CARD_CSS
+    settings = tomllib.loads(CONFIG_FILE.read_text())["theme"]
+    assert settings["headingFontWeights"] == settings["metricValueFontWeight"] == theme.WEIGHT_MEDIUM
+    assert "wght@400;500&" in settings["font"]                        # only the two weights are downloaded
+
+
+def test_keyboard_focus_always_shows_a_ring_in_the_accent():
+    assert f":focus-visible {{ outline: 2px solid {theme.ACCENT}" in theme.CARD_CSS
+    assert "outline: none" not in theme.CARD_CSS and "outline: 0" not in theme.CARD_CSS
 
 
 def test_the_card_css_is_fixed_text_with_nothing_from_a_company_in_it():
@@ -142,7 +181,7 @@ def background_of(style):
 
 
 def test_hex_codes_are_turned_into_red_green_and_blue_numbers():
-    assert theme.hex_to_rgb("#0B1F3A") == (11, 31, 58)
+    assert theme.hex_to_rgb("#0F0D0B") == (15, 13, 11)
     assert theme.hex_to_rgb("#ffffff") == (255, 255, 255)
 
 
@@ -170,19 +209,19 @@ def test_the_text_on_every_heatmap_cell_is_readable():
         style = app.tint(price, 100)
         red, green, blue = background_of(style)
         text = re.search(r"color: (#[0-9A-Fa-f]{6})$", style).group(1)
-        assert text in (theme.TEXT, theme.NAVY)
+        assert text in (theme.TEXT, theme.CANVAS)
         assert contrast_ratio(f"#{red:02X}{green:02X}{blue:02X}", text) >= 4.5, price
 
 
-def test_light_backgrounds_get_navy_text_and_dark_ones_get_the_off_white_text():
-    assert theme.readable_text_on(theme.UP) == theme.NAVY              # bright mint green
-    assert theme.readable_text_on("#FFFFFF") == theme.NAVY
+def test_light_backgrounds_get_dark_text_and_dark_ones_get_the_cream_text():
+    assert theme.readable_text_on(theme.UP) == theme.CANVAS            # the sage green is light
+    assert theme.readable_text_on("#FFFFFF") == theme.CANVAS
     assert theme.readable_text_on(theme.SURFACE) == theme.TEXT         # the card colour is dark
-    assert theme.readable_text_on(theme.NAVY) == theme.TEXT
+    assert theme.readable_text_on(theme.CANVAS) == theme.TEXT
 
 
 def test_the_contrast_formula_in_theme_py_agrees_with_this_files_own_copy():
-    for first, second in [(theme.TEXT, theme.NAVY), (theme.UP, theme.DOWN), (theme.ACCENT, theme.SURFACE)]:
+    for first, second in [(theme.TEXT, theme.CANVAS), (theme.UP, theme.DOWN), (theme.ACCENT, theme.SURFACE)]:
         assert theme.contrast_ratio(first, second) == pytest.approx(contrast_ratio(first, second))
     assert theme.contrast_ratio("#000000", "#FFFFFF") == pytest.approx(21)
     assert theme.contrast_ratio("#123456", "#123456") == pytest.approx(1)
@@ -296,14 +335,15 @@ def test_a_colour_can_be_made_see_through():
     assert theme.with_opacity("#4C9AFF", 0.12) == "rgba(76, 154, 255, 0.12)"
 
 
-def test_every_chart_gets_a_transparent_page_coloured_background_and_the_off_white_text():
+def test_every_chart_gets_a_transparent_page_coloured_background_and_the_cream_text():
     import plotly.graph_objects as go
 
     figure = theme.style_figure(go.Figure(go.Scatter(x=[1, 2], y=[1, 2])), height=120)
     assert figure.layout.height == 120
     assert figure.layout.paper_bgcolor == "rgba(0, 0, 0, 0)" and figure.layout.plot_bgcolor == "rgba(0, 0, 0, 0)"
     assert figure.layout.font.color == theme.TEXT and "Inter" in figure.layout.font.family
-    assert figure.layout.hoverlabel.bgcolor == theme.SURFACE and figure.layout.hoverlabel.bordercolor == theme.BORDER
+    # The hover label sits on the raised surface with the strong line, so it lifts off a card.
+    assert figure.layout.hoverlabel.bgcolor == theme.RAISED and figure.layout.hoverlabel.bordercolor == theme.BORDER_STRONG
     assert figure.layout.showlegend is False
     assert figure.layout.margin.l == figure.layout.margin.r == figure.layout.margin.t == figure.layout.margin.b == 0
 
