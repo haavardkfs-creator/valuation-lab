@@ -382,11 +382,14 @@
   palette is now cream on dark brown with a brass accent, tabular figures everywhere, Inter in two weights, thin lines instead
   of shadows and a brass focus ring. `theme.py`, `.streamlit/config.toml`, `test_theme.py`; help texts say "gold" instead of
   "blue". New `lessons.md` holds Haavard's feedback. Design canvas: "Valuation Lab redesign" in Claude Design.
-- Done (in the open pull request "One large number and a slider strip"): redesign pull request 2 of 6. The header leads with
+- Done (merged, #68 "One large number and a slider strip"): redesign pull request 2 of 6. The header leads with
   the DCF value per share at 56 px and its upside, with the market price and the multiples value to the right; the three
   sliders sit in a strip under the header, the WACC and the live risk-free boxes behind a "WACC and rates" button. CLAUDE.md
   now says Claude merges once the tests pass.
-- Next (redesign): one number formatter and one chart template; the tabs; empty and fallback states
+- Done (in the open pull request "True minus signs and one chart template"): redesign pull request 3 of 6. Negative numbers
+  use the true minus sign (−) everywhere the page formats a number; every Plotly chart shares one template; peers and history
+  are bronze in charts; the margin axis shows one decimal (no more 37%, 37%, 38%).
+- Next (redesign): the tabs; empty and fallback states
   (the yellow "Yahoo could not be reached" banner becomes a small pill); the phone layout.
 - Next: check the macro numbers on the live app after the merge; the live FMP check with Yahoo switched
   off; the small items below. CLAUDE.md still needs Haavard's edits (the theme line, and rows for theme.py and test_theme.py).

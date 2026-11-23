@@ -237,8 +237,8 @@ def test_the_contrast_formula_in_theme_py_agrees_with_this_files_own_copy():
     (23769, "$23.8B"),                    # Adobe's revenue, $ millions
     (2_100_000, "$2.1T"),
     (0, "$0M"),
-    (-281, "-$281M"),
-    (-1234, "-$1.2B"),
+    (-281, "−$281M"),       # the true minus sign
+    (-1234, "−$1.2B"),
     (999.4, "$999M"),
     (999.6, "$1.0B"),                     # would round to $1,000M, so it moves up a unit
     (1000, "$1.0B"),
@@ -255,7 +255,7 @@ def test_money_short_writes_millions_the_way_a_dashboard_does(millions, expected
 
 @pytest.mark.parametrize("change, expected", [
     (0.413, "▲ +41.3%"),
-    (-0.12, "▼ -12.0%"),
+    (-0.12, "▼ −12.0%"),
     (0.0, "0.0%"),
     (0.0004, "0.0%"),                     # too small to show a direction
     (-0.0004, "0.0%"),
@@ -354,7 +354,7 @@ def test_every_chart_gets_a_transparent_page_coloured_background_and_the_cream_t
 
 @pytest.mark.parametrize("change, expected", [
     (0.413, "▲ +41%"),
-    (-0.6, "▼ -60%"),
+    (-0.6, "▼ −60%"),
     (0.004, "0%"),                        # rounds to nothing: no direction to show
     (-0.004, "0%"),
     (0.0051, "▲ +1%"),
@@ -464,3 +464,39 @@ def test_the_brand_mark_is_fixed_text_hidden_from_screen_readers():
 
 def test_the_strip_css_targets_the_container_the_app_draws():
     assert f".st-key-{app.STRIP_KEY} " in theme.CARD_CSS
+
+
+# ---------------------------------------------------------------------------
+# One number format and one chart template (redesign step 5, pull request 3)
+# ---------------------------------------------------------------------------
+
+def test_negative_numbers_use_the_true_minus_sign_not_a_hyphen():
+    assert theme.MINUS == "−"
+    assert theme.change_text(-0.12) == "▼ −12.0%"
+    assert theme.money_short(-1234) == "−$1.2B"
+    assert theme.with_true_minus("-$281M") == "−$281M"
+    assert "-" not in theme.change_text(-0.5) + theme.money_short(-5)
+
+
+def test_the_comparison_colour_is_quiet_but_still_visible_on_the_page():
+    assert theme.COMPARISON == theme.BRONZE
+    assert contrast_ratio(theme.COMPARISON, theme.CANVAS) >= 3            # the web standard for shapes, not text
+    assert contrast_ratio(theme.COMPARISON, theme.CANVAS) < contrast_ratio(theme.ACCENT, theme.CANVAS)
+
+
+def test_every_chart_gets_the_shared_template_with_quiet_axes():
+    import plotly.graph_objects as go
+
+    figure = theme.style_figure(go.Figure(go.Bar(x=[1, 2], y=[1, 2])), height=200)
+    axis = figure.layout.template.layout.yaxis
+    assert axis.gridcolor == theme.BORDER and axis.linecolor == theme.BORDER_STRONG and axis.zeroline is False
+    assert axis.tickfont.color == theme.GREY and axis.tickfont.size == 11
+
+
+def test_a_chart_that_turns_its_gridlines_off_keeps_them_off():
+    import plotly.graph_objects as go
+
+    figure = go.Figure(go.Bar(x=[1, 2], y=[1, 2]))
+    figure.update_xaxes(showgrid=False)
+    theme.style_figure(figure, height=200)
+    assert figure.layout.xaxis.showgrid is False

@@ -61,8 +61,9 @@ SLOW_DATA_CACHE_SECONDS = 6 * 60 * 60
 
 
 def dollars(amount):
-    """Write a number as a dollar price with two decimals, for example $305.60."""
-    return f"${amount:,.2f}"
+    """Write a number as a dollar price with two decimals, for example $305.60, and a negative one as −$12.50
+    (the true minus sign in front of the dollar sign)."""
+    return f"{theme.MINUS}${-amount:,.2f}" if amount < 0 else f"${amount:,.2f}"
 
 
 def percent(rate):
@@ -70,7 +71,7 @@ def percent(rate):
     too small to show is written 0.0%, never -0.0%.
     """
     text = f"{rate:.1%}"
-    return "0.0%" if text == "-0.0%" else text
+    return "0.0%" if text == "-0.0%" else theme.with_true_minus(text)
 
 
 def precise_percent(rate):
@@ -78,7 +79,7 @@ def precise_percent(rate):
     too small to show is written 0.00%, never -0.00%.
     """
     text = f"{rate:.2%}"
-    return "0.00%" if text == "-0.00%" else text
+    return "0.00%" if text == "-0.00%" else theme.with_true_minus(text)
 
 
 def shift_from_points(points):
@@ -1002,7 +1003,7 @@ def points_text(shift):
     """Write a decimal shift as percentage points with a sign, for example 0.015 as +1.5 points
     and 0 as +0.0 points.
     """
-    return f"{shift * 100 + 0.0:+.1f} points"
+    return theme.with_true_minus(f"{shift * 100 + 0.0:+.1f} points")
 
 
 def draw_assumptions(company, dcf_inputs, year_labels, dcf, terminal_growth_rate, wacc_is_set_by_user, growth_shift, margin_shift):
@@ -1183,10 +1184,10 @@ def draw_wacc_build(company, dcf_inputs, source_used, dcf, wacc_is_set_by_user):
 
 
 def millions_text(amount):
-    """Write a dollar amount in millions, for example $23,769m or -$281m, or a dash if missing."""
+    """Write a dollar amount in millions, for example $23,769m or −$281m, or a dash if missing."""
     if amount is None:
         return "–"
-    return f"-${-amount:,.0f}m" if amount < 0 else f"${amount:,.0f}m"
+    return f"{theme.MINUS}${-amount:,.0f}m" if amount < 0 else f"${amount:,.0f}m"
 
 
 def rate_text(rate):
@@ -1301,7 +1302,7 @@ def history_margins_headline(history):
 
 
 def history_amounts_figure(history):
-    """Draw revenue (the accent colour) and reported free cash flow (grey) for each year of the history, as bars in
+    """Draw revenue (the accent colour) and reported free cash flow (brown) for each year of the history, as bars in
     $ billions, in the same style as the other charts.
     """
     amounts, _margins = history_chart_data(history)
@@ -1312,7 +1313,7 @@ def history_amounts_figure(history):
             hovertemplate=f"<b>%{{x}}</b><br>{name} $%{{y:,.1f}} billion<extra></extra>",
         )
         for column, name, colour in (
-            ("Revenue", "Revenue", theme.ACCENT), ("Free cash flow (reported)", "Reported free cash flow", theme.GREY),
+            ("Revenue", "Revenue", theme.ACCENT), ("Free cash flow (reported)", "Reported free cash flow", theme.COMPARISON),
         )
     ])
     figure.update_yaxes(tickprefix="$", ticksuffix="B", tickformat=",.0f", gridcolor=theme.BORDER, zeroline=False)
@@ -1494,7 +1495,7 @@ def football_field_headline(company_name, above, total):
 
 def football_field_figure(rows, share_price):
     """Draw the football field: one horizontal bar per method from its low to its high price (the DCF in the
-    accent colour, everything else in grey), a tick at its middle value, and a dashed vertical line at today's
+    accent colour, everything else in brown), a tick at its middle value, and a dashed vertical line at today's
     market price. `rows` is what valuation.football_field gives, top row first.
     """
     figure = go.Figure(go.Bar(
@@ -1503,7 +1504,7 @@ def football_field_figure(rows, share_price):
         base=[row["low"] for row in rows],
         orientation="h",
         width=0.5,
-        marker={"color": [theme.ACCENT if row["kind"] == "dcf" else theme.GREY for row in rows]},
+        marker={"color": [theme.ACCENT if row["kind"] == "dcf" else theme.COMPARISON for row in rows]},
         customdata=[[row["low"], row["high"]] for row in rows],
         hovertemplate="<b>%{y}</b><br>$%{customdata[0]:,.2f} to $%{customdata[1]:,.2f}<extra></extra>",
     ))
@@ -1565,7 +1566,7 @@ def draw_football_field(company, dcf, multiples, dcf_inputs, base_wacc, prices, 
     st.plotly_chart(football_field_figure(rows, company["share_price"]), width="stretch", config=CHART_CONFIG)
     st.caption(
         "Each bar is a way of valuing the company: the gold bar is the DCF with the WACC a point either way and terminal growth from 1.5% to 3.5%, "
-        "the grey bars cover the middle half of the peers' multiples (25th to 75th percentile), the analysts' price "
+        "the brown bars cover the middle half of the peers' multiples (25th to 75th percentile), the analysts' price "
         "targets (when Yahoo Finance has them) and the share's own 52-week range. The cream tick is the middle value "
         "(the mean, for the analysts), and the dashed line is today's market price."
     )
@@ -1737,7 +1738,7 @@ def cash_flow_headline(dcf, history):
 
 
 def cash_flow_figure(year_labels, dcf, operating_margins, history):
-    """Draw free cash flow year by year: the company's reported figures in grey, the model's forecast in the
+    """Draw free cash flow year by year: the company's reported figures in brown, the model's forecast in the
     accent colour (bars, in $ billions), and the operating margin as a line on the right-hand axis. With no
     history only the forecast is drawn.
     """
@@ -1747,7 +1748,7 @@ def cash_flow_figure(year_labels, dcf, operating_margins, history):
         figure.add_trace(go.Bar(
             x=history_labels,
             y=[None if value is None else value / 1000 for value in history["free_cash_flow"]],
-            name="Reported free cash flow", marker={"color": theme.GREY},
+            name="Reported free cash flow", marker={"color": theme.COMPARISON},
             hovertemplate="<b>%{x}</b><br>Reported free cash flow $%{y:,.1f} billion<extra></extra>",
         ), secondary_y=False)
     figure.add_trace(go.Bar(
@@ -1763,7 +1764,7 @@ def cash_flow_figure(year_labels, dcf, operating_margins, history):
     ), secondary_y=True)
     figure.update_yaxes(tickprefix="$", ticksuffix="B", tickformat=",.0f", gridcolor=theme.BORDER, zeroline=False,
                         secondary_y=False)
-    figure.update_yaxes(tickformat=".0%", showgrid=False, secondary_y=True)
+    figure.update_yaxes(tickformat=".1%", showgrid=False, secondary_y=True)     # margins sit close together: 37.0%, 37.5%, never 37%, 37%
     figure.update_xaxes(showgrid=False)
     theme.style_figure(figure, height=320)
     figure.update_layout(
@@ -1785,7 +1786,7 @@ def terminal_value_donut(dcf):
         hole=0.65,
         sort=False,
         direction="clockwise",
-        marker={"colors": [theme.GREY, theme.DOWN if share > assumptions.TERMINAL_VALUE_SHARE_WARNING else theme.ACCENT],
+        marker={"colors": [theme.COMPARISON, theme.DOWN if share > assumptions.TERMINAL_VALUE_SHARE_WARNING else theme.ACCENT],
                 "line": {"color": theme.CANVAS, "width": 2}},
         textinfo="none",
         hovertemplate="<b>%{label}</b><br>$%{value:,.0f} million (%{percent})<extra></extra>",
@@ -1821,7 +1822,7 @@ def draw_charts(dcf, year_labels, terminal_growth_rate, operating_margins, histo
     )
     donut_column.plotly_chart(terminal_value_donut(dcf), width="stretch", config=CHART_CONFIG)
     st.caption(
-        "Grey bars are free cash flow as the company reports it; gold bars are the model's forecast, which starts from "
+        "Brown bars are free cash flow as the company reports it; gold bars are the model's forecast, which starts from "
         "operating profit, so the two are not built the same way."
     )
     # Each dollar sign is escaped with a backslash, because Streamlit reads text between two
@@ -1919,7 +1920,7 @@ def shift_label(average, shift):
     """
     if shift == 0:
         return f"{precise_percent(average)} (base)"
-    return f"{precise_percent(average)} ({shift * 100:+.0f} pts)"
+    return f"{precise_percent(average)} ({theme.with_true_minus(f'{shift * 100:+.0f}')} pts)"
 
 
 def draw_margin_growth_table(company, dcf_inputs, dcf, terminal_growth_rate, wacc_override):
@@ -2168,7 +2169,7 @@ def peer_bar_headline(label, company_name, company_value, median):
 
 def peer_bar_figure(label, company_label, company_value, tickers, peer_values, median):
     """Draw one multiple as horizontal bars, highest at the top: the company in the accent colour, the peers in
-    grey, and a dashed line at the peers' median. A figure that is missing, or zero or negative (no real multiple), is
+    brown, and a dashed line at the peers' median. A figure that is missing, or zero or negative (no real multiple), is
     left off.
     """
     bars = [(company_label, company_value, True)] + [(ticker, value, False) for ticker, value in zip(tickers, peer_values)]
@@ -2177,7 +2178,7 @@ def peer_bar_figure(label, company_label, company_value, tickers, peer_values, m
         y=[name for name, _value, _own in bars],
         x=[value for _name, value, _own in bars],
         orientation="h",
-        marker={"color": [theme.ACCENT if own else theme.GREY for _name, _value, own in bars]},
+        marker={"color": [theme.ACCENT if own else theme.COMPARISON for _name, _value, own in bars]},
         text=[f"{value:.1f}x" for _name, value, _own in bars],
         textposition="outside",
         textfont={"color": theme.TEXT},
@@ -2222,7 +2223,7 @@ def peer_scatter_headline(company_name, company_multiple, company_margin, median
 def peer_scatter_figure(company_label, company_multiple, company_margin, tickers, peer_multiples, peer_margins,
                         median_multiple, median_margin):
     """Draw the peers as dots, EV/EBITDA up and operating margin across: the company in the accent colour (bigger), the
-    peers in grey with their tickers, and dashed lines at the peers' median of each. A dot far below the middle of the
+    peers in brown with their tickers, and dashed lines at the peers' median of each. A dot far below the middle of the
     cloud is cheap for its profitability. A peer missing either figure, or without a real multiple, is left off.
     """
     dots = [
@@ -2233,7 +2234,7 @@ def peer_scatter_figure(company_label, company_multiple, company_margin, tickers
     figure = go.Figure(go.Scatter(
         x=[margin for _t, margin, _m in dots], y=[multiple for _t, _x, multiple in dots],
         text=[ticker for ticker, _x, _m in dots], mode="markers+text", textposition="top center",
-        textfont={"color": theme.TEXT, "size": 12}, marker={"color": theme.GREY, "size": 12},
+        textfont={"color": theme.TEXT, "size": 12}, marker={"color": theme.COMPARISON, "size": 12},
         hovertemplate="<b>%{text}</b><br>Operating margin %{x:.1%}<br>EV/EBITDA %{y:.1f}x<extra></extra>",
     ))
     if company_margin is not None and valuation.usable_multiples([company_multiple]):
@@ -2285,7 +2286,7 @@ def draw_peer_charts(multiples, peers, own_label, overview, company_name):
         width="stretch", config=CHART_CONFIG,
     )
     st.caption(
-        "Gold is this company, grey the peers, and dashed lines the peers' middle values. In the scatter, a dot low on "
+        "Gold is this company, brown the peers, and dashed lines the peers' middle values. In the scatter, a dot low on "
         "the chart is cheap for its profitability, and one far to the right earns a high margin."
     )
 
