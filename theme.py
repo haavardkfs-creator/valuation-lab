@@ -224,6 +224,7 @@ CARD_CSS = f"""
 .vl-mark {{ position: relative; display: inline-block; width: 18px; height: 18px; box-sizing: border-box; border: 1.5px solid {ACCENT}; border-radius: 4px; }}
 .vl-mark::after {{ content: ""; position: absolute; left: 3px; top: 7px; width: 10px; height: 1.5px; background: {TEXT}; border-radius: 1px; transform: rotate(-35deg); }}
 .vl-brand-name .vl-brand {{ color: {TEXT}; font-size: 0.875rem; letter-spacing: 0.01em; text-transform: none; }}
+.vl-header {{ overflow-x: clip; }}                  /* the glow never makes a phone page scroll sideways */
 .vl-hero-row {{ display: flex; justify-content: space-between; align-items: flex-end; gap: 1.5rem 3rem; flex-wrap: wrap; padding: 2.5rem 0 1rem 0; }}
 .vl-hero {{ position: relative; display: flex; flex-direction: column; gap: 0.75rem; min-width: 0; }}
 .vl-hero::before {{
@@ -253,11 +254,22 @@ CARD_CSS = f"""
 
 /* On a phone: the 16 px gutter, and a little less padding in the cards so the numbers are not squeezed. */
 @media (max-width: 640px) {{
-    .block-container {{ padding-left: 1rem; padding-right: 1rem; padding-top: 2rem; }}
+    .block-container {{ padding-left: 1rem; padding-right: 1rem; padding-top: 3.5rem; }}     /* clear of Streamlit's own top bar */
+    .vl-hero .vl-kpis {{ gap: 1rem; flex-wrap: nowrap; }}
+    .vl-kpi-hero, .vl-kpi-change {{ padding: 0; }}
+    .vl-kpi-change .vl-kpi-value {{ font-size: 1.125rem; }}
+    .vl-hero::before {{ left: -1rem; width: 100%; }}
+    .st-key-assumption_strip {{ padding: 1rem; }}
+    .st-key-assumption_strip [data-testid="stHorizontalBlock"] {{ gap: 0.25rem; }}
+    .st-key-assumption_strip [data-testid="stColumn"] {{ min-width: 100%; }}
+    .st-key-source_note {{ margin-top: 0; }}
+    [data-testid="stElementContainer"]:has(h3) {{ margin-top: 2rem; }}
+    [data-baseweb="tab-list"] {{ gap: 1.25rem; }}
     [data-testid="stMetric"], .vl-kpi {{ padding: 1rem; }}
     .vl-name h1 {{ font-size: 1.75rem; }}
     .vl-hero-row {{ gap: 1.5rem; padding: 1.5rem 0; }}
     .vl-kpi-hero .vl-kpi-value {{ font-size: 2.5rem; line-height: 2.75rem; }}
+    .vl-kpi-hero .vl-kpi-value.vl-muted {{ font-size: 1.25rem; line-height: 2.75rem; }}
     .vl-stats {{ width: 100%; }}
     .vl-kpi-stat {{ flex: 1; padding: 0 1rem; }}
     .vl-kpi-stat:first-child {{ padding-left: 0; border-left: 0; }}

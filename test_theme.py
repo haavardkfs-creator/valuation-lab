@@ -536,3 +536,26 @@ def test_notes_are_calm_cards_and_the_source_note_targets_the_box_the_app_draws(
     assert f'.stApp [data-testid="stAlertContainer"] {{ background: {theme.SURFACE}' in theme.CARD_CSS
     assert f'[data-testid="stAlertContentWarning"] p::before {{ background: {theme.ACCENT}; }}' in theme.CARD_CSS
 
+
+
+# ---------------------------------------------------------------------------
+# The phone layout (redesign step 5, pull request 6)
+# ---------------------------------------------------------------------------
+
+def phone_css():
+    """The part of the page styling that applies on a phone (640 px wide or less)."""
+    return theme.CARD_CSS[theme.CARD_CSS.index("@media (max-width: 640px)"):]
+
+
+def test_on_a_phone_the_page_has_a_16_px_gutter_and_clears_streamlits_top_bar():
+    assert "padding-left: 1rem; padding-right: 1rem; padding-top: 3.5rem;" in phone_css()
+
+
+def test_on_a_phone_the_large_number_and_its_change_stay_on_one_line_and_the_sliders_stack():
+    css = phone_css()
+    assert ".vl-hero .vl-kpis { gap: 1rem; flex-wrap: nowrap; }" in css
+    assert f".st-key-{app.STRIP_KEY} [data-testid=\"stColumn\"] {{ min-width: 100%; }}" in css
+
+
+def test_the_glow_never_makes_the_page_scroll_sideways():
+    assert ".vl-header { overflow-x: clip; }" in theme.CARD_CSS
