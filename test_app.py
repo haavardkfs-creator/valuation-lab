@@ -214,6 +214,52 @@ def test_a_company_with_no_dcf_gets_no_sentence(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
+# Slider hints and the "Try this" buttons
+# ---------------------------------------------------------------------------
+
+def snapshot_page(monkeypatch):
+    """The page with Yahoo out of reach, so Adobe comes from the snapshot and the numbers are the Excel model's."""
+    class BrokenTicker:
+        def __init__(self, ticker):
+            raise ConnectionError("no internet")
+
+    return run_page(monkeypatch, yahoo=BrokenTicker)
+
+
+def test_the_hint_says_what_the_slider_means_and_what_one_point_is_worth():
+    assert app.slider_hint("operating_margins", 7.2524) == "More profit kept from each dollar of sales. +1 pt ≈ +$7.25 a share."
+    assert app.slider_hint("growth_rates", -3.5).endswith("+1 pt ≈ −$3.50 a share.")
+    assert app.slider_hint("terminal_growth_rate", None) == app.SLIDER_HINTS["terminal_growth_rate"]
+
+
+def test_the_page_shows_a_hint_under_each_slider_with_adobes_dollars_per_point(monkeypatch):
+    page = snapshot_page(monkeypatch)
+    assert_footer_and_no_crash(page)
+    shown = [text.replace("\\$", "$") for text in texts(page.caption)]
+    # One margin point on Adobe's base case is $7.25 a share (checked by hand in test_valuation.py).
+    assert "More profit kept from each dollar of sales. +1 pt ≈ +$7.25 a share." in shown
+    assert any(text.startswith(app.SLIDER_HINTS["growth_rates"] + " +1 pt ≈ +$") for text in shown)
+    assert any(text.startswith(app.SLIDER_HINTS["terminal_growth_rate"] + " +1 pt ≈ +$") for text in shown)
+
+
+def test_the_bear_and_bull_buttons_give_the_scenarios_sheets_prices_and_base_puts_everything_back(monkeypatch):
+    page = snapshot_page(monkeypatch)
+    page.button(key="preset_bear").click().run()
+    assert page.slider(key=app.GROWTH_KEY).value == -2.0 and page.slider(key=app.MARGIN_KEY).value == -5.0
+    assert metrics(page)["DCF implied price"] == "$248.29"                  # scenarios C19
+    page.button(key="preset_bull").click().run()
+    assert metrics(page)["DCF implied price"] == "$370.49"                  # scenarios E19
+    page.slider(key=app.TERMINAL_GROWTH_KEY).set_value(0.03).run()
+    page.checkbox(key=app.WACC_TICK_KEY).check().run()
+    page.button(key="preset_base").click().run()
+    assert page.slider(key=app.GROWTH_KEY).value == 0.0 and page.slider(key=app.MARGIN_KEY).value == 0.0
+    assert page.slider(key=app.TERMINAL_GROWTH_KEY).value == assumptions.TERMINAL_GROWTH_RATE
+    assert page.checkbox(key=app.WACC_TICK_KEY).value is False
+    assert metrics(page)["DCF implied price"] == "$305.60"
+    assert_footer_and_no_crash(page)
+
+
+# ---------------------------------------------------------------------------
 # The "About" card under the header
 # ---------------------------------------------------------------------------
 

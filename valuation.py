@@ -1179,6 +1179,23 @@ def margin_growth_table(dcf_inputs, terminal_growth_rate, wacc_override, margin_
     }
 
 
+def price_change_per_point(dcf_inputs, terminal_growth_rate, wacc_override, input_name, point):
+    """Say how many dollars the share price moves when one input goes up by `point` (0.01 is one percentage point), with
+    everything else as it is. `input_name` is "growth_rates" or "operating_margins" (every forecast year moves), or
+    "terminal_growth_rate". The page shows it under each slider, for example "+1 pt = about +$12 a share". Stops with a
+    ValueError if the raised terminal growth would reach the WACC.
+    """
+    def price(inputs, terminal):
+        return run_full_dcf(**inputs, terminal_growth_rate=terminal, wacc_override=wacc_override)["implied_share_price"]
+
+    before = price(dcf_inputs, terminal_growth_rate)
+    if input_name == "terminal_growth_rate":
+        return price(dcf_inputs, terminal_growth_rate + point) - before
+    changed = dict(dcf_inputs)
+    changed[input_name] = shift_rates(dcf_inputs[input_name], point)
+    return price(changed, terminal_growth_rate) - before
+
+
 def run_scenarios(
     dcf_inputs, terminal_growth_rate, wacc_override, margin_shifts, growth_shifts, probabilities,
     market_price, tolerance,

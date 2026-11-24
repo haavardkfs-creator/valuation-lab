@@ -271,6 +271,7 @@ ABOUT_KEY = "about_company"          # the bordered "About" card under the heade
 STORY_KEY = "price_story"            # the box under the headline cards with the plain sentence (see price_story)
 STRIP_KEY = "assumption_strip"          # the bordered strip of sliders under the header (its CSS class is st-key-assumption_strip)
 SEARCH_BAR_KEY = theme.SEARCH_BAR_KEY   # the app's name, the ticker box and the name search, side by side at the top
+PRESETS_KEY = "strip_presets"           # the "Try this" row of buttons under the tools (see draw_presets)
 TOOLS_KEY = "strip_tools"               # the row of buttons under the sliders: WACC and rates, Scenarios, Peers, One-off items
 LIVE_RF_KEY = "live_risk_free"          # the tick box that swaps in today's 10-year Treasury yield
 
@@ -402,15 +403,86 @@ def write_link():
 LINK_NOTE = "To share this view, copy the page's address from your browser: it holds the company and every setting on the page."
 
 
+# The short hint under each slider: what it means in plain words. The page adds how much one point moves the price
+# (see slider_hint), once the valuation has run.
+SLIDER_HINTS = {
+    "growth_rates": "Faster growth means more cash in every later year.",
+    "operating_margins": "More profit kept from each dollar of sales.",
+    "terminal_growth_rate": "Growth forever after year 5. Small moves matter a lot.",
+}
+
+
+def slider_hint(input_name, change):
+    """Write the hint under a slider: what it means, then how many dollars one more percentage point moves the share
+    price, for example "More profit kept from each dollar of sales. +1 pt ≈ +$7.25 a share." `change` is None when it
+    cannot be worked out, and then only the first part is written.
+    """
+    if change is None:
+        return SLIDER_HINTS[input_name]
+    sign = "+" if change >= 0 else theme.MINUS
+    point = f"{assumptions.SLIDER_HINT_POINT * 100:+.0f} pt"
+    return f"{SLIDER_HINTS[input_name]} {point} ≈ {sign}{dollars(abs(change))} a share."
+
+
+def fill_slider_hints(hint_boxes, dcf_inputs, terminal_growth_rate, wacc_override):
+    """Write the hint under each slider (see slider_hint), now that the valuation has run. A step the model cannot take
+    (terminal growth raised to the WACC) leaves out the dollar figure.
+    """
+    for input_name, box in hint_boxes.items():
+        try:
+            change = valuation.price_change_per_point(
+                dcf_inputs, terminal_growth_rate, wacc_override, input_name, assumptions.SLIDER_HINT_POINT,
+            )
+        except ValueError:
+            change = None
+        box.caption(dollar_text_for_markdown(slider_hint(input_name, change)))
+
+
+# The "Try this" buttons under the sliders: a label and what each one sets the sliders to. The bear and bull cases use
+# the same shifts as the Scenarios box (assumptions.py), so the price after a click matches the scenarios table there.
+PRESETS = {
+    "bear": ("Bear case", {
+        "growth": assumptions.SCENARIO_BEAR_GROWTH_POINTS, "margin": assumptions.SCENARIO_BEAR_MARGIN_POINTS,
+    }),
+    "bull": ("Bull case", {
+        "growth": assumptions.SCENARIO_BULL_GROWTH_POINTS, "margin": assumptions.SCENARIO_BULL_MARGIN_POINTS,
+    }),
+    "base": ("Back to base", {
+        "growth": 0.0, "margin": 0.0, "terminal_growth": assumptions.TERMINAL_GROWTH_RATE, "wacc_tick": False,
+    }),
+}
+PRESET_KEYS = {"growth": GROWTH_KEY, "margin": MARGIN_KEY, "terminal_growth": TERMINAL_GROWTH_KEY, "wacc_tick": WACC_TICK_KEY}
+
+
+def apply_preset(name):
+    """Move the sliders to one of the PRESETS. It runs when its button is clicked, before the page is drawn again, so
+    the sliders show the new values.
+    """
+    for setting, value in PRESETS[name][1].items():
+        st.session_state[PRESET_KEYS[setting]] = value
+
+
+def draw_presets(box):
+    """Draw the "Try this" row in `box` (the space draw_sliders kept for it): one button for each of the PRESETS, which
+    moves the sliders for the reader. Drawn only once a company has loaded, so a not-found page has no extra buttons.
+    """
+    row = box.container(horizontal=True, vertical_alignment="center", key=PRESETS_KEY)
+    row.markdown("Try this:")
+    for name, (label, _settings) in PRESETS.items():
+        row.button(label, key=f"preset_{name}", on_click=apply_preset, args=(name,))
+
+
 def draw_sliders():
     """Draw the assumption strip under the header and return what it is set to: the growth shift, the margin shift, the
     terminal growth rate, the WACC the user chose (None when the box is unticked, meaning the model uses its own) and
-    today's risk-free rate when that box is ticked (None otherwise). Three sliders sit side by side; the WACC and the
+    today's risk-free rate when that box is ticked (None otherwise). Three sliders sit side by side, each with an empty
+    space under it for its hint (filled by fill_slider_hints once the valuation has run); the WACC and the
     risk-free rate are behind a "WACC and rates" button, because they are changed less often. Each starts at the base case.
-    Also returns the row of buttons under the sliders, where the Scenarios, Peers and One-off items buttons go too.
+    Also returns the row of buttons under the sliders, where the Scenarios, Peers and One-off items buttons go too, the
+    hint spaces, and an empty space under that row for the "Try this" buttons (see draw_presets).
     """
     strip = st.container(border=True, key=STRIP_KEY)
-    growth_column, margin_column, terminal_column = strip.columns(3, gap="large", vertical_alignment="bottom")
+    growth_column, margin_column, terminal_column = strip.columns(3, gap="large", vertical_alignment="top")
     growth_points = growth_column.slider(
         "Revenue growth, every year",
         min_value=assumptions.GROWTH_SHIFT_MIN_POINTS,
@@ -441,6 +513,11 @@ def draw_sliders():
         format="percent",
         help="How fast cash flow is assumed to grow forever after year 5. The base case is 2.5%.",
     )
+    hint_boxes = {
+        "growth_rates": growth_column.empty(),
+        "operating_margins": margin_column.empty(),
+        "terminal_growth_rate": terminal_column.empty(),
+    }
     tools = strip.container(horizontal=True, key=TOOLS_KEY)
     rates = tools.popover("WACC and rates")
     wacc_override = None
@@ -460,9 +537,10 @@ def draw_sliders():
             help="The rate that cash flows are discounted at. Higher means a lower price.",
         )
     live_risk_free = draw_live_risk_free(rates)
+    presets_box = strip.container()
     return (
         shift_from_points(growth_points), shift_from_points(margin_points), terminal_growth_rate, wacc_override, live_risk_free,
-        tools,
+        tools, hint_boxes, presets_box,
     )
 
 
@@ -3435,7 +3513,7 @@ def draw_page():
     load_link()
     ticker = draw_search_bar()
     header_area = st.container()                       # filled once the numbers are known, so the header sits above the sliders
-    growth_shift, margin_shift, terminal_growth_rate, wacc_override, live_risk_free, tools = draw_sliders()
+    growth_shift, margin_shift, terminal_growth_rate, wacc_override, live_risk_free, tools, hint_boxes, presets_box = draw_sliders()
     scenario_settings = draw_scenario_boxes(tools)
     adjustment = 0.0
     load_error = None
@@ -3472,6 +3550,9 @@ def draw_page():
         dcf_inputs = dcf = multiples = base_wacc = None
         dcf_error = error
     overview = company_overview(company)
+    draw_presets(presets_box)
+    if dcf is not None:
+        fill_slider_hints(hint_boxes, dcf_inputs, terminal_growth_rate, wacc_override)
 
     prices = price_history_or_none(company)
     analysts = analyst_view_or_none(company)

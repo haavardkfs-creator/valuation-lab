@@ -2257,3 +2257,40 @@ def test_a_lower_risk_free_rate_matches_the_excel_model_with_wacc_c8_typed_as_4_
     assert result["implied_share_price"] == pytest.approx(336.1776, abs=5e-5)
     assert result["wacc"] < run_base_case()["wacc"] and result["implied_share_price"] > run_base_case()["implied_share_price"]
 
+
+
+# ---------------------------------------------------------------------------
+# The hint under each slider: dollars per percentage point
+# ---------------------------------------------------------------------------
+
+def test_one_margin_point_matches_the_reverse_dcf_sheet():
+    # The price is a straight line in the margin, so one point is the gap between two of the sheet's spot checks
+    # divided by the 20 points between them: margin -10 and +10, both at growth -4 (reverse dcf C56 and C58).
+    excel_per_point = (321.01922006390203 - 197.87449572381999) / 20
+    slower = dict(adobe_dcf_inputs(), growth_rates=v.shift_rates(GROWTH_RATES, -0.04))
+    got = v.price_change_per_point(slower, TERMINAL_GROWTH_RATE, None, "operating_margins", 0.01)
+    assert got == pytest.approx(excel_per_point, abs=1e-6)
+
+
+def test_one_margin_point_on_adobes_base_case_is_about_7_dollars_and_25_cents():
+    # By hand: 1% of FY2026 revenue ($25.9bn) is $259m of operating profit, $212m after the 18% tax. Five years of
+    # that plus the terminal value, discounted, is about $3.0bn; over 413m shares that is about $7.25.
+    got = v.price_change_per_point(adobe_dcf_inputs(), TERMINAL_GROWTH_RATE, None, "operating_margins", 0.01)
+    assert got == pytest.approx(7.25, abs=0.01)
+
+
+def test_one_growth_point_is_the_price_with_every_year_one_point_faster_minus_the_price_now():
+    base = run_base_case()["implied_share_price"]
+    faster = v.run_full_dcf(
+        **dict(adobe_dcf_inputs(), growth_rates=v.shift_rates(GROWTH_RATES, 0.01)),
+        terminal_growth_rate=TERMINAL_GROWTH_RATE, wacc_override=None,
+    )["implied_share_price"]
+    got = v.price_change_per_point(adobe_dcf_inputs(), TERMINAL_GROWTH_RATE, None, "growth_rates", 0.01)
+    assert got == close(faster - base)
+    assert got > 0
+
+
+def test_one_terminal_growth_point_raises_the_price_and_a_step_to_the_wacc_is_refused():
+    assert v.price_change_per_point(adobe_dcf_inputs(), TERMINAL_GROWTH_RATE, None, "terminal_growth_rate", 0.01) > 0
+    with pytest.raises(ValueError):
+        v.price_change_per_point(adobe_dcf_inputs(), 0.03, 0.035, "terminal_growth_rate", 0.01)   # 4% growth, 3.5% WACC
