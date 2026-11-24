@@ -443,6 +443,9 @@
   +1 pt ≈ +$7.25 a share). `price_change_per_point` in `valuation.py` works it out; `SLIDER_HINT_POINT` is in
   `assumptions.py`. Under the buttons, "Bear case", "Bull case" and "Back to base" move the sliders; the bear and bull
   shifts are the Scenarios box's, so they give the scenarios sheet's $248.29 and $370.49.
+- Done: the "About" card is now one closed line (Haavard's pick, 24 Nov 2026), "About Adobe Inc. · Technology · ...",
+  that opens to the description, so the sliders sit higher on the page. `profile_label` in `app.py` writes the line.
+  Comparable transactions comes next, in its own thread.
 - Next: check the macro numbers on the live app after the merge; the live FMP check with Yahoo switched
   off; the small items below. CLAUDE.md still needs Haavard's edits (the theme line, and rows for theme.py and test_theme.py).
 - Open:

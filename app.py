@@ -267,7 +267,7 @@ ONE_OFF_KEY_START = "oneoff_"
 LINK_LOADED_KEY = "link_loaded"
 COMPARE_KEY = "compare_ticker"          # the box in the Compare tab where the second company is typed
 SOURCE_NOTE_KEY = "source_note"        # the box under the header that says where the figures came from (CSS class st-key-source_note)
-ABOUT_KEY = "about_company"          # the bordered "About" card under the header (see draw_company_profile)
+ABOUT_KEY = "about_company"          # the closed "About" box under the header (see draw_company_profile)
 STORY_KEY = "price_story"            # the box under the headline cards with the plain sentence (see price_story)
 STRIP_KEY = "assumption_strip"          # the bordered strip of sliders under the header (its CSS class is st-key-assumption_strip)
 SEARCH_BAR_KEY = theme.SEARCH_BAR_KEY   # the app's name, the ticker box and the name search, side by side at the top
@@ -3085,20 +3085,25 @@ def profile_facts(profile):
     return " · ".join(fact for fact in facts if fact)
 
 
+def profile_label(company_name, profile):
+    """Write the one line the closed "About" box shows: the company's name, then its short facts when Yahoo has any,
+    for example "About Adobe Inc. · Technology · Software - Infrastructure · 30,709 employees · San Jose, CA, United States".
+    """
+    facts = profile_facts(profile)
+    return f"About {company_name}" + (f" · {facts}" if facts else "")
+
+
 def draw_company_profile(company):
-    """Draw the "About" card under the header: the company's sector, industry, size and home on one line, and the first
-    sentences of what it does, from Yahoo's profile. When Yahoo cannot give the profile the card is left out, because
-    nothing else on the page depends on it.
+    """Draw the "About" box under the header: one closed line with the company's name, sector, industry, size and home,
+    which opens to the first sentences of what it does, from Yahoo's profile. Closed, it takes one line, so the sliders
+    stay near the top of the page (Haavard, 24 Nov 2026). When Yahoo cannot give the profile the box is left out,
+    because nothing else on the page depends on it.
     """
     try:
         profile = load_company_profile(company["ticker"])
     except ValueError:
         return
-    with st.container(border=True, key=ABOUT_KEY):
-        st.markdown(f"**About {plain_text_for_markdown(company['company_name'])}**")
-        facts = profile_facts(profile)
-        if facts:
-            st.caption(plain_text_for_markdown(facts))
+    with st.expander(plain_text_for_markdown(profile_label(company["company_name"], profile)), key=ABOUT_KEY):
         if profile["summary"]:
             st.markdown(plain_text_for_markdown(short_summary(profile["summary"], assumptions.ABOUT_SUMMARY_SENTENCES)))
         source = "From Yahoo Finance's company profile."
