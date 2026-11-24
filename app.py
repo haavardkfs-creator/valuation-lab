@@ -267,6 +267,7 @@ ONE_OFF_KEY_START = "oneoff_"
 LINK_LOADED_KEY = "link_loaded"
 COMPARE_KEY = "compare_ticker"          # the box in the Compare tab where the second company is typed
 SOURCE_NOTE_KEY = "source_note"        # the box under the header that says where the figures came from (CSS class st-key-source_note)
+STORY_KEY = "price_story"            # the box under the headline cards with the plain sentence (see price_story)
 STRIP_KEY = "assumption_strip"          # the bordered strip of sliders under the header (its CSS class is st-key-assumption_strip)
 SEARCH_BAR_KEY = theme.SEARCH_BAR_KEY   # the app's name, the ticker box and the name search, side by side at the top
 TOOLS_KEY = "strip_tools"               # the row of buttons under the sliders: WACC and rates, Scenarios, Peers, One-off items
@@ -3084,6 +3085,28 @@ def verdict_basis_text(verdict):
     return f"The model's DCF price against today's market price, with {limit} either way. The model's output, not investment advice."
 
 
+def price_story(company_name, average_growth, average_margin, dcf_price, upside, market_price):
+    """Say in one plain sentence what the model assumes and what it gets, for example "If Adobe Inc. grows revenue by
+    8.10% a year for the next five years, with an average operating margin of 37.65%, the model says one share is worth
+    $305.60, 21.5% above today's market price of $251.47." The averages have two decimals, like the "What the model
+    assumes" table. The page redraws the sentence whenever a slider moves.
+    """
+    if average_growth < 0:
+        growth = f"shrinks revenue by {precise_percent(-average_growth)} a year"
+    else:
+        growth = f"grows revenue by {precise_percent(average_growth)} a year"
+    gap = percent(abs(upside))
+    if gap == "0.0%":
+        comparison = "the same as"
+    else:
+        comparison = f"{gap} {'above' if upside > 0 else 'below'}"
+    return (
+        f"If {company_name} {growth} for the next five years, with an average operating margin of "
+        f"{precise_percent(average_margin)}, the model says one share is worth {dollars(dcf_price)}, {comparison} today's "
+        f"market price of {dollars(market_price)}."
+    )
+
+
 def price_sparkline(prices):
     """Draw a small line chart of the share price over the last year, with no axes: just the shape, and the
     date and price when the reader hovers. `prices` is the list get_price_history gives.
@@ -3124,12 +3147,13 @@ def analyst_view_or_none(company):
         return None
 
 
-def draw_header(company, dcf, multiples, prices):
+def draw_header(company, dcf, multiples, prices, dcf_inputs=None):
     """Draw the top of the page, the answer first: the company's name and ticker, a verdict badge, one large number
     (the DCF value per share) with the upside or downside beside it, two quieter numbers to the right (the market price
-    and the middle of the multiples prices) and a small chart of the share price over the last year. When no DCF could be built (`dcf` is None)
-    the badge says so and the cards that need it say "Not available". `prices` is the year of share prices, or
-    None, and then the chart is left out; nothing else depends on it.
+    and the middle of the multiples prices), one plain sentence saying what the model assumes and gets (see price_story),
+    and a small chart of the share price over the last year. When no DCF could be built (`dcf` is None)
+    the badge says so, the cards that need it say "Not available" and there is no sentence. `prices` is the year of share
+    prices, or None, and then the chart is left out; nothing else depends on it.
     """
     upside = None if dcf is None else dcf["upside"]
     verdict = valuation.verdict(upside, assumptions.VERDICT_THRESHOLD)
@@ -3160,6 +3184,14 @@ def draw_header(company, dcf, multiples, prices):
         company["company_name"], company["ticker"], verdict, hero_cards, verdict_basis_text(verdict),
         verdict_help=explanations.help_text("verdict"), side_cards=side_cards,
     ))
+    if dcf is not None and dcf_inputs is not None:
+        story = price_story(
+            company["company_name"], valuation.average_rate(dcf_inputs["growth_rates"]),
+            valuation.average_rate(dcf_inputs["operating_margins"]), dcf["implied_share_price"], upside,
+            company["share_price"],
+        )
+        with st.container(key=STORY_KEY):
+            st.markdown(dollar_text_for_markdown(story))
     if prices is None:
         return
     st.caption("Share price, last 12 months", help=explanations.help_text("sparkline"))
@@ -3392,7 +3424,7 @@ def draw_page():
     prices = price_history_or_none(company)
     analysts = analyst_view_or_none(company)
     with header_area:
-        draw_header(company, dcf, multiples, prices)
+        draw_header(company, dcf, multiples, prices, dcf_inputs)
         with st.container(key=SOURCE_NOTE_KEY):            # styled as small quiet notes under the header (see theme.py)
             draw_source_note(company, source_used)
     note = adjustment_note(adjustment)

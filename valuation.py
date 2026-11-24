@@ -71,6 +71,13 @@ def shift_rates(rates, shift):
     return [rate + shift for rate in rates]
 
 
+def average_rate(rates):
+    """Add up a list of yearly rates and divide by how many there are, for example 9%, 9%, 8%, 7.5% and 7% growth
+    average 8.1%. The sentence under the price uses it to sum up five forecast years in one number.
+    """
+    return sum(rates) / len(rates)
+
+
 # ---------------------------------------------------------------------------
 # Discount rate (docs/model.md: "Discount rate (WACC)")
 # ---------------------------------------------------------------------------

@@ -155,6 +155,63 @@ def test_adobe_falls_back_to_the_snapshot_when_yahoo_cannot_be_reached(monkeypat
     assert market_price_of(page) == "$251.47"
 
 
+# ---------------------------------------------------------------------------
+# The plain sentence under the price
+# ---------------------------------------------------------------------------
+
+def story_of(page):
+    """The plain sentence under the headline cards, as the reader sees it (the backslashes before the dollar signs,
+    which stop Streamlit reading them as maths, taken out).
+    """
+    [story] = [text for text in texts(page.markdown) if "the model says one share is worth" in text]
+    return story.replace("\\$", "$")
+
+
+def test_the_sentence_says_adobes_base_case_in_words():
+    # Growth 9, 9, 8, 7.5, 7 averages 8.1%; margins 36.8 to 39 average 37.65%; $305.60 / $251.47 - 1 = 21.5%.
+    assert app.price_story("Adobe Inc.", 0.081, 0.3765, 305.60, 305.60 / 251.47 - 1, 251.47) == (
+        "If Adobe Inc. grows revenue by 8.10% a year for the next five years, with an average operating margin of 37.65%, "
+        "the model says one share is worth $305.60, 21.5% above today's market price of $251.47."
+    )
+
+
+def test_the_sentence_says_below_and_shrinks_when_the_numbers_are_negative():
+    story = app.price_story("Example Corp", -0.02, 0.10, 40.0, 40.0 / 50.0 - 1, 50.0)
+    assert "Example Corp shrinks revenue by 2.00% a year" in story
+    assert "$40.00, 20.0% below today's market price of $50.00." in story
+
+
+def test_the_sentence_says_the_same_as_when_the_prices_match():
+    assert "worth $50.00, the same as today's market price of $50.00." in app.price_story("X", 0.05, 0.2, 50.0, 0.0, 50.0)
+
+
+def test_the_page_shows_the_base_case_sentence_under_the_price(monkeypatch):
+    class BrokenTicker:
+        def __init__(self, ticker):
+            raise ConnectionError("no internet")
+
+    page = run_page(monkeypatch, yahoo=BrokenTicker)          # the snapshot, so the exact Excel numbers
+    assert_footer_and_no_crash(page)
+    assert story_of(page) == app.price_story("Adobe Inc.", 0.081, 0.3765, 305.60, 305.60 / 251.47 - 1, 251.47)
+
+
+def test_the_sentence_rewrites_itself_when_a_slider_moves(monkeypatch):
+    page = run_page(monkeypatch)
+    page.slider(key=app.GROWTH_KEY).set_value(1.0).run()
+    page.slider(key=app.MARGIN_KEY).set_value(-2.0).run()
+    story = story_of(page)
+    assert "grows revenue by 9.10% a year" in story                 # 8.1% + 1 point
+    assert "average operating margin of 35.65%" in story            # 37.65% - 2 points
+    assert metrics(page)["DCF implied price"] in story
+
+
+def test_a_company_with_no_dcf_gets_no_sentence(monkeypatch):
+    loss = dict(ADOBE_YAHOO_INCOME, **{"Pretax Income": (-100e6, 50e6)})
+    page = run_page(monkeypatch, ticker="loss", yahoo=fake_statements_ticker(income=loss))
+    assert_footer_and_no_crash(page)
+    assert not [text for text in texts(page.markdown) if "the model says one share is worth" in text]
+
+
 def test_an_empty_ticker_box_means_adobe(monkeypatch):
     page = run_page(monkeypatch, ticker="   ")
     assert_footer_and_no_crash(page)

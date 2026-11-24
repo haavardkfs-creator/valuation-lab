@@ -365,6 +365,20 @@ def test_shift_rates_leaves_the_original_list_untouched():
     assert original == [0.09, 0.07]
 
 
+def test_the_average_of_adobes_growth_is_8_1_percent():
+    # (9 + 9 + 8 + 7.5 + 7) / 5 = 40.5 / 5 = 8.1
+    assert v.average_rate(GROWTH_RATES) == close(0.081)
+
+
+def test_the_average_of_adobes_margin_is_37_65_percent():
+    # (36.8 + 36.95 + 37.5 + 38 + 39) / 5 = 188.25 / 5 = 37.65
+    assert v.average_rate(OPERATING_MARGINS) == close(0.3765)
+
+
+def test_a_shift_moves_the_average_by_the_same_amount():
+    assert v.average_rate(v.shift_rates(GROWTH_RATES, 0.01)) == close(0.091)
+
+
 def test_a_shift_of_zero_still_gives_the_excel_price():
     result = v.run_full_dcf(
         base_revenue=BASE_REVENUE,
