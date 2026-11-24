@@ -1929,8 +1929,13 @@ def test_the_peers_multiples_and_the_company_are_still_remembered_for_the_shorte
     source = inspect.getsource(app)
     assert "@st.cache_data(ttl=LIVE_DATA_CACHE_SECONDS, show_spinner=False)\ndef load_company(" in source
     assert "@st.cache_data(ttl=LIVE_DATA_CACHE_SECONDS, show_spinner=False)\ndef load_peer_multiples(" in source
-    for slow in ("load_suggested_peers", "load_history", "load_ttm"):
+    for slow in ("load_suggested_peers", "load_history", "load_ttm", "load_company_matches", "load_analyst_view",
+                 "load_price_history", "load_company_context"):
         assert f"@st.cache_data(ttl=SLOW_DATA_CACHE_SECONDS, show_spinner=False)\ndef {slow}(" in source
+
+
+def test_after_yahoo_says_no_the_page_leaves_it_alone_for_fifteen_minutes():
+    assert data.YAHOO_COOLDOWN_SECONDS == 15 * 60
 
 
 def test_the_page_shows_the_plain_message_when_yahoo_is_limiting_the_server(monkeypatch):

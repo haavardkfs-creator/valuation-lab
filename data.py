@@ -184,8 +184,9 @@ def _pause(seconds):
 
 
 # After Yahoo has said it is busy, the page skips Yahoo for this many seconds and goes straight to its
-# backup, instead of waiting and retrying on every click. Chosen with Haavard on 20 Nov 2026.
-YAHOO_COOLDOWN_SECONDS = 300
+# backup, instead of waiting and retrying on every click. Chosen with Haavard on 20 Nov 2026 (5 minutes), raised to
+# 15 minutes on 24 Nov 2026: asking again too soon tends to make Yahoo's block last longer.
+YAHOO_COOLDOWN_SECONDS = 15 * 60
 _yahoo_busy_until = 0.0         # when the cool-down ends; the whole server shares it, because it is one program
 
 
