@@ -433,6 +433,11 @@
   operating margin of 37.65%, the model says one share is worth $305.60, 21.5% above today's market price of $251.47."
   It rewrites itself as the sliders move. `average_rate` in `valuation.py` does the averaging; `price_story` in `app.py`
   writes the words. Upgrades 2 (an "About the company" card) and 3 (slider hints and "Try this" presets) come next.
+- Done: the "About" card (first-visit upgrade 2 of 3, 24 Nov 2026). Under the header, a bordered card names the
+  company's sector, industry, full-time employees and headquarters, and the first two sentences of what it does, from
+  Yahoo's profile. `fetch_yahoo_profile` and `get_company_profile` in `data.py` fetch it; `draw_company_profile` in
+  `app.py` draws it, and the page remembers it for six hours. When Yahoo cannot give it, the card is left out. Not the
+  "About this project" panel Haavard turned down.
 - Next: check the macro numbers on the live app after the merge; the live FMP check with Yahoo switched
   off; the small items below. CLAUDE.md still needs Haavard's edits (the theme line, and rows for theme.py and test_theme.py).
 - Open:

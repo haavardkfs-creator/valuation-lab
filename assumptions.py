@@ -263,6 +263,11 @@ GENERIC_YEAR_LABELS = [f"Year {number}" for number in range(1, STARTING_POINT_YE
 # is going on without a wall of links. Chosen with Haavard on 20 Nov 2026.
 NEWS_ITEMS_SHOWN = 5
 
+# How many sentences of Yahoo's description of the company the "About" card shows. Yahoo's text runs to ten or more
+# sentences; the first two say what the company does and how it is split up, which is enough for a first visit.
+# Chosen by Claude for first-visit upgrade 2 (24 Nov 2026); Haavard can change it.
+ABOUT_SUMMARY_SENTENCES = 2
+
 # How many top officers the page shows. Yahoo lists the chairman, CEO and CFO first and then the
 # executive vice presidents, so the first five are the people who run the company. Chosen with Haavard
 # on 20 Nov 2026.

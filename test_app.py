@@ -21,6 +21,7 @@ import explanations
 import theme
 import valuation
 from test_data import (
+    ADOBE_PROFILE_INFO,
     ADOBE_YAHOO_BALANCE,
     ADOBE_YAHOO_CASH_FLOW,
     ADOBE_YAHOO_INCOME,
@@ -210,6 +211,41 @@ def test_a_company_with_no_dcf_gets_no_sentence(monkeypatch):
     page = run_page(monkeypatch, ticker="loss", yahoo=fake_statements_ticker(income=loss))
     assert_footer_and_no_crash(page)
     assert not [text for text in texts(page.markdown) if "the model says one share is worth" in text]
+
+
+# ---------------------------------------------------------------------------
+# The "About" card under the header
+# ---------------------------------------------------------------------------
+
+def test_the_summary_keeps_the_first_sentences_and_does_not_cut_after_inc():
+    text = "Adobe Inc. operates as a software company. It has three segments. It was founded in 1982."
+    assert app.short_summary(text, 2) == "Adobe Inc. operates as a software company. It has three segments."
+    assert app.short_summary("One sentence only.", 2) == "One sentence only."
+
+
+def test_the_profile_facts_skip_what_yahoo_does_not_have():
+    profile = {"sector": "Technology", "industry": "Software - Infrastructure", "employees": 30709,
+               "headquarters": "San Jose, CA, United States"}
+    assert app.profile_facts(profile) == "Technology · Software - Infrastructure · 30,709 employees · San Jose, CA, United States"
+    assert app.profile_facts(dict(profile, industry=None, employees=None)) == "Technology · San Jose, CA, United States"
+
+
+def test_the_page_shows_the_about_card_from_yahoos_profile(monkeypatch):
+    page = run_page(monkeypatch, yahoo=fake_statements_ticker(info=ADOBE_PROFILE_INFO))
+    assert_footer_and_no_crash(page)
+    shown = texts(page.markdown)
+    assert "**About Adobe Inc\\.**" in shown
+    assert "Technology · Software \\- Infrastructure · 30,709 employees · San Jose, CA, United States" in texts(page.caption)
+    # Two sentences of the three: the founding year is left out.
+    assert any(text.startswith("Adobe Inc\\., together with") and "three segments\\." in text and "1982" not in text
+               for text in shown)
+    assert "From Yahoo Finance's company profile. Company website: https://www.adobe.com" in texts(page.caption)
+
+
+def test_the_about_card_is_left_out_when_yahoo_has_no_profile(monkeypatch):
+    page = run_page(monkeypatch)                     # the usual fake Yahoo has no sector, industry or description
+    assert_footer_and_no_crash(page)
+    assert not [text for text in texts(page.markdown) if text.startswith("**About ")]
 
 
 def test_an_empty_ticker_box_means_adobe(monkeypatch):

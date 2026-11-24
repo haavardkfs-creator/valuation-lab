@@ -2577,3 +2577,69 @@ def test_without_the_ten_year_yield_there_is_a_plain_error(rows):
     with pytest.raises(data.SourceUnavailable, match="10-year Treasury yield"):
         data.risk_free_from_macro(rows)
 
+
+
+# ---------------------------------------------------------------------------
+# About the company: Yahoo's profile (text, no maths)
+# ---------------------------------------------------------------------------
+
+ADOBE_PROFILE_INFO = dict(
+    ADOBE_YAHOO_INFO,
+    sector="Technology",
+    industry="Software - Infrastructure",
+    longBusinessSummary=(
+        "Adobe Inc., together with its subsidiaries, operates as a diversified software company worldwide.  It operates "
+        "through three segments. The company was founded in 1982."
+    ),
+    fullTimeEmployees=30709,
+    city="San Jose",
+    state="CA",
+    country="United States",
+    website="https://www.adobe.com",
+)
+
+
+def test_the_profile_picks_the_parts_and_tidies_the_text(monkeypatch):
+    monkeypatch.setattr("yfinance.Ticker", fake_statements_ticker(info=ADOBE_PROFILE_INFO))
+    profile = data.fetch_yahoo_profile("ADBE")
+    assert profile["sector"] == "Technology"
+    assert profile["industry"] == "Software - Infrastructure"
+    assert profile["summary"].startswith("Adobe Inc., together with its subsidiaries,")
+    assert "worldwide. It operates" in profile["summary"]                  # the double space squeezed
+    assert profile["employees"] == 30709
+    assert profile["headquarters"] == "San Jose, CA, United States"
+    assert profile["website"] == "https://www.adobe.com"
+
+
+def test_a_profile_part_yahoo_does_not_have_is_none(monkeypatch):
+    info = dict(ADOBE_YAHOO_INFO, country="Norway", fullTimeEmployees="many", website="http://not-https.example")
+    monkeypatch.setattr("yfinance.Ticker", fake_statements_ticker(info=info))
+    profile = data.fetch_yahoo_profile("EXMP")
+    assert profile == {
+        "sector": None, "industry": None, "summary": None, "employees": None, "headquarters": "Norway", "website": None,
+    }
+
+
+def test_get_company_profile_gives_back_what_yahoo_has():
+    profile = {"sector": "Technology", "industry": None, "summary": None, "employees": None, "headquarters": None,
+               "website": None}
+    assert data.get_company_profile("ADBE", fetch_profile=lambda ticker: profile) == profile
+
+
+def test_get_company_profile_stops_with_a_plain_error_when_yahoo_fails_or_has_nothing():
+    def broken(ticker):
+        raise ConnectionError("no internet")
+
+    with pytest.raises(data.SourceUnavailable, match="Could not get the company profile"):
+        data.get_company_profile("ADBE", fetch_profile=broken)
+    empty = dict.fromkeys(("sector", "industry", "summary", "employees", "headquarters", "website"))
+    with pytest.raises(data.SourceUnavailable, match="no profile"):
+        data.get_company_profile("ADBE", fetch_profile=lambda ticker: empty)
+
+
+def test_get_company_profile_leaves_yahoo_alone_while_it_is_cooling_down(monkeypatch):
+    monkeypatch.setattr("data._yahoo_busy_until", float("inf"))
+    asked = []
+    with pytest.raises(data.SourceUnavailable):
+        data.get_company_profile("ADBE", fetch_profile=asked.append)
+    assert asked == []
