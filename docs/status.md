@@ -397,19 +397,23 @@
   reason in a dashed card; the error page has the top bar instead of a big title.
 - Done (merged, #72 "The phone layout"): redesign pull request 6 of 6, the last of the build. 16 px gutter, the
   large number and its upside side by side, the sliders stacked in the strip, no sideways scrolling at 390 px.
-- Done (in the open pull request "Clearer sensitivity heatmaps"): polish A of 7. The dashed break-even line follows the
+- Done (merged, #73 "Clearer sensitivity heatmaps"): polish A of 7. The dashed break-even line follows the
   cell edges instead of crossing the numbers; each cell has the price over a smaller upside; the column labels sit on top
   like a spreadsheet, the row title in the corner, the base case's labels in gold; cells near the market price stay
   almost neutral; long labels go on two lines and the upside shrinks on a phone.
-- Next (polish, Haavard said yes to all on 24 Nov 2026): B tables (row lines only, right-aligned numbers, colour that means
-  something); C less grey text; D the multiples as one table; E search in the top bar, no sidebar; F an "About this
+- Done (in the open pull request "One calm style for every table"): polish B of 7. Every table is a plain table with
+  lines between the rows only, numbers on the right, small taupe capitals for headers; the scenarios' "vs market price"
+  has an arrow, a sign and sage or terracotta; the company's row in the peer table is gold; the WACC and the peer median
+  sit under a taupe total line. The four interactive grids (assumptions, sensitivity numbers, peers, compare) are now
+  plain tables too.
+- Next (polish, Haavard said yes to all on 24 Nov 2026): C less grey text; D the multiples as one table; E search in the top bar, no sidebar; F an "About this
   project" panel (Haavard approves the text); G tab names as questions.
 - Next: check the macro numbers on the live app after the merge; the live FMP check with Yahoo switched
   off; the small items below. CLAUDE.md still needs Haavard's edits (the theme line, and rows for theme.py and test_theme.py).
 - Open:
   - Redesign (23 Nov 2026): the sidebar still holds the ticker box, name
     search, Scenarios, Peers and One-off items; the canvas put the ticker search in the top bar, which would need a bigger
-    change to the page's layout (ask first). The interactive tables (`st.dataframe`) follow the colours only.
+    change to the page's layout (Haavard said yes on 24 Nov 2026: polish E).
   - Ideas from Haavard (20 Nov 2026): (1) group the overview by type of multiple: done in Phase 4a; (2) a ? help on every
     multiple and every chart, like the overview has: done in Phase 4b; (3) search
     by company name that lists several matching tickers, like Nordnet's search: done (price and day change in the list would cost

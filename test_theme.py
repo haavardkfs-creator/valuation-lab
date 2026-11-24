@@ -514,7 +514,22 @@ def test_a_section_name_is_a_quiet_label_and_the_sentence_under_it_is_the_headin
 
 def test_headings_have_no_link_icons_and_tables_put_numbers_on_the_right():
     assert '[data-testid="stHeaderActionElements"] { display: none; }' in theme.CARD_CSS
-    assert '[data-testid="stTable"] td { text-align: right;' in theme.CARD_CSS
+    # Streamlit writes "text-align: left" into every cell, so only !important puts the numbers on the right.
+    assert '[data-testid="stTable"] td, [data-testid="stTable"] thead th { text-align: right !important; }' in theme.CARD_CSS
+    assert '[data-testid="stTable"] tbody th, [data-testid="stTable"] thead th:first-child { text-align: left !important;' in theme.CARD_CSS
+
+
+def test_table_headers_are_small_taupe_capitals_like_the_section_labels():
+    rule = re.search(r'\[data-testid="stTable"\] thead th \{([^}]*)\}', theme.CARD_CSS).group(1)
+    assert f"color: {theme.GREY}" in rule and "text-transform: uppercase" in rule and "font-size: 0.6875rem" in rule
+
+
+def test_the_wacc_and_peer_tables_set_their_total_row_apart_and_keep_their_words_column_on_the_left():
+    wacc, peers = f".st-key-{theme.WACC_TABLE_KEY}", f".st-key-{theme.PEER_TABLE_KEY}"
+    assert f"{wacc} tbody tr:last-child > *, {peers} tbody tr:last-child > * {{ font-weight: {theme.WEIGHT_MEDIUM}; }}" in theme.CARD_CSS
+    assert f"{wacc} tbody tr:nth-last-child(2) > *, {peers} tbody tr:nth-last-child(2) > * {{\n    border-bottom: 1px solid {theme.GREY};" in theme.CARD_CSS
+    assert f"{peers} td:last-child {{ text-align: left !important; }}" in theme.CARD_CSS
+    assert f"{peers} tbody tr:first-child > * {{ color: {theme.ACCENT}; }}" in theme.CARD_CSS     # the company itself, in gold
 
 
 # ---------------------------------------------------------------------------

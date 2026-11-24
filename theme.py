@@ -64,6 +64,11 @@ WEIGHT_MEDIUM = 500
 # The boxes round the two sensitivity heatmaps are keyed "heatmap_wacc" and "heatmap_margin" (app.py), so the phone
 # rules below can find them.
 HEATMAP_KEY_PREFIX = "heatmap_"
+# The boxes round two tables that get a little more than the shared table style (app.py's draw_table): the WACC table
+# ends in its total, and the peer table starts with the company itself and ends in the peer median. Both have a last
+# column of words.
+WACC_TABLE_KEY = "table_wacc"
+PEER_TABLE_KEY = "table_peers"
 
 CARD_CSS = f"""
 <style>
@@ -132,15 +137,29 @@ CARD_CSS = f"""
 /* Closed boxes: a quiet header line, the content inside a card. */
 [data-testid="stExpander"] summary p {{ font-size: 0.875rem; color: {TEXT}; }}
 [data-testid="stExpander"] summary:hover {{ background: {RAISED}; }}
-/* Plain tables (st.table): 13 px, numbers right-aligned, quiet headers, thin lines between rows, a hovered row lifts. */
+/* Tables (st.table, drawn with lines between the rows only): 13 px, numbers on the right so their decimals line up,
+   headers as small taupe capitals like the section labels, the row names on the left in sand, a hovered row lifts.
+   Streamlit writes its own left alignment into each cell, so these rules need !important to win. */
 [data-testid="stTable"] table {{ font-size: 0.8125rem; line-height: 1.25rem; border-collapse: collapse; }}
-[data-testid="stTable"] th {{ color: {GREY}; font-weight: {WEIGHT_MEDIUM}; font-size: 0.75rem; text-align: right; border-color: {BORDER}; }}
-[data-testid="stTable"] td {{ text-align: right; border-color: {BORDER}; }}
+[data-testid="stTable"] th, [data-testid="stTable"] td {{ border-color: {BORDER}; padding: 0.5rem 0.75rem; }}
+[data-testid="stTable"] thead th {{ color: {GREY}; font-weight: {WEIGHT_MEDIUM}; font-size: 0.6875rem; letter-spacing: 0.06em; text-transform: uppercase; vertical-align: bottom; }}
+[data-testid="stTable"] td, [data-testid="stTable"] thead th {{ text-align: right !important; }}
+[data-testid="stTable"] tbody th, [data-testid="stTable"] thead th:first-child {{ text-align: left !important; color: {SAND}; font-weight: {WEIGHT_REGULAR}; }}
+[data-testid="stTable"] thead th:first-child {{ color: {GREY}; font-weight: {WEIGHT_MEDIUM}; }}
+[data-testid="stTable"] [data-testid="stMarkdownContainer"] {{ text-align: inherit; }}
 [data-testid="stTable"] p {{ font-size: inherit; line-height: inherit; margin: 0; }}
-[data-testid="stTable"] td [data-testid="stMarkdownContainer"], [data-testid="stTable"] thead th [data-testid="stMarkdownContainer"] {{ text-align: right; }}
-[data-testid="stTable"] tbody th [data-testid="stMarkdownContainer"], [data-testid="stTable"] thead th:first-child [data-testid="stMarkdownContainer"] {{ text-align: left; }}
-[data-testid="stTable"] tbody th, [data-testid="stTable"] thead th:first-child {{ text-align: left; color: {SAND}; }}
 [data-testid="stTable"] tbody tr:hover td, [data-testid="stTable"] tbody tr:hover th {{ background: {RAISED}; }}
+/* The WACC and peer tables: the last column is words (where a figure comes from, a peer's flag), so it stays on the left;
+   the last row is the total (the WACC, the peer median), set apart like a total in a set of accounts by the medium
+   weight and a taupe line above it (drawn as the row above's bottom line, which is the one the browser shows where
+   two row lines meet); the company's own row is in gold. */
+.st-key-{WACC_TABLE_KEY} thead th:last-child, .st-key-{WACC_TABLE_KEY} td:last-child,
+.st-key-{PEER_TABLE_KEY} thead th:last-child, .st-key-{PEER_TABLE_KEY} td:last-child {{ text-align: left !important; }}
+.st-key-{WACC_TABLE_KEY} tbody tr:last-child > *, .st-key-{PEER_TABLE_KEY} tbody tr:last-child > * {{ font-weight: {WEIGHT_MEDIUM}; }}
+.st-key-{WACC_TABLE_KEY} tbody tr:nth-last-child(2) > *, .st-key-{PEER_TABLE_KEY} tbody tr:nth-last-child(2) > * {{
+    border-bottom: 1px solid {GREY};
+}}
+.st-key-{PEER_TABLE_KEY} tbody tr:first-child > * {{ color: {ACCENT}; }}
 /* Long captions and notes under charts stay narrow enough to read in one go. */
 [data-testid="stCaptionContainer"] p {{ max-width: 52rem; line-height: 1.25rem; }}
 
