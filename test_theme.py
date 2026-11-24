@@ -580,5 +580,11 @@ def test_on_a_phone_the_upside_in_each_heatmap_cell_gets_smaller_so_it_fits():
     ) in phone_css()
 
 
+def test_the_how_to_read_this_boxes_are_one_quiet_line_with_no_frame():
+    notes = f'[class*="st-key-{theme.READING_NOTES_KEY_PREFIX}"]'
+    assert f"{notes} details {{ border: 0; background: transparent; }}" in theme.CARD_CSS
+    assert f"{notes} summary p {{ font-size: 0.8125rem; color: {theme.GREY}; }}" in theme.CARD_CSS
+
+
 def test_the_glow_never_makes_the_page_scroll_sideways():
     assert ".vl-header { overflow-x: clip; }" in theme.CARD_CSS

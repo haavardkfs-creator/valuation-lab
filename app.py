@@ -49,6 +49,9 @@ HEATMAP_KEY_PREFIX = theme.HEATMAP_KEY_PREFIX   # the boxes round the two heatma
 # way the best finance products lay out data (polish, 24 Nov 2026). theme.py's CSS does the type and the alignment.
 TABLE_BORDER = "horizontal"
 
+# The label of the small closed box that holds a section's notes on method (polish C, 24 Nov 2026).
+READING_NOTES_LABEL = "How to read this"
+
 # The six figures that make up a company's peers in a data package.
 PEER_KEYS = ["peer_tickers", "peer_ev_sales", "peer_ev_ebitda", "peer_pe", "peer_ps", "peer_forward_pe"]
 
@@ -906,10 +909,11 @@ def draw_reverse_dcf(company, dcf_inputs, terminal_growth_rate, wacc_override, h
     # unescaped dollar signs as a maths formula.
     st.caption(implied_margin_sentence(company["share_price"], answers["margin"], history).replace("$", "\\$"))
     st.caption(implied_growth_sentence(company["share_price"], answers["growth"], history).replace("$", "\\$"))
-    st.caption(
-        "Each answer changes one thing and holds the other as modelled. They use the page's current "
-        "settings (the sliders, the terminal growth and the WACC), so they move when you move those."
-    )
+    with reading_notes("reverse_dcf"):
+        st.caption(
+            "Each answer changes one thing and holds the other as modelled. They use the page's current "
+            "settings (the sliders, the terminal growth and the WACC), so they move when you move those."
+        )
 
 
 def draw_scenario_boxes():
@@ -947,6 +951,14 @@ def draw_scenario_boxes():
         "growth_shifts": [bear_growth / 100, 0.0, bull_growth / 100],
         "probabilities": [bear_chance / 100, base_chance / 100, bull_chance / 100],
     }
+
+
+def reading_notes(name):
+    """A small closed "How to read this" box under a section, holding the notes on method (what the colours mean, where
+    the figures come from), so the numbers stay in front and the explanations are one click away. `name` keeps each
+    box apart.
+    """
+    return st.expander(READING_NOTES_LABEL, key=f"{theme.READING_NOTES_KEY_PREFIX}{name}")
 
 
 def draw_table(table, key=None):
@@ -1012,11 +1024,12 @@ def draw_scenarios(company, dcf_inputs, terminal_growth_rate, wacc_override, set
         "Weighted price vs market", percent(scenarios["weighted_vs_market"]),
         help="The weighted price divided by today's market price, minus 1. Above 0% means the weighted price is higher than the market's.",
     )
-    st.caption(
-        "Each scenario moves every year's operating margin and revenue growth by the amounts shown, "
-        "on top of the sliders; the WACC and terminal growth are the same in all three. The weights are "
-        "your judgment, not a fact: change them in the Scenarios box in the sidebar."
-    )
+    with reading_notes("scenarios"):
+        st.caption(
+            "Each scenario moves every year's operating margin and revenue growth by the amounts shown, "
+            "on top of the sliders; the WACC and terminal growth are the same in all three. The weights are "
+            "your judgment, not a fact: change them in the Scenarios box in the sidebar."
+        )
 
 
 def draw_overview(overview):
@@ -1074,12 +1087,13 @@ def draw_overview(overview):
     else:
         basis = "Worked out from the last fiscal year and today's share price."
     st.caption(f"{basis} A number that would mean nothing (no P/E for a company that lost money) says so.")
-    st.caption(
-        "Return on invested capital, cash conversion, interest cover and the share count change are for the last "
-        "fiscal year. Return on invested capital counts a tax benefit as no tax, and is pushed up by buybacks that "
-        "shrink equity; where equity is negative it is not meaningful. Cash conversion uses the free cash flow the "
-        "company reports."
-    )
+    with reading_notes("overview"):
+        st.caption(
+            "Return on invested capital, cash conversion, interest cover and the share count change are for the last "
+            "fiscal year. Return on invested capital counts a tax benefit as no tax, and is pushed up by buybacks that "
+            "shrink equity; where equity is negative it is not meaningful. Cash conversion uses the free cash flow the "
+            "company reports."
+        )
 
 
 def assumptions_table(dcf_inputs, year_labels):
@@ -1124,12 +1138,13 @@ def draw_assumptions(company, dcf_inputs, year_labels, dcf, terminal_growth_rate
             "not a forecast (see the note under the title)."
         )
     whose_wacc = "the WACC you set" if wacc_is_set_by_user else "the model's own WACC"
-    st.caption(
-        f"{where_from} After year 5, cash flow grows {precise_percent(terminal_growth_rate)} a "
-        f"year for ever, discounted at {precise_percent(dcf['wacc'])} ({whose_wacc}). The sliders "
-        f"are changing growth by {points_text(growth_shift)} and operating margin by "
-        f"{points_text(margin_shift)} in every year; at +0.0 points the table is the base case."
-    )
+    with reading_notes("assumptions"):
+        st.caption(
+            f"{where_from} After year 5, cash flow grows {precise_percent(terminal_growth_rate)} a "
+            f"year for ever, discounted at {precise_percent(dcf['wacc'])} ({whose_wacc}). The sliders "
+            f"are changing growth by {points_text(growth_shift)} and operating margin by "
+            f"{points_text(margin_shift)} in every year; at +0.0 points the table is the base case."
+        )
 
 
 def provider_name(source_used):
@@ -1552,12 +1567,13 @@ def draw_history(history, error, overview, company_name):
     # Each dollar sign is escaped with a backslash, because Streamlit reads text between two
     # unescaped dollar signs as a maths formula.
     st.caption(free_cash_flow_note(history, overview, company_name).replace("$", "\\$"))
-    st.caption(
-        f"{provider_name(history.get('source'))} gives {len(history['years'])} years of figures for this company. Shares are "
-        "the diluted average over each year, not the number outstanding that the valuation uses; a "
-        "fall means buybacks. One year can be a peak or a bottom, so look at the direction, not "
-        "just the latest number."
-    )
+    with reading_notes("history"):
+        st.caption(
+            f"{provider_name(history.get('source'))} gives {len(history['years'])} years of figures for this company. Shares are "
+            "the diluted average over each year, not the number outstanding that the valuation uses; a "
+            "fall means buybacks. One year can be a peak or a bottom, so look at the direction, not "
+            "just the latest number."
+        )
 
 
 def terminal_value_cautions(dcf, terminal_growth_rate):
@@ -1667,12 +1683,13 @@ def draw_football_field(company, dcf, multiples, dcf_inputs, base_wacc, prices, 
     if headline:
         st.markdown(f"**{headline}**", help=explanations.help_text("football_field"))
     st.plotly_chart(football_field_figure(rows, company["share_price"]), width="stretch", config=CHART_CONFIG)
-    st.caption(
-        "Each bar is a way of valuing the company: the gold bar is the DCF with the WACC a point either way and terminal growth from 1.5% to 3.5%, "
-        "the brown bars cover the middle half of the peers' multiples (25th to 75th percentile), the analysts' price "
-        "targets (when Yahoo Finance has them) and the share's own 52-week range. The cream tick is the middle value "
-        "(the mean, for the analysts), and the dashed line is today's market price."
-    )
+    with reading_notes("football_field"):
+        st.caption(
+            "Each bar is a way of valuing the company: the gold bar is the DCF with the WACC a point either way and terminal growth from 1.5% to 3.5%, "
+            "the brown bars cover the middle half of the peers' multiples (25th to 75th percentile), the analysts' price "
+            "targets (when Yahoo Finance has them) and the share's own 52-week range. The cream tick is the middle value "
+            "(the mean, for the analysts), and the dashed line is today's market price."
+        )
 
 
 def analyst_headline(company_name, view, share_price, dcf_price):
@@ -1772,10 +1789,11 @@ def draw_analyst_view(company, analysts, dcf_price):
         st.markdown(f"**{dollar_text_for_markdown(headline)}**", help=explanations.help_text("analyst_split"))
     if analysts["counts"]:
         st.plotly_chart(analyst_split_figure(analysts["counts"]), width="stretch", config=CHART_CONFIG)
-    st.caption(
-        "Other analysts' opinions, from Yahoo Finance, not this app's advice. Price targets are set for about a year ahead "
-        "and tend to run optimistic, so they are a comparison for the model, not a prediction."
-    )
+    with reading_notes("analysts"):
+        st.caption(
+            "Other analysts' opinions, from Yahoo Finance, not this app's advice. Price targets are set for about a year ahead "
+            "and tend to run optimistic, so they are a comparison for the model, not a prediction."
+        )
 
 
 def waterfall_headline(dcf):
@@ -1924,10 +1942,11 @@ def draw_charts(dcf, year_labels, terminal_growth_rate, operating_margins, histo
         f"**{share:.0%} of the value comes from after year 5.**", help=explanations.help_text("terminal_value_ring")
     )
     donut_column.plotly_chart(terminal_value_donut(dcf), width="stretch", config=CHART_CONFIG)
-    st.caption(
-        "Brown bars are free cash flow as the company reports it; gold bars are the model's forecast, which starts from "
-        "operating profit, so the two are not built the same way."
-    )
+    with reading_notes("forecast_charts"):
+        st.caption(
+            "Brown bars are free cash flow as the company reports it; gold bars are the model's forecast, which starts from "
+            "operating profit, so the two are not built the same way."
+        )
     # Each dollar sign is escaped with a backslash, because Streamlit reads text between two
     # unescaped dollar signs as a maths formula.
     st.caption(
@@ -2007,11 +2026,12 @@ def draw_heatmap(company, dcf_inputs, base_wacc):
         " A blank cell has no answer: its growth rate is at or above its WACC."
         if any(price is None for row in table["prices"] for price in row) else ""
     )
-    st.caption(
-        f"Each cell shows the price and how far it is above (▲, green) or below (▼, red) today's market price of "
-        f"{dollars(company['share_price'])}. The dashed line runs where the model equals the market price, and the gold frame is "
-        "the base case. The growth and margin sliders move the whole table.".replace("$", "\\$") + blank_note
-    )
+    with reading_notes("heatmap_wacc"):
+        st.caption(
+            f"Each cell shows the price and how far it is above (▲, green) or below (▼, red) today's market price of "
+            f"{dollars(company['share_price'])}. The dashed line runs where the model equals the market price, and the gold frame is "
+            "the base case. The growth and margin sliders move the whole table.".replace("$", "\\$") + blank_note
+        )
 
 
 def shift_label(average, shift):
@@ -2062,15 +2082,16 @@ def draw_margin_growth_table(company, dcf_inputs, dcf, terminal_growth_rate, wac
     draw_sensitivity_numbers(prices, company["share_price"], base_cell)
     # Each dollar sign is escaped with a backslash, because Streamlit reads text between two
     # unescaped dollar signs as a maths formula.
-    st.caption(
-        (
-            f"Each cell moves the operating margin and the revenue growth of every forecast year by the "
-            f"points shown, and shows the price and how far it is above (▲, green) or below (▼, red) today's market "
-            f"price of {dollars(company['share_price'])}. The dashed line runs where the model equals the market price, "
-            f"and the gold frame is the base case, {dollars(dcf['implied_share_price'])}, the DCF above. The "
-            "table uses the WACC and terminal growth in use, and the sliders move it."
-        ).replace("$", "\\$")
-    )
+    with reading_notes("heatmap_margin"):
+        st.caption(
+            (
+                f"Each cell moves the operating margin and the revenue growth of every forecast year by the "
+                f"points shown, and shows the price and how far it is above (▲, green) or below (▼, red) today's market "
+                f"price of {dollars(company['share_price'])}. The dashed line runs where the model equals the market price, "
+                f"and the gold frame is the base case, {dollars(dcf['implied_share_price'])}, the DCF above. The "
+                "table uses the WACC and terminal growth in use, and the sliders move it."
+            ).replace("$", "\\$")
+        )
 
 
 def forward_price_text(price, company_forward_pe):
@@ -2387,10 +2408,11 @@ def draw_peer_charts(multiples, peers, own_label, overview, company_name):
         ),
         width="stretch", config=CHART_CONFIG,
     )
-    st.caption(
-        "Gold is this company, brown the peers, and dashed lines the peers' middle values. In the scatter, a dot low on "
-        "the chart is cheap for its profitability, and one far to the right earns a high margin."
-    )
+    with reading_notes("peer_charts"):
+        st.caption(
+            "Gold is this company, brown the peers, and dashed lines the peers' middle values. In the scatter, a dot low on "
+            "the chart is cheap for its profitability, and one far to the right earns a high margin."
+        )
 
 
 def draw_multiples(multiples, peers, notes, peers_are_suggested, own_label, overview, company_name):
@@ -2442,20 +2464,21 @@ def draw_multiples(multiples, peers, notes, peers_are_suggested, own_label, over
         )
     draw_peer_charts(multiples, peers, own_label, overview, company_name)
     draw_table(peer_table(peers, own_label, overview, multiples), key=theme.PEER_TABLE_KEY)
-    st.caption(
-        f"Each multiple needs at least {assumptions.MINIMUM_PEERS} peers with a usable figure; "
-        "a peer with no figure (a dash) is left out of that multiple only. A negative operating "
-        "margin counts, because a loss is real information. The forward P/E uses analysts' estimate of next "
-        "year's adjusted earnings per share (it leaves out things like share-based pay), so it is only "
-        "compared with the peers' forward P/E, never with the ordinary P/E. "
-        + (
-            f"The company's own row is its last twelve months (to {overview['ttm_period_end']}) at "
-            f"today's price, like the peers' figures from {provider_name(peers.get('peer_data_source'))}, so the two are like for like."
-            if overview.get("ttm_period_end")
-            else "The company's own row comes from its last fiscal year and today's price; the peers' "
-            f"figures are {provider_name(peers.get('peer_data_source'))}'s trailing twelve months, so small differences are expected."
+    with reading_notes("multiples"):
+        st.caption(
+            f"Each multiple needs at least {assumptions.MINIMUM_PEERS} peers with a usable figure; "
+            "a peer with no figure (a dash) is left out of that multiple only. A negative operating "
+            "margin counts, because a loss is real information. The forward P/E uses analysts' estimate of next "
+            "year's adjusted earnings per share (it leaves out things like share-based pay), so it is only "
+            "compared with the peers' forward P/E, never with the ordinary P/E. "
+            + (
+                f"The company's own row is its last twelve months (to {overview['ttm_period_end']}) at "
+                f"today's price, like the peers' figures from {provider_name(peers.get('peer_data_source'))}, so the two are like for like."
+                if overview.get("ttm_period_end")
+                else "The company's own row comes from its last fiscal year and today's price; the peers' "
+                f"figures are {provider_name(peers.get('peer_data_source'))}'s trailing twelve months, so small differences are expected."
+            )
         )
-    )
     for sentence in flag_explanations(peers):
         st.caption(f"⚠ {sentence}")
     if flag_explanations(peers):
@@ -2966,11 +2989,12 @@ def draw_news_and_management(ticker):
         st.caption(f"Yahoo Finance lists no officers for {ticker}.")
     else:
         st.markdown("\n".join(officer_line(officer) for officer in context["officers"][: assumptions.OFFICERS_SHOWN]))
-    st.caption(
-        "From Yahoo Finance. Headlines are written by outside publishers, not by this app, and Yahoo sometimes "
-        "mixes in general market stories; nothing in the valuation depends on them. The officers are the team "
-        "today: Yahoo does not say when anyone changed."
-    )
+    with reading_notes("news"):
+        st.caption(
+            "From Yahoo Finance. Headlines are written by outside publishers, not by this app, and Yahoo sometimes "
+            "mixes in general market stories; nothing in the valuation depends on them. The officers are the team "
+            "today: Yahoo does not say when anyone changed."
+        )
 
 
 def day_text(iso_date):
@@ -3013,11 +3037,12 @@ def draw_macro_backdrop():
             delta=macro_date_text(row) if row["value"] is not None else None, delta_color="off", delta_arrow="off",
             help=help_texts[row["key"]],
         )
-    st.caption(
-        "From FRED, the Federal Reserve Bank of St. Louis. These are US numbers: a company that lives on another country's "
-        "rates (Aker on Norway's, for instance) is moved more by those. They are background for the valuation, not an input "
-        "to it, unless you tick \"Use today's 10-year Treasury yield\" under \"WACC and rates\": the WACC's risk-free rate is otherwise typed in from Damodaran."
-    )
+    with reading_notes("macro"):
+        st.caption(
+            "From FRED, the Federal Reserve Bank of St. Louis. These are US numbers: a company that lives on another country's "
+            "rates (Aker on Norway's, for instance) is moved more by those. They are background for the valuation, not an input "
+            "to it, unless you tick \"Use today's 10-year Treasury yield\" under \"WACC and rates\": the WACC's risk-free rate is otherwise typed in from Damodaran."
+        )
 
 
 NOT_AVAILABLE = "Not available"
@@ -3276,10 +3301,11 @@ def draw_compare(company, dcf, multiples, growth_shift, margin_shift, terminal_g
         st.caption(f"No DCF for {typed}: {second['dcf_error']}")
     st.markdown("**How far each way of valuing them is from their own market price**", help=explanations.help_text("compare_chart"))
     st.plotly_chart(compare_figure(first, second), width="stretch", config=CHART_CONFIG)
-    st.caption(
-        "Both companies get the same sliders, the same typed-in WACC and the same risk-free rate (if you set them), each its own figures and peers. Numbers "
-        "marked last year are from the last full fiscal year. A comparison of models' outputs, not a recommendation."
-    )
+    with reading_notes("compare"):
+        st.caption(
+            "Both companies get the same sliders, the same typed-in WACC and the same risk-free rate (if you set them), each its own figures and peers. Numbers "
+            "marked last year are from the last full fiscal year. A comparison of models' outputs, not a recommendation."
+        )
 
 
 PAGE_TABS = ["Overview", "DCF", "Multiples", "Sensitivity", "Compare", "Explanations"]

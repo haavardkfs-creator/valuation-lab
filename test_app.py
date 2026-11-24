@@ -2092,6 +2092,20 @@ def test_the_wacc_and_peer_tables_sit_in_named_boxes_so_their_total_row_can_be_m
     assert found == keys
 
 
+def test_the_notes_on_method_sit_in_small_closed_how_to_read_this_boxes_and_the_findings_stay_in_front(monkeypatch):
+    page = run_page(monkeypatch)
+    notes = [expander for expander in page.expander if expander.label == app.READING_NOTES_LABEL]
+    assert len(notes) >= 10                                                    # one under each section that explains its method
+    inside = [caption.value for expander in notes for caption in expander.caption]
+    assert any(text.startswith("Each answer changes one thing") for text in inside)
+    assert any(text.startswith("Each scenario moves every year") for text in inside)
+    assert any(text.startswith("Gold is this company, brown the peers") for text in inside)
+    # The findings themselves (what the market price implies) are not hidden.
+    outside = [caption.value for caption in page.caption if caption.value not in inside]
+    assert any(text.startswith("To justify the market price of") for text in outside)
+    assert page.main.caption[-1].value == app.FOOTER_TEXT
+
+
 def test_the_base_scenario_is_the_dcf_price_on_the_page(monkeypatch):
     page = run_page(monkeypatch)
     assert scenario_rows(page)["Base"]["Price"] == metrics(page)["DCF implied price"]
