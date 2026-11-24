@@ -2294,3 +2294,84 @@ def test_one_terminal_growth_point_raises_the_price_and_a_step_to_the_wacc_is_re
     assert v.price_change_per_point(adobe_dcf_inputs(), TERMINAL_GROWTH_RATE, None, "terminal_growth_rate", 0.01) > 0
     with pytest.raises(ValueError):
         v.price_change_per_point(adobe_dcf_inputs(), 0.03, 0.035, "terminal_growth_rate", 0.01)   # 4% growth, 3.5% WACC
+
+
+# ---------------------------------------------------------------------------
+# Comparable transactions (workbook: `deals` sheet). Inputs are the sheet's yellow cells C6:I10; every
+# expected value is the sheet's cached result, copied from excel/valuation-lab.xlsx.
+# ---------------------------------------------------------------------------
+
+DEALS_SHEET = [
+    # target, headline (C), kind (D), debt (E), cash (F), last full year (G), this year (H), same period last year (I)
+    ("Tableau", 15700, "enterprise", 0, 1055.098, 1155.352, 282.46, 246.207),
+    ("Slack", 27700, "enterprise", 640.767, 1575.497, 630.422, 652.012, 448.519),
+    ("Figma", 20000, "enterprise", 0, 0, 400, 0, 0),
+    ("Splunk", 28000, "equity", 3879.386, 2448.988, 3653.708, 1662.093, 1472.834),
+    ("Ansys", 35000, "enterprise", 753.812, 639.513, 2065.553, 1464.841, 1371.438),
+]
+
+# deals J6:J10, K6:K10, L6:L10
+DEALS_EXPECTED = {
+    "Tableau": (15700, 1191.605, 13.175506984277508),
+    "Slack": (27700, 833.915, 33.21681466336497),
+    "Figma": (20000, 400, 50),
+    "Splunk": (29430.397999999997, 3842.9670000000006, 7.658248951916577),
+    "Ansys": (35000, 2158.9559999999997, 16.211539281022866),
+}
+
+
+def _deal_dicts():
+    """The deals sheet's inputs in the shape data.PRECEDENT_DEALS uses."""
+    return [
+        {"target": target, "headline_value": headline, "headline_kind": kind, "debt": debt,
+         "cash_and_investments": cash, "last_full_year_revenue": full_year,
+         "revenue_this_year_so_far": so_far, "revenue_same_period_last_year": last_year}
+        for target, headline, kind, debt, cash, full_year, so_far, last_year in DEALS_SHEET
+    ]
+
+
+def test_an_equity_value_gets_debt_added_and_cash_taken_off():
+    # deals J9: Splunk, announced as $28bn of equity value
+    assert v.deal_enterprise_value(28000, "equity", 3879.386, 2448.988) == pytest.approx(29430.397999999997)
+
+
+def test_an_enterprise_value_is_used_as_it_is():
+    # deals J10: Ansys, announced as $35bn of enterprise value; its debt and cash must not be counted twice
+    assert v.deal_enterprise_value(35000, "enterprise", 753.812, 639.513) == 35000
+
+
+def test_last_twelve_months_revenue_matches_the_deals_sheet():
+    # deals K6: Tableau, FY2018 + Q1 2019 - Q1 2018
+    assert v.last_twelve_months_revenue(1155.352, 282.46, 246.207) == pytest.approx(1191.605)
+
+
+def test_each_deal_matches_the_deals_sheet():
+    result = v.run_precedent_deals(_deal_dicts(), BASE_REVENUE, -385, SHARES, minimum_deals=2)
+    for row in result["deals"]:
+        ev, ltm, multiple = DEALS_EXPECTED[row["target"]]
+        assert row["deal_enterprise_value"] == pytest.approx(ev)
+        assert row["ltm_revenue"] == pytest.approx(ltm)
+        assert row["ev_revenue"] == pytest.approx(multiple)
+
+
+def test_precedent_deals_median_quartiles_and_prices_match_the_deals_sheet():
+    result = v.run_precedent_deals(_deal_dicts(), BASE_REVENUE, -385, SHARES, minimum_deals=2)
+    assert result["median_ev_revenue"] == pytest.approx(16.211539281022866)          # deals C14
+    assert result["ev_revenue_range"] == pytest.approx((13.175506984277508, 33.21681466336497))  # C13, C15
+    assert result["price_median"] == pytest.approx(933.9396541661804)                 # deals F14
+    assert result["price_range"] == pytest.approx((759.2097469958645, 1912.6282511707552))  # F13, F15
+
+
+def test_precedent_deals_keep_the_input_figures():
+    result = v.run_precedent_deals(_deal_dicts(), BASE_REVENUE, -385, SHARES, minimum_deals=2)
+    assert [row["target"] for row in result["deals"]] == ["Tableau", "Slack", "Figma", "Splunk", "Ansys"]
+    assert result["deals"][3]["headline_value"] == 28000
+
+
+def test_too_few_deals_give_no_median_or_price():
+    result = v.run_precedent_deals(_deal_dicts()[:1], BASE_REVENUE, -385, SHARES, minimum_deals=2)
+    assert result["median_ev_revenue"] is None
+    assert result["ev_revenue_range"] is None
+    assert result["price_median"] is None
+    assert result["price_range"] is None
+    assert result["deals"][0]["ev_revenue"] == pytest.approx(13.175506984277508)

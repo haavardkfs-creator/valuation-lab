@@ -1060,6 +1060,67 @@ def run_multiples(
 
 
 # ---------------------------------------------------------------------------
+# Comparable transactions: what buyers paid for whole companies (workbook: `Deals` sheet)
+# ---------------------------------------------------------------------------
+
+def deal_enterprise_value(headline_value, headline_kind, debt, cash_and_investments):
+    """Turn the price a buyer announced into the deal's enterprise value (workbook: `Deals` J6:J10). A price
+    given as equity value (what the shares cost) gets the target's debt added and its cash taken off; a price
+    already given as enterprise value is used as it is.
+    """
+    if headline_kind == "equity":
+        return headline_value + debt - cash_and_investments
+    return headline_value
+
+
+def last_twelve_months_revenue(last_full_year, this_year_so_far, same_period_last_year):
+    """Find a company's revenue over the last twelve months (workbook: `Deals` K6:K10): the last full year,
+    plus the quarters reported so far this year, minus the same quarters a year earlier.
+    """
+    return last_full_year + this_year_so_far - same_period_last_year
+
+
+def run_precedent_deals(deals, revenue, net_debt_amount, shares, minimum_deals):
+    """Value the company from what buyers paid for similar companies (workbook: `Deals` sheet). Each deal gets
+    its enterprise value, its last twelve months of revenue and its EV / revenue multiple; then the median and
+    the middle half (25th to 75th percentile) of the multiples are applied to the company's revenue and turned
+    into prices per share. Returns the deals with the three figures added, the median, the (low, high)
+    multiples, the price at the median and the (low, high) price range; the medians and prices are None when
+    fewer than minimum_deals deals have a multiple.
+    """
+    rows = []
+    for deal in deals:
+        enterprise_value_amount = deal_enterprise_value(
+            deal["headline_value"], deal["headline_kind"], deal["debt"], deal["cash_and_investments"]
+        )
+        ltm_revenue = last_twelve_months_revenue(
+            deal["last_full_year_revenue"], deal["revenue_this_year_so_far"], deal["revenue_same_period_last_year"]
+        )
+        rows.append({
+            **deal,
+            "deal_enterprise_value": enterprise_value_amount,
+            "ltm_revenue": ltm_revenue,
+            "ev_revenue": ratio_or_none(enterprise_value_amount, ltm_revenue),
+        })
+
+    multiples = [row["ev_revenue"] for row in rows]
+    median_multiple = median_of_usable_multiples(multiples, minimum_deals)
+    multiple_range = quartile_range(multiples, minimum_deals)
+
+    def price_at(multiple):
+        """The company's price per share at one deal multiple."""
+        return price_from_ev_multiple(revenue, multiple, net_debt_amount, shares)
+
+    return {
+        "deals": rows,
+        "median_ev_revenue": median_multiple,
+        "ev_revenue_range": multiple_range,
+        "price_median": None if median_multiple is None else price_at(median_multiple),
+        "price_range": None if multiple_range is None else tuple(sorted(price_at(m) for m in multiple_range)),
+    }
+
+
+# ---------------------------------------------------------------------------
 # The reverse DCF: what does the market price imply? (workbook: `reverse dcf` sheet)
 # ---------------------------------------------------------------------------
 

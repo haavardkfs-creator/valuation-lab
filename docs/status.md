@@ -446,6 +446,11 @@
 - Done: the "About" card is now one closed line (Haavard's pick, 24 Nov 2026), "About Adobe Inc. · Technology · ...",
   that opens to the description, so the sliders sit higher on the page. `profile_label` in `app.py` writes the line.
   Comparable transactions comes next, in its own thread.
+- Done: comparable transactions, step 1 of 3 (24 Nov 2026). Haavard built the `deals` sheet in the workbook (five
+  software takeovers, deal EV / last-twelve-months revenue, median 16.2x, Adobe at $933.94, range $759.21 to $1,912.63).
+  The deals are in `data.PRECEDENT_DEALS` with their filings; `run_precedent_deals` in `valuation.py` does the maths,
+  and tests match the sheet's cells. Nothing on the page yet. Next: the "What buyers paid" section on the Multiples tab,
+  then the football field (waiting on Haavard's choice: no bar, a full bar, or a cut-off bar).
 - Next: check the macro numbers on the live app after the merge; the live FMP check with Yahoo switched
   off; the small items below. CLAUDE.md still needs Haavard's edits (the theme line, and rows for theme.py and test_theme.py).
 - Open:
