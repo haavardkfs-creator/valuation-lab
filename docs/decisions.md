@@ -1065,3 +1065,15 @@ plain tables. The grid draws on a canvas, so it can take the page's colours but 
 extra, sorting by a column, did not work well here, because the figures are text ("26.2x") and sorted as words. Nothing
 was lost: every figure is still on the page.
 
+## 2026-11-24 — Less grey text: notes behind "How to read this" (polish C of 7)
+
+Most sections ended in two or three grey paragraphs, so the page read like a report with charts in it. Decisions.
+(1) A section keeps its finding in front (for example "To justify the market price of $251.47, the market is pricing in
+an average operating margin of 30.2%", the WACC sentence, the enterprise value split) and moves its notes on method
+(what the colours and lines mean, where the figures come from, what a number leaves out) into a small closed box labelled
+"How to read this" (`reading_notes` in app.py, `READING_NOTES_LABEL`). Fifteen sections have one. (2) No text was removed
+or reworded, so every explanation is still one click away and every test that reads a caption still finds it. (3) The box
+is drawn quieter than the other closed boxes: no frame, a 13 px taupe label that turns sand on hover
+(`theme.READING_NOTES_KEY_PREFIX`). (4) Kept in front on purpose: the source note, the footer, warnings and cautions,
+"not available" messages, and the line that says the peers were suggested, because those are about trust, not method.
+

@@ -401,12 +401,15 @@
   cell edges instead of crossing the numbers; each cell has the price over a smaller upside; the column labels sit on top
   like a spreadsheet, the row title in the corner, the base case's labels in gold; cells near the market price stay
   almost neutral; long labels go on two lines and the upside shrinks on a phone.
-- Done (in the open pull request "One calm style for every table"): polish B of 7. Every table is a plain table with
+- Done (merged, #74 "One calm style for every table"): polish B of 7. Every table is a plain table with
   lines between the rows only, numbers on the right, small taupe capitals for headers; the scenarios' "vs market price"
   has an arrow, a sign and sage or terracotta; the company's row in the peer table is gold; the WACC and the peer median
   sit under a taupe total line. The four interactive grids (assumptions, sensitivity numbers, peers, compare) are now
   plain tables too.
-- Next (polish, Haavard said yes to all on 24 Nov 2026): C less grey text; D the multiples as one table; E search in the top bar, no sidebar; F an "About this
+- Done (in the open pull request "Less grey text: notes behind How to read this"): polish C of 7. Fifteen sections kept
+  their finding in front and moved their notes on method (what the colours mean, where figures come from) into a small
+  closed "How to read this" line; no text was removed.
+- Next (polish, Haavard said yes to all on 24 Nov 2026): D the multiples as one table; E search in the top bar, no sidebar; F an "About this
   project" panel (Haavard approves the text); G tab names as questions.
 - Next: check the macro numbers on the live app after the merge; the live FMP check with Yahoo switched
   off; the small items below. CLAUDE.md still needs Haavard's edits (the theme line, and rows for theme.py and test_theme.py).

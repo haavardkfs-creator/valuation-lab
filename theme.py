@@ -67,6 +67,9 @@ HEATMAP_KEY_PREFIX = "heatmap_"
 # The boxes round two tables that get a little more than the shared table style (app.py's draw_table): the WACC table
 # ends in its total, and the peer table starts with the company itself and ends in the peer median. Both have a last
 # column of words.
+# The small closed "How to read this" boxes under sections (app.py's reading_notes) are keyed with this, so they can be
+# drawn quieter than the other closed boxes: no frame, a small taupe label.
+READING_NOTES_KEY_PREFIX = "reading_notes_"
 WACC_TABLE_KEY = "table_wacc"
 PEER_TABLE_KEY = "table_peers"
 
@@ -137,6 +140,13 @@ CARD_CSS = f"""
 /* Closed boxes: a quiet header line, the content inside a card. */
 [data-testid="stExpander"] summary p {{ font-size: 0.875rem; color: {TEXT}; }}
 [data-testid="stExpander"] summary:hover {{ background: {RAISED}; }}
+/* "How to read this": the notes on method under a section, one quiet line until opened, with no frame round it. */
+[class*="st-key-{READING_NOTES_KEY_PREFIX}"] details {{ border: 0; background: transparent; }}
+[class*="st-key-{READING_NOTES_KEY_PREFIX}"] summary {{ padding: 0.25rem 0; }}
+[class*="st-key-{READING_NOTES_KEY_PREFIX}"] summary p {{ font-size: 0.8125rem; color: {GREY}; }}
+[class*="st-key-{READING_NOTES_KEY_PREFIX}"] summary:hover {{ background: transparent; }}
+[class*="st-key-{READING_NOTES_KEY_PREFIX}"] summary:hover p {{ color: {SAND}; }}
+[class*="st-key-{READING_NOTES_KEY_PREFIX}"] [data-testid="stExpanderDetails"] {{ padding: 0 0 0.5rem 1.5rem; }}
 /* Tables (st.table, drawn with lines between the rows only): 13 px, numbers on the right so their decimals line up,
    headers as small taupe capitals like the section labels, the row names on the left in sand, a hovered row lifts.
    Streamlit writes its own left alignment into each cell, so these rules need !important to win. */
