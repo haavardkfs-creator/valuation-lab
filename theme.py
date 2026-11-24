@@ -224,7 +224,7 @@ CARD_CSS = f"""
 }}
 .st-key-source_note [data-testid="stAlertContentWarning"] p::before {{ background: {ACCENT}; }}
 .st-key-source_note [data-testid="stCaptionContainer"] p::before {{ background: {UP}; }}
-.st-key-source_note [data-testid="stCaptionContainer"] {{ color: {SAND}; }}
+.st-key-source_note [data-testid="stCaptionContainer"] {{ color: {SAND}; margin-bottom: 0; }}   /* Streamlit pulls the next element up under a caption (-1rem); here that would slide the next note over this line */
 
 /* The card that helps when a company cannot be found: a title and a short list of things to check. */
 .vl-hints {{
