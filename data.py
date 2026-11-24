@@ -162,6 +162,95 @@ def snapshot_source(ticker):
 
 
 # ---------------------------------------------------------------------------
+# Precedent deals: takeovers of software companies, for the comparable transactions section (Adobe only)
+# ---------------------------------------------------------------------------
+
+# Typed in by hand from the filings on 24 Nov 2026, the same figures as the `Deals` sheet of
+# excel/valuation-lab.xlsx (rows 6-10). $ millions. Full citations: docs/decisions.md, 24 Nov 2026,
+# "Comparable transactions". Each deal's figures:
+# - headline_value / headline_kind: the price the buyer announced, and whether that price is the
+#   "equity" value (what the shares cost) or the "enterprise" value (shares plus debt minus cash).
+# - debt / cash_and_investments: the target's balance sheet just before the deal (only used to turn an
+#   equity value into an enterprise value).
+# - last_full_year_revenue, revenue_this_year_so_far, revenue_same_period_last_year: the three revenue
+#   figures that give the last twelve months of revenue before the deal.
+# - revenue_is_run_rate: True for Figma, a private company that gave only its annual recurring revenue (ARR).
+PRECEDENT_DEALS = [
+    {
+        "buyer": "Salesforce", "target": "Tableau", "announced": "2019-06-10", "status": "Closed",
+        # Salesforce press release, 10 Jun 2019: "an enterprise value of $15.7 billion (net of cash)"
+        "headline_value": 15700, "headline_kind": "enterprise",
+        "debt": 0,                                  # Tableau 10-Q, Q1 2019, balance sheet: no debt line
+        "cash_and_investments": 1055.098,           # same: cash 501.056 + short-term investments 554.042
+        "last_full_year_revenue": 1155.352,         # Tableau Q4 2018 results: FY2018 total revenues
+        "revenue_this_year_so_far": 282.460,        # Tableau 10-Q: three months to 31 Mar 2019
+        "revenue_same_period_last_year": 246.207,   # same: three months to 31 Mar 2018
+        "revenue_is_run_rate": False,
+        "source": "https://www.sec.gov/Archives/edgar/data/1108524/000119312519168525/d750397dex991.htm",
+    },
+    {
+        "buyer": "Salesforce", "target": "Slack", "announced": "2020-12-01", "status": "Closed",
+        # Salesforce press release, 1 Dec 2020: enterprise value of $27.7 billion
+        "headline_value": 27700, "headline_kind": "enterprise",
+        "debt": 640.767,                            # Slack 10-Q, 31 Oct 2020: convertible senior notes, net
+        "cash_and_investments": 1575.497,           # same: cash 1,099.807 + marketable securities 475.690
+        "last_full_year_revenue": 630.422,          # Slack Q4 FY20 results: year to 31 Jan 2020
+        "revenue_this_year_so_far": 652.012,        # Slack 10-Q: nine months to 31 Oct 2020
+        "revenue_same_period_last_year": 448.519,   # same: nine months to 31 Oct 2019
+        "revenue_is_run_rate": False,
+        "source": "https://www.salesforce.com/news/?p=42879",
+    },
+    {
+        "buyer": "Adobe", "target": "Figma", "announced": "2022-09-15", "status": "Called off Dec 2023",
+        # Adobe Rule 425 filing, 15 Sep 2022: "~$20 billion". Figma was private and published no balance
+        # sheet, so the price is used as the enterprise value.
+        "headline_value": 20000, "headline_kind": "enterprise",
+        "debt": 0,
+        "cash_and_investments": 0,
+        "last_full_year_revenue": 400,              # same filing: "surpass $400 million ARR exiting fiscal year 2022"
+        "revenue_this_year_so_far": 0,
+        "revenue_same_period_last_year": 0,
+        "revenue_is_run_rate": True,
+        "source": "https://www.sec.gov/Archives/edgar/data/796343/000114036122033504/ny20005310x4_425.htm",
+    },
+    {
+        "buyer": "Cisco", "target": "Splunk", "announced": "2023-09-21", "status": "Closed",
+        # Cisco press release, 21 Sep 2023: "$157 per share in cash, representing approximately $28 billion
+        # in equity value"
+        "headline_value": 28000, "headline_kind": "equity",
+        "debt": 3879.386,                           # Splunk 10-Q, 31 Jul 2023: debt current 776.456 + non-current 3,102.930
+        "cash_and_investments": 2448.988,           # same: cash 1,523.462 + current investments 925.526
+        "last_full_year_revenue": 3653.708,         # Splunk Q4 FY23 results: year to 31 Jan 2023
+        "revenue_this_year_so_far": 1662.093,       # Splunk 10-Q: six months to 31 Jul 2023
+        "revenue_same_period_last_year": 1472.834,  # same: six months to 31 Jul 2022
+        "revenue_is_run_rate": False,
+        "source": "https://investor.cisco.com/news/news-details/2023/Cisco-to-Acquire-Splunk-to-Help-Make-Organizations-More-Secure-and-Resilient-in-an-AI-Powered-World/default.aspx",
+    },
+    {
+        "buyer": "Synopsys", "target": "Ansys", "announced": "2024-01-16", "status": "Closed",
+        # Synopsys Rule 425 filing, 16 Jan 2024: "an enterprise value of approximately $35 billion"
+        "headline_value": 35000, "headline_kind": "enterprise",
+        "debt": 753.812,                            # Ansys 10-Q, 30 Sep 2023: long-term debt
+        "cash_and_investments": 639.513,            # same: cash 639.342 + short-term investments 0.171
+        "last_full_year_revenue": 2065.553,         # Ansys Q4 2022 results: FY2022 total revenue
+        "revenue_this_year_so_far": 1464.841,       # Ansys 10-Q: nine months to 30 Sep 2023
+        "revenue_same_period_last_year": 1371.438,  # same: nine months to 30 Sep 2022
+        "revenue_is_run_rate": False,
+        "source": "https://www.sec.gov/Archives/edgar/data/883241/000119312524008603/d720113d425.htm",
+    },
+]
+
+
+def get_precedent_deals(ticker):
+    """Hand over the list of past takeovers picked for a company, or None when there is none. Only Adobe has
+    a list, because the deals were chosen as Adobe's comparable transactions.
+    """
+    if ticker.upper() != ADOBE_SNAPSHOT["ticker"]:
+        return None
+    return copy.deepcopy(PRECEDENT_DEALS)
+
+
+# ---------------------------------------------------------------------------
 # Source 2: live (current share price and beta from Yahoo Finance)
 # ---------------------------------------------------------------------------
 

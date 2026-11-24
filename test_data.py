@@ -2643,3 +2643,59 @@ def test_get_company_profile_leaves_yahoo_alone_while_it_is_cooling_down(monkeyp
     with pytest.raises(data.SourceUnavailable):
         data.get_company_profile("ADBE", fetch_profile=asked.append)
     assert asked == []
+
+
+# ---------------------------------------------------------------------------
+# Precedent deals (workbook: `deals` sheet, rows 6-10)
+# ---------------------------------------------------------------------------
+
+# deals C6:I10, exactly as typed into the sheet. Kind "EV" in the sheet is "enterprise" here.
+DEALS_SHEET_INPUTS = {
+    "Tableau": (15700, "enterprise", 0, 1055.098, 1155.352, 282.46, 246.207),
+    "Slack": (27700, "enterprise", 640.767, 1575.497, 630.422, 652.012, 448.519),
+    "Figma": (20000, "enterprise", 0, 0, 400, 0, 0),
+    "Splunk": (28000, "equity", 3879.386, 2448.988, 3653.708, 1662.093, 1472.834),
+    "Ansys": (35000, "enterprise", 753.812, 639.513, 2065.553, 1464.841, 1371.438),
+}
+
+
+def test_precedent_deals_match_the_deals_sheet():
+    deals = data.get_precedent_deals("ADBE")
+    assert [deal["target"] for deal in deals] == list(DEALS_SHEET_INPUTS)
+    for deal in deals:
+        assert (
+            deal["headline_value"], deal["headline_kind"], deal["debt"], deal["cash_and_investments"],
+            deal["last_full_year_revenue"], deal["revenue_this_year_so_far"], deal["revenue_same_period_last_year"],
+        ) == DEALS_SHEET_INPUTS[deal["target"]]
+
+
+def test_every_precedent_deal_names_its_buyer_date_status_and_source():
+    for deal in data.get_precedent_deals("ADBE"):
+        assert deal["buyer"] and deal["status"]
+        assert len(deal["announced"]) == 10 and deal["announced"][4] == "-"
+        assert deal["source"].startswith("https://")
+
+
+def test_only_figma_uses_run_rate_revenue():
+    flagged = [deal["target"] for deal in data.get_precedent_deals("ADBE") if deal["revenue_is_run_rate"]]
+    assert flagged == ["Figma"]
+
+
+def test_precedent_deals_are_for_adobe_only():
+    assert data.get_precedent_deals("MSFT") is None
+    assert data.get_precedent_deals("adbe") is not None
+
+
+def test_changing_the_precedent_deals_does_not_change_the_originals():
+    deals = data.get_precedent_deals("ADBE")
+    deals[0]["headline_value"] = 1
+    assert data.get_precedent_deals("ADBE")[0]["headline_value"] == 15700
+
+
+def test_precedent_deals_through_valuation_give_the_sheets_adobe_prices():
+    adobe = data.snapshot_source("ADBE")
+    net_debt = v.net_debt(adobe["debt"], adobe["cash_and_investments"])
+    result = v.run_precedent_deals(data.get_precedent_deals("ADBE"), adobe["revenue"], net_debt,
+                                   adobe["shares"], minimum_deals=2)
+    assert result["price_median"] == pytest.approx(933.9396541661804)                     # deals F14
+    assert result["price_range"] == pytest.approx((759.2097469958645, 1912.6282511707552))  # F13, F15

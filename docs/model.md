@@ -753,3 +753,36 @@ The peer charts sit under the price boxes, above the peer table, each under a se
 - On 20 Nov 2026 NVIDIA: EV/EBITDA 14.9x against the peers' median of 28.5x, with a margin of 65.2% against 61.7%: cheaper than the typical
   peer while more profitable. Its WACC heatmap (13.3% WACC) shows 13 of 35 combinations above the market price of $125.53; the
   margin and growth heatmap 6 of 25.
+
+## Comparable transactions (precedent deals)
+
+Workbook: `deals` sheet. Adobe only, because the five deals were picked as Adobe's comparable transactions.
+
+The Multiples section asks what the stock market pays for similar companies. This section asks what a buyer paid to
+take over a whole similar company. Buyers usually pay more than the share price for control (the **control premium**:
+Synopsys paid about 29% over Ansys's closing price on 21 Dec 2023), so deal multiples are a rough ceiling, not a fair value.
+
+The five deals, with every figure taken from the filings (in the `deals` sheet, `PRECEDENT_DEALS` in `data.py`, and
+the 24 Nov 2026 entry in `decisions.md`): Salesforce-Tableau (2019), Salesforce-Slack (2020), Adobe-Figma (2022, called
+off Dec 2023), Cisco-Splunk (2023) and Synopsys-Ansys (2024).
+
+For each deal ($ millions):
+- **Deal enterprise value** (`deals` J6:J10). If the buyer announced an equity value (what the shares cost), add the
+  target's debt and take off its cash and short-term investments. If it announced an enterprise value, use it as it is.
+  Only Splunk was announced as an equity value: 28,000 + 3,879.386 − 2,448.988 = 29,430.4.
+- **Last twelve months of revenue** (`deals` K6:K10) = the last full year + the quarters reported so far this year −
+  the same quarters a year earlier. Tableau: 1,155.352 + 282.460 − 246.207 = 1,191.6. Figma was private and gave only its
+  annual recurring revenue (ARR, a yearly run rate of subscriptions), $400m, which is used as its revenue and flagged.
+- **EV / revenue** (`deals` L6:L10) = deal enterprise value ÷ last twelve months of revenue. Revenue is used, not EBITDA,
+  because Figma and Slack lost money, so a profit multiple would mean nothing.
+
+Then for Adobe (`deals` C13:F15):
+- The **median** and the **25th and 75th percentile** (Excel's QUARTILE.INC) of the five multiples: 16.2x, 13.2x and 33.2x.
+- Each becomes a price the same way as EV/Sales in Multiples: multiple × Adobe's revenue (23,769), minus net debt (−385,
+  so +385), ÷ shares (413). Median: $933.94. Range: $759.21 to $1,912.63, against $251.47 in the market.
+
+The result is far above every other method. Growth explains part of it: from the same filings, revenue so far that
+year grew 45% at Slack (652.0 vs 448.5), 15% at Tableau and 13% at Splunk, against 10.5% at Adobe (23,769 vs 21,505).
+It does not explain all of it: Ansys grew 7% (1,464.8 vs 1,371.4) and still sold for 16.2x, because a buyer also pays for
+what it expects to gain by combining the two companies. A small sample (five deals), deals from different years and
+interest-rate conditions, and Figma's run-rate revenue all hold the result down.

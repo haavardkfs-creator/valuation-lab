@@ -1122,3 +1122,31 @@ year of daily closes hardly changes within a day, and five headlines a few hours
 because asking again too soon tends to make the block last longer. This lowers how often Yahoo is asked but cannot
 stop a block. A paid FMP plan remains the step after this one. No valuation maths changed.
 
+
+**24 Nov 2026 — Comparable transactions: the deal figures and how they are used.** Haavard approved the plan on 23 Nov
+2026 (five software takeovers, EV / revenue, a section at the bottom of the Multiples tab, Adobe only) and built the
+`deals` sheet in the workbook himself. Decisions. (1) **The deals**: Salesforce-Tableau (10 Jun 2019), Salesforce-Slack
+(1 Dec 2020), Adobe-Figma (15 Sep 2022, called off Dec 2023), Cisco-Splunk (21 Sep 2023), Synopsys-Ansys (16 Jan 2024).
+Broadcom-VMware was left out (the plan's default). (2) **The price is the buyer's own announced figure**, because that is
+what the buyer said it paid, including options and share awards that a basic share count misses. Four were announced as
+enterprise values and used as they are; Splunk was announced as an equity value, so its debt is added and its cash taken
+off (`valuation.deal_enterprise_value`). (3) **Revenue is the last twelve months before the deal**: last full year plus
+the quarters reported so far that year minus the same quarters a year earlier, each from the target's own results
+release and 10-Q. (4) **Figma** was private and published only its annual recurring revenue (more than $400m by the end
+of 2022) and no balance sheet, so its $20bn is used as the enterprise value and its ARR as revenue, flagged
+(`revenue_is_run_rate`). (5) **No control premium column**: only the Synopsys filing states a final premium (about 29%),
+so the premium is explained with that one example instead of a column with four blanks. (6) The deals sit in
+`data.PRECEDENT_DEALS`; all maths is in `valuation.run_precedent_deals`, which reuses the median, quartile and EV
+multiple functions the peer multiples use. Sources: Tableau [Salesforce release](https://www.sec.gov/Archives/edgar/data/1108524/000119312519168525/d750397dex991.htm),
+[Q4 2018 results](https://www.sec.gov/Archives/edgar/data/1303652/000130365219000004/a991-01q42018.htm),
+[10-Q Q1 2019](https://www.sec.gov/Archives/edgar/data/1303652/000130365219000017/a10qq12019.htm); Slack
+[Salesforce release](https://www.salesforce.com/news/?p=42879), [Q4 FY20 results](https://www.sec.gov/Archives/edgar/data/1764925/000176492520000250/pressreleaseq4fy20.htm),
+[10-Q Q3 FY21](https://www.sec.gov/Archives/edgar/data/1764925/000176492520000652/work-20201031.htm); Figma
+[Adobe Rule 425](https://www.sec.gov/Archives/edgar/data/796343/000114036122033504/ny20005310x4_425.htm); Splunk
+[Cisco release](https://investor.cisco.com/news/news-details/2023/Cisco-to-Acquire-Splunk-to-Help-Make-Organizations-More-Secure-and-Resilient-in-an-AI-Powered-World/default.aspx),
+[Q4 FY23 results](https://www.sec.gov/Archives/edgar/data/1353283/000135328323000007/a1312023ex-991.htm),
+[10-Q Q2 FY24](https://www.sec.gov/Archives/edgar/data/1353283/000135328323000034/splk-20230731.htm); Ansys
+[Synopsys Rule 425](https://www.sec.gov/Archives/edgar/data/883241/000119312524008603/d720113d425.htm),
+[Q4 2022 results](https://www.sec.gov/Archives/edgar/data/1013462/000101346223000012/anssex991-pressrelease2022.htm),
+[10-Q Q3 2023](https://www.sec.gov/Archives/edgar/data/1013462/000101346223000055/anss-20230930.htm). Nothing on the
+page changes yet; the Multiples section is the next pull request.
