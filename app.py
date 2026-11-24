@@ -3325,7 +3325,17 @@ def draw_compare(company, dcf, multiples, growth_shift, margin_shift, terminal_g
         )
 
 
-PAGE_TABS = ["Overview", "DCF", "Multiples", "Sensitivity", "Compare", "Explanations"]
+# The tabs read as the questions an equity research note answers, in that order: answer first, then the evidence
+# (polish G, 24 Nov 2026). The short name on the left is how the code and the tests refer to each tab.
+TAB_LABELS = {
+    "Overview": "Where does the price sit?",
+    "DCF": "What is it worth?",
+    "Multiples": "What do peers say?",
+    "Sensitivity": "How sure are we?",
+    "Compare": "How does it compare?",
+    "Explanations": "What do the terms mean?",
+}
+PAGE_TABS = list(TAB_LABELS.values())
 
 
 def draw_page():
@@ -3401,7 +3411,7 @@ def draw_page():
     year_labels = assumptions.FORECAST_YEAR_LABELS if is_base_case(company) else assumptions.GENERIC_YEAR_LABELS
     if dcf_error is not None:
         # No DCF to draw, so only the tabs that do not need one: the overview (with the reason on top) and the glossary.
-        overview_tab, explanations_tab = st.tabs(["Overview", "Explanations"])
+        overview_tab, explanations_tab = st.tabs([TAB_LABELS["Overview"], TAB_LABELS["Explanations"]])
         with overview_tab:
             draw_dcf_unavailable(ticker, dcf_error)
             draw_analyst_view(company, analysts, None)
