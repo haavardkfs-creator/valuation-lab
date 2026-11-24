@@ -2909,18 +2909,38 @@ def test_the_table_tint_is_built_from_the_same_colours_as_the_heatmap():
 
 
 def test_the_heatmap_colour_scale_runs_red_card_green_with_the_card_colour_at_the_market_price():
-    low, middle, high = app.heatmap_colourscale()
+    scale = app.heatmap_colourscale()
+    low, middle, high = scale[0], scale[len(scale) // 2], scale[-1]
     assert [low[0], middle[0], high[0]] == [0.0, 0.5, 1.0]
     assert middle[1] == f"rgb{theme.hex_to_rgb(theme.SURFACE)}"
     assert low[1] == f"rgb{app.heat_colour(-0.5)}" and high[1] == f"rgb{app.heat_colour(0.5)}"
+    # Every stop is the table's colour for the same gap, so the heatmap and the table under it never disagree.
+    for position, colour in scale:
+        assert colour == f"rgb{app.heat_colour((2 * position - 1) * app.HEATMAP_FULL_TINT_GAP)}"
+
+
+def test_cells_near_the_market_price_stay_almost_the_card_colour_and_the_tint_builds_up_further_away():
+    surface, up = theme.hex_to_rgb(theme.SURFACE), theme.hex_to_rgb(theme.UP)
+    half_way = (0.5 ** app.HEATMAP_TINT_CURVE) * app.HEATMAP_STRONGEST_TINT          # a gap of 25%, half the full gap
+    assert app.heat_colour(0.25) == tuple(round(start + (end - start) * half_way) for start, end in zip(surface, up))
+    assert half_way < app.HEATMAP_STRONGEST_TINT / 2                                  # less than a straight line would give
+
+
+def heat_cell(price, upside):
+    """The text a heatmap cell should hold: the price, larger and in the medium weight, over its upside, smaller."""
+    return (
+        f"<span style='font-size:13px;font-weight:{theme.WEIGHT_MEDIUM}'>{price}</span><br>"
+        f"<span style='font-size:11px'>{upside}</span>"
+    )
 
 
 def test_every_heatmap_cell_shows_its_price_and_upside_with_an_arrow_and_a_blank_cell_stays_empty():
     heat = a_heatmap().data[0]
     assert [list(row) for row in heat.text] == [
-        ["$150<br>▲ +50%", "$120<br>▲ +20%", ""],
-        ["$100<br>0%", "$80<br>▼ −20%", "$50<br>▼ −50%"],
+        [heat_cell("$150", "▲ +50%"), heat_cell("$120", "▲ +20%"), ""],
+        [heat_cell("$100", "0%"), heat_cell("$80", "▼ −20%"), heat_cell("$50", "▼ −50%")],
     ]
+    assert heat.textfont.color == theme.TEXT                  # cream on every tint (a green or red number fails the contrast check)
     assert heat.z[0][0] == pytest.approx(0.5) and heat.z[1][1] == pytest.approx(-0.2) and heat.z[0][2] is None
     assert heat.zmin == -app.HEATMAP_FULL_TINT_GAP and heat.zmax == app.HEATMAP_FULL_TINT_GAP
     assert heat.hoverongaps is False
@@ -2934,10 +2954,19 @@ def test_the_heatmap_hover_names_the_row_the_column_the_price_and_the_upside():
     assert "$%{customdata[0]:,.2f}" in heat.hovertemplate and "%{customdata[1]:+.1%}" in heat.hovertemplate
 
 
-def test_a_dashed_line_runs_where_the_model_equals_the_market_price():
-    contour = a_heatmap().data[1]
-    assert contour.contours.start == 0 and contour.contours.end == 0 and contour.contours.coloring == "none"
-    assert contour.line.dash == "dash" and contour.line.color == theme.TEXT
+def test_a_dashed_line_runs_along_the_cell_edges_where_the_price_crosses_the_market_price():
+    # Upsides +50%, +20%, blank / 0%, -20%, -50%: the line runs under the +20% cell and between the 0% and -20% cells,
+    # and never next to the blank cell. It follows the cell edges (halves), so it never crosses a number.
+    line = a_heatmap().data[1]
+    assert list(line.x) == [0.5, 1.5, None, 0.5, 0.5, None]
+    assert list(line.y) == [0.5, 0.5, None, 0.5, 1.5, None]
+    assert line.mode == "lines" and line.hoverinfo == "skip"
+    assert line.line.dash == "dash" and line.line.color == theme.TEXT
+
+
+def test_there_is_no_break_even_line_when_every_price_is_on_the_same_side_of_the_market_price():
+    assert app.break_even_edges([[0.1, 0.2], [0.3, None]]) == ([], [])
+    assert app.break_even_edges([[-0.1, -0.2]]) == ([], [])
 
 
 def test_a_blue_frame_marks_the_base_case_cell():
@@ -2946,11 +2975,28 @@ def test_a_blue_frame_marks_the_base_case_cell():
     assert frame.line.color == theme.ACCENT
 
 
-def test_the_heatmap_axes_carry_the_labels_and_the_first_row_is_at_the_top():
-    figure = a_heatmap()
-    assert list(figure.layout.xaxis.ticktext) == HEAT_COLUMNS and list(figure.layout.yaxis.ticktext) == HEAT_ROWS
-    assert figure.layout.xaxis.title.text == "Terminal growth" and figure.layout.yaxis.title.text == "WACC"
+def test_the_heatmap_reads_like_a_spreadsheet_with_the_column_labels_on_top_and_the_row_title_in_the_corner():
+    figure = a_heatmap()                                       # the base case is row 1, column 1
+    gold = f"<span style='color:{theme.ACCENT}'>"
+    assert list(figure.layout.xaxis.ticktext) == ["1.5%", f"{gold}2.0%</span>", "2.5%"]
+    assert list(figure.layout.yaxis.ticktext) == ["10.00%", f"{gold}11.00%</span>"]
+    assert figure.layout.xaxis.side == "top" and figure.layout.xaxis.title.text == "Terminal growth"
+    assert figure.layout.yaxis.title.text is None                                  # not turned on its side
+    [corner] = figure.layout.annotations
+    assert corner.text == "WACC" and corner.x == 0 and corner.y == 1 and corner.xanchor == "right"
     assert figure.layout.yaxis.autorange == "reversed"
+
+
+def test_long_labels_go_on_two_lines_and_a_long_row_title_wraps_to_the_width_of_the_row_labels():
+    figure = a_heatmap(
+        row_labels=["27.65% (−10 pts)", "37.65% (base)"], column_labels=["4.10% (−4 pts)", "8.10% (base)", "12.10% (+4 pts)"],
+        row_title="Average operating margin", base_cell=(0, 0),
+    )
+    gold = f"<span style='color:{theme.ACCENT}'>"
+    assert list(figure.layout.xaxis.ticktext) == [f"{gold}4.10%<br>(−4 pts)</span>", "8.10%<br>(base)", "12.10%<br>(+4 pts)"]
+    assert list(figure.layout.yaxis.ticktext) == [f"{gold}27.65%<br>(−10 pts)</span>", "37.65%<br>(base)"]
+    assert figure.layout.xaxis.tickangle == 0                                      # never tilted
+    assert figure.layout.annotations[0].text == "Average<br>operating<br>margin"   # as wide as "(−10 pts)"
 
 
 def test_the_sensitivity_headline_counts_the_combinations_above_the_market_price():

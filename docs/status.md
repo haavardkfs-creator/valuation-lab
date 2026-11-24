@@ -395,14 +395,19 @@
 - Done (merged, #71 "Calm notes, empty states and the error page"): redesign pull request 5 of 6. The source
   note sits under the header as a small outlined line with a dot; other notes are calm cards; an empty section shows its
   reason in a dashed card; the error page has the top bar instead of a big title.
-- Done (in the open pull request "The phone layout"): redesign pull request 6 of 6, the last of the build. 16 px gutter, the
+- Done (merged, #72 "The phone layout"): redesign pull request 6 of 6, the last of the build. 16 px gutter, the
   large number and its upside side by side, the sliders stacked in the strip, no sideways scrolling at 390 px.
-- Next (redesign): Haavard reviews the live site on desktop and phone and says what to change.
+- Done (in the open pull request "Clearer sensitivity heatmaps"): polish A of 7. The dashed break-even line follows the
+  cell edges instead of crossing the numbers; each cell has the price over a smaller upside; the column labels sit on top
+  like a spreadsheet, the row title in the corner, the base case's labels in gold; cells near the market price stay
+  almost neutral; long labels go on two lines and the upside shrinks on a phone.
+- Next (polish, Haavard said yes to all on 24 Nov 2026): B tables (row lines only, right-aligned numbers, colour that means
+  something); C less grey text; D the multiples as one table; E search in the top bar, no sidebar; F an "About this
+  project" panel (Haavard approves the text); G tab names as questions.
 - Next: check the macro numbers on the live app after the merge; the live FMP check with Yahoo switched
   off; the small items below. CLAUDE.md still needs Haavard's edits (the theme line, and rows for theme.py and test_theme.py).
 - Open:
-  - Redesign (23 Nov 2026): on a phone the heatmap cells are tight, since Plotly's text does not shrink; the numbers are in
-    the table box under each. Could switch to a table-only view below 640 px. The sidebar still holds the ticker box, name
+  - Redesign (23 Nov 2026): the sidebar still holds the ticker box, name
     search, Scenarios, Peers and One-off items; the canvas put the ticker search in the top bar, which would need a bigger
     change to the page's layout (ask first). The interactive tables (`st.dataframe`) follow the colours only.
   - Ideas from Haavard (20 Nov 2026): (1) group the overview by type of multiple: done in Phase 4a; (2) a ? help on every

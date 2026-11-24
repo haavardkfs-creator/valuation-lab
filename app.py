@@ -9,6 +9,7 @@ import datetime
 import math
 import os
 import re
+import textwrap
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -29,6 +30,20 @@ DEFAULT_TICKER = assumptions.BASE_CASE_TICKER
 # themselves are theme.UP and theme.DOWN.
 HEATMAP_FULL_TINT_GAP = 0.5
 HEATMAP_STRONGEST_TINT = 0.4        # low enough that the text stays readable on every cell (4.5 contrast, checked in test_theme.py)
+# The tint grows slowly near the market price and faster further away (the gap to the power 1.5), so cells close to
+# the market price stay almost the card colour and only the far-off cells stand out (polish, 24 Nov 2026).
+HEATMAP_TINT_CURVE = 1.5
+HEATMAP_SCALE_STEPS = 10            # colour stops on each side of the market price, so Plotly's scale follows that curve
+# The two lines of type in a heatmap cell: the price, larger and in the medium weight, and its upside, smaller and in the
+# regular weight. Both are the cream text, because a green or red number fails the 4.5 contrast check on the strongest tints.
+HEATMAP_PRICE_SIZE = 13             # px, the "table" step of the type scale
+HEATMAP_UPSIDE_SIZE = 11            # px, the "label" step of the type scale
+# Room on the left of a heatmap for its row labels and the row title in the corner above them: about 7 px for each
+# character of the 11 px axis labels, plus a little space before the cells. The corner title wraps to the width of the
+# longest row label, so it never needs more room than the labels themselves.
+HEATMAP_LABEL_CHARACTER_WIDTH = 7   # px
+HEATMAP_LABEL_GAP = 16              # px
+HEATMAP_KEY_PREFIX = theme.HEATMAP_KEY_PREFIX   # the boxes round the two heatmaps, so theme.py's phone CSS can find them
 
 # The six figures that make up a company's peers in a data package.
 PEER_KEYS = ["peer_tickers", "peer_ev_sales", "peer_ev_ebitda", "peer_pe", "peer_ps", "peer_forward_pe"]
@@ -538,9 +553,10 @@ def draw_dcf(company, dcf, wacc_is_set_by_user, terminal_growth_rate):
 def heat_colour(gap):
     """Work out the colour of a heatmap cell from how far its price is above (positive) or below (negative) the
     market price, as red, green and blue numbers: the card colour at the market price, moving towards green above it
-    and red below it, as far as HEATMAP_STRONGEST_TINT when the gap reaches HEATMAP_FULL_TINT_GAP.
+    and red below it (slowly at first, see HEATMAP_TINT_CURVE), as far as HEATMAP_STRONGEST_TINT when the gap reaches
+    HEATMAP_FULL_TINT_GAP.
     """
-    strength = min(abs(gap) / HEATMAP_FULL_TINT_GAP, 1) * HEATMAP_STRONGEST_TINT
+    strength = min(abs(gap) / HEATMAP_FULL_TINT_GAP, 1) ** HEATMAP_TINT_CURVE * HEATMAP_STRONGEST_TINT
     start = theme.hex_to_rgb(theme.SURFACE)
     target = theme.hex_to_rgb(theme.UP if gap >= 0 else theme.DOWN)
     return tuple(round(begin + (end - begin) * strength) for begin, end in zip(start, target))
@@ -557,10 +573,55 @@ def tint(price, market_price):
 
 def heatmap_colourscale():
     """The colours of a heatmap as Plotly wants them: red-tinted at the lowest gap it shows, the card colour at the
-    market price and green-tinted at the highest, the same colours the tables use (see heat_colour).
+    market price and green-tinted at the highest, with enough steps in between to follow the same curve as the
+    tables (see heat_colour).
     """
-    colours = [heat_colour(gap) for gap in (-HEATMAP_FULL_TINT_GAP, 0.0, HEATMAP_FULL_TINT_GAP)]
-    return [[position, f"rgb{colour}"] for position, colour in zip((0.0, 0.5, 1.0), colours)]
+    steps = 2 * HEATMAP_SCALE_STEPS
+    positions = [step / steps for step in range(steps + 1)]
+    return [[position, f"rgb{heat_colour((2 * position - 1) * HEATMAP_FULL_TINT_GAP)}"] for position in positions]
+
+
+def heatmap_cell_text(price, gap):
+    """The text inside one heatmap cell: the price on top, larger and in the medium weight, and its upside with an
+    arrow underneath, smaller. A blank cell (no answer) stays empty.
+    """
+    if price is None:
+        return ""
+    return (
+        f"<span style='font-size:{HEATMAP_PRICE_SIZE}px;font-weight:{theme.WEIGHT_MEDIUM}'>${price:,.0f}</span><br>"
+        f"<span style='font-size:{HEATMAP_UPSIDE_SIZE}px'>{theme.change_text(gap, digits=0)}</span>"
+    )
+
+
+def break_even_edges(upsides):
+    """Find the cell edges that separate a price above the market price from one below it, as the x and y points of a
+    line Plotly can draw (None breaks the line between edges). The line then runs between cells, never across their
+    numbers. A blank cell has no side, so no edge is drawn next to it.
+    """
+    xs, ys = [], []
+
+    def above(row, column):
+        """Whether a cell's price is at or above the market price (None for a blank cell)."""
+        gap = upsides[row][column]
+        return None if gap is None else gap >= 0
+
+    for row in range(len(upsides)):
+        for column in range(len(upsides[row])):
+            here = above(row, column)
+            if here is None:
+                continue
+            if column + 1 < len(upsides[row]) and above(row, column + 1) not in (None, here):
+                xs += [column + 0.5, column + 0.5, None]
+                ys += [row - 0.5, row + 0.5, None]
+            if row + 1 < len(upsides) and above(row + 1, column) not in (None, here):
+                xs += [column - 0.5, column + 0.5, None]
+                ys += [row + 0.5, row + 0.5, None]
+    return xs, ys
+
+
+def base_label(label):
+    """A row or column label in the gold of the base-case frame, so the base case can be found from the edges too."""
+    return f"<span style='color:{theme.ACCENT}'>{label}</span>"
 
 
 def sensitivity_headline(prices, share_price):
@@ -576,17 +637,21 @@ def sensitivity_headline(prices, share_price):
 
 
 def sensitivity_heatmap(row_labels, column_labels, prices, share_price, base_cell, row_title, column_title):
-    """Draw a sensitivity table as a heatmap: every cell shows its price and its upside against the market price
-    (with an arrow and a sign), coloured green above the market price and red below it, with a dashed line along
-    the combinations where the model equals the market price and a frame round the base case. A blank cell (no answer)
-    stays empty. `base_cell` is the (row, column) position of the base case.
+    """Draw a sensitivity table as a heatmap laid out like a banker's spreadsheet: the column labels along the top,
+    the row title in the top-left corner, and the base case's row and column labels in gold. Every cell shows its
+    price and, smaller, its upside against the market price (with an arrow and a sign), tinted green above the
+    market price and red below it. A dashed line runs along the cell edges where the price crosses the market price,
+    and a gold frame marks the base case. A blank cell (no answer) stays empty. `base_cell` is the (row, column)
+    position of the base case.
     """
     upsides = valuation.upside_grid(prices, share_price)
     rows, columns = range(len(row_labels)), range(len(column_labels))
-    text = [
-        ["" if price is None else f"${price:,.0f}<br>{theme.change_text(gap, digits=0)}" for price, gap in zip(price_row, gap_row)]
-        for price_row, gap_row in zip(prices, upsides)
-    ]
+    base_row, base_column = base_cell
+    # A long label such as "4.10% (−4 pts)" goes on two lines, so the column labels fit side by side even on a phone
+    # and the row labels leave more room for the cells.
+    column_lines = [label.replace(" (", "<br>(") for label in column_labels]
+    row_lines = [label.replace(" (", "<br>(") for label in row_labels]
+    text = [[heatmap_cell_text(price, gap) for price, gap in zip(price_row, gap_row)] for price_row, gap_row in zip(prices, upsides)]
     customdata = [
         [[price, gap, row_labels[row], column_labels[column]] for column, (price, gap) in enumerate(zip(price_row, gap_row))]
         for row, (price_row, gap_row) in enumerate(zip(prices, upsides))
@@ -594,30 +659,41 @@ def sensitivity_heatmap(row_labels, column_labels, prices, share_price, base_cel
     figure = go.Figure(go.Heatmap(
         z=upsides, x=list(columns), y=list(rows),
         zmin=-HEATMAP_FULL_TINT_GAP, zmax=HEATMAP_FULL_TINT_GAP, colorscale=heatmap_colourscale(), showscale=False,
-        text=text, texttemplate="%{text}", textfont={"color": theme.TEXT, "size": 12},
+        text=text, texttemplate="%{text}", textfont={"color": theme.TEXT, "size": HEATMAP_PRICE_SIZE},
         customdata=customdata, hoverongaps=False, xgap=2, ygap=2,
         hovertemplate=(
             f"{row_title}: %{{customdata[2]}}<br>{column_title}: %{{customdata[3]}}<br>"
             "Price $%{customdata[0]:,.2f}<br>%{customdata[1]:+.1%} against the market price<extra></extra>"
         ),
     ))
-    figure.add_trace(go.Contour(
-        z=upsides, x=list(columns), y=list(rows), showscale=False, hoverinfo="skip",
-        contours={"type": "levels", "start": 0, "end": 0, "size": 1, "coloring": "none", "showlabels": False},
+    edge_xs, edge_ys = break_even_edges(upsides)
+    figure.add_trace(go.Scatter(
+        x=edge_xs, y=edge_ys, mode="lines", hoverinfo="skip", connectgaps=False,
         line={"color": theme.TEXT, "width": 2, "dash": "dash"},
     ))
-    base_row, base_column = base_cell
     figure.add_shape(
         type="rect", x0=base_column - 0.5, x1=base_column + 0.5, y0=base_row - 0.5, y1=base_row + 0.5,
-        line={"color": theme.ACCENT, "width": 3},
+        line={"color": theme.ACCENT, "width": 2},
     )
-    figure.update_xaxes(tickvals=list(columns), ticktext=column_labels, title=column_title, showgrid=False, zeroline=False)
+    figure.update_xaxes(
+        tickvals=list(columns), side="top", showgrid=False, zeroline=False,
+        ticktext=[base_label(label) if column == base_column else label for column, label in enumerate(column_lines)],
+        tickangle=0,
+        title={"text": column_title, "font": {"size": HEATMAP_UPSIDE_SIZE, "color": theme.GREY}},
+    )
     figure.update_yaxes(
-        tickvals=list(rows), ticktext=row_labels, title=row_title, showgrid=False, zeroline=False, autorange="reversed",
-        automargin=True,
+        tickvals=list(rows), showgrid=False, zeroline=False, autorange="reversed", automargin=True,
+        ticktext=[base_label(label) if row == base_row else label for row, label in enumerate(row_lines)],
+    )
+    # The row title sits in the top-left corner, beside the column labels, instead of turned on its side.
+    label_texts = [line for label in row_lines for line in label.split("<br>")] + row_title.split()
+    label_length = max(len(text) for text in label_texts)
+    figure.add_annotation(
+        text="<br>".join(textwrap.wrap(row_title, label_length)), xref="paper", yref="paper", x=0, y=1, xanchor="right", yanchor="bottom", showarrow=False,
+        xshift=-8, align="right", font={"size": HEATMAP_UPSIDE_SIZE, "color": theme.GREY},
     )
     theme.style_figure(figure, height=110 + 56 * len(row_labels))
-    figure.update_layout(margin={"l": 0, "r": 0, "t": 10, "b": 0})
+    figure.update_layout(margin={"l": label_length * HEATMAP_LABEL_CHARACTER_WIDTH + HEATMAP_LABEL_GAP, "r": 0, "t": 0, "b": 0})
     return figure
 
 
@@ -1891,12 +1967,13 @@ def draw_heatmap(company, dcf_inputs, base_wacc):
     st.markdown(
         f"**{sensitivity_headline(table['prices'], company['share_price'])}**", help=explanations.help_text("heatmap_wacc")
     )
-    st.plotly_chart(
-        sensitivity_heatmap(
-            row_labels, column_labels, table["prices"], company["share_price"], base_cell, "WACC", "Terminal growth"
-        ),
-        width="stretch", config=CHART_CONFIG,
-    )
+    with st.container(key=f"{HEATMAP_KEY_PREFIX}wacc"):
+        st.plotly_chart(
+            sensitivity_heatmap(
+                row_labels, column_labels, table["prices"], company["share_price"], base_cell, "WACC", "Terminal growth"
+            ),
+            width="stretch", config=CHART_CONFIG,
+        )
     prices = pd.DataFrame(
         table["prices"],
         index=pd.Index(row_labels, name="WACC"),
@@ -1946,13 +2023,14 @@ def draw_margin_growth_table(company, dcf_inputs, dcf, terminal_growth_rate, wac
     st.markdown(
         f"**{sensitivity_headline(table['prices'], company['share_price'])}**", help=explanations.help_text("heatmap_margin")
     )
-    st.plotly_chart(
-        sensitivity_heatmap(
-            row_labels, column_labels, table["prices"], company["share_price"], base_cell,
-            "Average operating margin", "Average revenue growth",
-        ),
-        width="stretch", config=CHART_CONFIG,
-    )
+    with st.container(key=f"{HEATMAP_KEY_PREFIX}margin"):
+        st.plotly_chart(
+            sensitivity_heatmap(
+                row_labels, column_labels, table["prices"], company["share_price"], base_cell,
+                "Average operating margin", "Average revenue growth",
+            ),
+            width="stretch", config=CHART_CONFIG,
+        )
     prices = pd.DataFrame(
         table["prices"],
         index=pd.Index(row_labels, name="Average operating margin"),
