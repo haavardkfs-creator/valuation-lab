@@ -1032,3 +1032,20 @@ The design system's states (step 4): "A section with nothing in it is one quiet 
 ## 2026-11-23 — The phone layout (step 5, pull request 6 of 6)
 
 The last step of the redesign build, checked at 390 px wide (a common phone width) with the page's own screenshots. Decisions. (1) A 16 px gutter, and 56 px above the content so the app's top bar is never hidden under Streamlit's own bar. (2) The large DCF number (40 px on a phone) and its upside stay side by side; the market price and the multiples value sit in two halves under them. (3) The three sliders stack inside the strip with small gaps, each the full width of the strip, and the "WACC and rates" button takes the full width under them. (4) Sections are 32 px apart instead of 48, and the tabs sit closer together (Streamlit lets them scroll sideways when they do not fit). (5) The faint glow behind the large number is clipped to the header, which had made the page 2 px wider than the screen; the page now never scrolls sideways (checked on the Overview, DCF and Sensitivity tabs). (6) Known limit: the heatmaps are Plotly charts with fixed 12 px text, so on a phone the cells are tight; the exact numbers are in the "Show the numbers as a table" box under each. Listed under "open" in `docs/status.md`. No valuation logic changed, no new dependency, no new file.
+
+## 2026-11-24 — Clearer sensitivity heatmaps (polish A of 7)
+
+Haavard said the live site looked good and asked whether the heatmaps and tables could look better; he chose to do both,
+heatmaps first. Decisions. (1) The dashed line where the model equals the market price used to be a smooth contour that
+ran straight across the numbers in some cells; it now runs along the cell edges between a price above the market price and
+one below it, so every number stays readable (`break_even_edges` in app.py: it only compares the upsides that
+`valuation.upside_grid` already worked out, so no valuation maths moved). (2) Each cell has two levels of type: the price
+at 13 px in the medium weight and the upside at 11 px under it. The upside stays cream rather than green or red, because a
+green or red number on the strongest tints fails the 4.5 contrast check the app holds every text to. (3) Laid out like a
+banker's sensitivity table in Excel: the column labels on top, the row title in the top-left corner instead of turned on
+its side, and the base case's row and column labels in the gold of its frame. (4) The tint grows with the gap to the power
+1.5 (`HEATMAP_TINT_CURVE`), so cells near the market price stay almost the card colour and only the far-off ones stand out;
+the strongest tint is unchanged, so the readability test still holds. (5) On a phone, long labels such as
+"4.10% (−4 pts)" go on two lines and are never tilted, and the upside shrinks to 10 px so "+127%" fits in its cell. The
+upside stays visible rather than moving to the hover, because a phone has no hover.
+

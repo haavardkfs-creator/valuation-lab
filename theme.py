@@ -61,6 +61,10 @@ WEIGHT_MEDIUM = 500
 # 11 label; the spacing steps are 4, 8, 12, 16, 24, 32, 48 and 72 px.
 # ---------------------------------------------------------------------------
 
+# The boxes round the two sensitivity heatmaps are keyed "heatmap_wacc" and "heatmap_margin" (app.py), so the phone
+# rules below can find them.
+HEATMAP_KEY_PREFIX = "heatmap_"
+
 CARD_CSS = f"""
 <style>
 /* Tabular figures everywhere: every digit is the same width, so $305.60 and $111.11 line up in a column and a
@@ -273,6 +277,8 @@ CARD_CSS = f"""
     .vl-stats {{ width: 100%; }}
     .vl-kpi-stat {{ flex: 1; padding: 0 1rem; }}
     .vl-kpi-stat:first-child {{ padding-left: 0; border-left: 0; }}
+    /* The upside under each heatmap price gets smaller, so "+127%" still fits inside its cell. */
+    [class*="st-key-{HEATMAP_KEY_PREFIX}"] .heatmap-label tspan.line + tspan.line tspan {{ font-size: 10px !important; }}
 }}
 </style>
 """

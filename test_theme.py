@@ -557,5 +557,13 @@ def test_on_a_phone_the_large_number_and_its_change_stay_on_one_line_and_the_sli
     assert f".st-key-{app.STRIP_KEY} [data-testid=\"stColumn\"] {{ min-width: 100%; }}" in css
 
 
+def test_on_a_phone_the_upside_in_each_heatmap_cell_gets_smaller_so_it_fits():
+    assert app.HEATMAP_KEY_PREFIX == theme.HEATMAP_KEY_PREFIX == "heatmap_"
+    assert (
+        f'[class*="st-key-{theme.HEATMAP_KEY_PREFIX}"] .heatmap-label tspan.line + tspan.line tspan '
+        "{ font-size: 10px !important; }"
+    ) in phone_css()
+
+
 def test_the_glow_never_makes_the_page_scroll_sideways():
     assert ".vl-header { overflow-x: clip; }" in theme.CARD_CSS
