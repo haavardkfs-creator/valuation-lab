@@ -640,6 +640,44 @@ def get_company_context(ticker, fetch_news=fetch_yahoo_news, fetch_officers=fetc
 
 
 # ---------------------------------------------------------------------------
+# About the company: sector, industry, what it does, employees and headquarters, from Yahoo's profile
+# ---------------------------------------------------------------------------
+
+def fetch_yahoo_profile(ticker):
+    """Ask Yahoo Finance for a company's profile: its "sector", "industry", a "summary" of what it does, its number of
+    full-time "employees", where its "headquarters" are (city, state and country) and its "website" (an https link).
+    A part Yahoo does not have comes back as None. This is the only function in this part that touches the internet.
+    """
+    info = _fetch_info(ticker)
+    employees = info.get("fullTimeEmployees")
+    place = [tidy_text(info.get(key)) for key in ("city", "state", "country")]
+    return {
+        "sector": tidy_text(info.get("sector")) or None,
+        "industry": tidy_text(info.get("industry")) or None,
+        "summary": tidy_text(info.get("longBusinessSummary")) or None,
+        "employees": employees if isinstance(employees, int) and employees > 0 else None,
+        "headquarters": ", ".join(part for part in place if part) or None,
+        "website": safe_link(info.get("website")),
+    }
+
+
+def get_company_profile(ticker, fetch_profile=fetch_yahoo_profile):
+    """Get a company's profile from Yahoo (see fetch_yahoo_profile). Stops with a SourceUnavailable error when Yahoo said
+    it was busy a moment ago (it is then left alone), could not be reached, or has nothing at all for this company.
+    `fetch_profile` can be swapped, which is how the tests run without the internet.
+    """
+    if _yahoo_cooling_down():
+        raise SourceUnavailable(YAHOO_BUSY_MESSAGE)
+    try:
+        profile = fetch_profile(ticker)
+    except Exception as error:      # Yahoo can fail in many ways; the profile is optional, so the page just leaves it out
+        raise SourceUnavailable("Could not get the company profile from Yahoo Finance.") from error
+    if not any(profile.values()):
+        raise SourceUnavailable("Yahoo Finance has no profile for this company.")
+    return profile
+
+
+# ---------------------------------------------------------------------------
 # The macro backdrop: three US interest-rate and inflation numbers from FRED (the Federal Reserve Bank of St. Louis)
 # ---------------------------------------------------------------------------
 

@@ -267,6 +267,7 @@ ONE_OFF_KEY_START = "oneoff_"
 LINK_LOADED_KEY = "link_loaded"
 COMPARE_KEY = "compare_ticker"          # the box in the Compare tab where the second company is typed
 SOURCE_NOTE_KEY = "source_note"        # the box under the header that says where the figures came from (CSS class st-key-source_note)
+ABOUT_KEY = "about_company"          # the bordered "About" card under the header (see draw_company_profile)
 STORY_KEY = "price_story"            # the box under the headline cards with the plain sentence (see price_story)
 STRIP_KEY = "assumption_strip"          # the bordered strip of sliders under the header (its CSS class is st-key-assumption_strip)
 SEARCH_BAR_KEY = theme.SEARCH_BAR_KEY   # the app's name, the ticker box and the name search, side by side at the top
@@ -2595,6 +2596,15 @@ def load_company_context(ticker):
 
 
 @st.cache_data(ttl=SLOW_DATA_CACHE_SECONDS, show_spinner=False)
+def load_company_profile(ticker):
+    """Fetch a company's profile (sector, industry, what it does, employees, headquarters) and remember it for
+    SLOW_DATA_CACHE_SECONDS, because it hardly ever changes and every request to Yahoo counts. Stops with a plain error
+    if Yahoo is busy or has nothing.
+    """
+    return data.get_company_profile(ticker)
+
+
+@st.cache_data(ttl=SLOW_DATA_CACHE_SECONDS, show_spinner=False)
 def load_macro_backdrop():
     """Fetch the macro numbers (they change once a day at most) and remember them for SLOW_DATA_CACHE_SECONDS.
     Stops with a plain error if FRED has no key or could not be reached.
@@ -2975,6 +2985,48 @@ def headline_line(item):
         except ValueError:
             details.append(plain_text_for_markdown(item["published"]))
     return f"- {text}" + (f" ({', '.join(details)})" if details else "")
+
+
+def short_summary(text, sentences):
+    """Keep the first few sentences of a company description, so the "About" card stays short. A sentence ends at a
+    full stop, question mark or exclamation mark followed by a space and a capital letter, so "Adobe Inc. operates"
+    is not cut after "Inc.".
+    """
+    parts = re.split(r"(?<=[.!?])\s+(?=[A-Z])", text.strip())
+    return " ".join(parts[:sentences])
+
+
+def profile_facts(profile):
+    """Write the profile's short facts on one line, the ones Yahoo has, for example "Technology · Software -
+    Infrastructure · 30,709 employees · San Jose, CA, United States".
+    """
+    facts = [profile["sector"], profile["industry"]]
+    if profile["employees"]:
+        facts.append(f"{profile['employees']:,} employees")
+    facts.append(profile["headquarters"])
+    return " · ".join(fact for fact in facts if fact)
+
+
+def draw_company_profile(company):
+    """Draw the "About" card under the header: the company's sector, industry, size and home on one line, and the first
+    sentences of what it does, from Yahoo's profile. When Yahoo cannot give the profile the card is left out, because
+    nothing else on the page depends on it.
+    """
+    try:
+        profile = load_company_profile(company["ticker"])
+    except ValueError:
+        return
+    with st.container(border=True, key=ABOUT_KEY):
+        st.markdown(f"**About {plain_text_for_markdown(company['company_name'])}**")
+        facts = profile_facts(profile)
+        if facts:
+            st.caption(plain_text_for_markdown(facts))
+        if profile["summary"]:
+            st.markdown(plain_text_for_markdown(short_summary(profile["summary"], assumptions.ABOUT_SUMMARY_SENTENCES)))
+        source = "From Yahoo Finance's company profile."
+        if profile["website"]:
+            source += f" Company website: {profile['website']}"
+        st.caption(source)
 
 
 def officer_line(officer):
@@ -3374,7 +3426,7 @@ PAGE_TABS = list(TAB_LABELS.values())
 def draw_page():
     """Draw the whole page: the search bar at the top, the answer-first header, the strip of sliders with its buttons
     (WACC and rates, Scenarios, and for companies other than Adobe, Peers and One-off items), then the header's
-    notes, then five tabs: Overview (the football field, the overview numbers, the history, news and management), DCF
+    notes and the "About" card, then five tabs: Overview (the football field, the overview numbers, the history, news and management), DCF
     (the DCF, what the market implies, scenarios, assumptions, the WACC build, the charts behind the number), Multiples,
     Sensitivity (both heatmaps) and Explanations (the glossary), and the footer. If the company cannot be found, draw
     the reason instead. If it was found but a DCF cannot be built (it lost money), draw the header, the reason and
@@ -3427,6 +3479,7 @@ def draw_page():
         draw_header(company, dcf, multiples, prices, dcf_inputs)
         with st.container(key=SOURCE_NOTE_KEY):            # styled as small quiet notes under the header (see theme.py)
             draw_source_note(company, source_used)
+        draw_company_profile(company)
     note = adjustment_note(adjustment)
     if note:
         st.warning(note)
