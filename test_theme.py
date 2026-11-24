@@ -319,7 +319,7 @@ def test_the_header_holds_the_name_the_ticker_the_verdict_the_basis_and_every_ca
     assert ">ADBE</span>" in header and "vl-badge-ticker" in header
     assert "▲ UNDERVALUED" in header and "Because reasons." in header
     assert '<div class="vl-kpis"><CARD1><CARD2></div>' in header
-    assert "Valuation Lab" in header                                  # the small app name above the company
+    assert "Valuation Lab" not in header                              # the app's name moved to the search bar (polish E)
 
 
 def test_the_header_css_is_responsive_and_stays_inside_the_palette():
@@ -459,7 +459,7 @@ def test_the_large_number_is_56_px_and_only_it_gets_the_faint_glow():
 
 def test_the_brand_mark_is_fixed_text_hidden_from_screen_readers():
     assert 'aria-hidden="true"' in theme.BRAND_MARK and "<script" not in theme.BRAND_MARK
-    assert theme.BRAND_MARK in theme.header_html("A", "B", None, [], "C")
+    assert theme.BRAND_MARK in theme.topbar_html()                    # in the search bar since polish E
 
 
 def test_the_strip_css_targets_the_container_the_app_draws():
@@ -536,9 +536,20 @@ def test_the_wacc_and_peer_tables_set_their_total_row_apart_and_keep_their_words
 # Empty, fallback and error states (redesign step 5, pull request 5)
 # ---------------------------------------------------------------------------
 
-def test_every_page_has_the_same_top_bar_and_the_header_uses_it():
-    assert theme.topbar_html() in theme.header_html("A", "B", None, [], "C")
+def test_the_apps_name_sits_in_the_search_bar_now_not_in_the_header():
+    # Since polish E (24 Nov 2026) the name sits at the left of the search bar, which every page draws, error pages too.
+    assert theme.topbar_html() not in theme.header_html("A", "B", None, [], "C")
     assert "Valuation Lab" in theme.topbar_html() and theme.BRAND_MARK in theme.topbar_html()
+
+
+def test_the_search_bar_has_one_line_under_it_and_quiet_capital_labels():
+    bar = f".st-key-{theme.SEARCH_BAR_KEY}"
+    assert f"{bar} {{ border-bottom: 1px solid {theme.BORDER};" in theme.CARD_CSS
+    assert f'{bar} [data-testid="stWidgetLabel"] p {{ color: {theme.GREY}; font-size: 0.6875rem;' in theme.CARD_CSS
+
+
+def test_on_a_phone_the_ticker_box_and_the_name_search_share_one_row():
+    assert f'.st-key-{theme.SEARCH_BAR_KEY} [data-testid="stColumn"]:nth-child(3) {{ flex: 1 1 60%;' in phone_css()
 
 
 def test_an_empty_section_is_a_dashed_card_not_a_heading():

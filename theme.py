@@ -64,6 +64,8 @@ WEIGHT_MEDIUM = 500
 # The boxes round the two sensitivity heatmaps are keyed "heatmap_wacc" and "heatmap_margin" (app.py), so the phone
 # rules below can find them.
 HEATMAP_KEY_PREFIX = "heatmap_"
+# The search bar at the top of the page (app.py's draw_search_bar): the app's name, the ticker box and the name search.
+SEARCH_BAR_KEY = "search_bar"
 # The boxes round two tables that get a little more than the shared table style (app.py's draw_table): the WACC table
 # ends in its total, and the peer table starts with the company itself and ends in the peer median. Both have a last
 # column of words.
@@ -83,7 +85,7 @@ CARD_CSS = f"""
 .stApp, .stApp * {{ font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; }}
 
 /* A comfortable reading width with the 48 px page gutter (16 px on a phone, below). */
-.block-container {{ padding-top: 3rem; padding-bottom: 3rem; padding-left: 3rem; padding-right: 3rem; max-width: 1344px; }}
+.block-container {{ padding-top: 4rem; padding-bottom: 3rem; padding-left: 3rem; padding-right: 3rem; max-width: 1344px; }}
 
 /* Two weights only: headings and strong text are medium (500), never heavier. */
 .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp strong, .stApp b {{ font-weight: {WEIGHT_MEDIUM}; }}
@@ -266,6 +268,11 @@ CARD_CSS = f"""
    and the quieter numbers to the right, divided by thin lines. A faint brass glow sits behind the large number only. */
 .vl-topbar {{ display: flex; align-items: center; justify-content: space-between; height: 3rem; border-bottom: 1px solid {BORDER}; }}
 .vl-header-error {{ margin-bottom: 2rem; }}
+/* The search bar at the very top: the app's name on the left, the ticker box and the name search beside it, one thin line
+   under the row. Inside it the name needs no line of its own. */
+.st-key-{SEARCH_BAR_KEY} {{ border-bottom: 1px solid {BORDER}; padding-bottom: 1rem; margin-bottom: 0.5rem; }}
+.st-key-{SEARCH_BAR_KEY} .vl-topbar {{ border-bottom: 0; height: 2.5rem; }}
+.st-key-{SEARCH_BAR_KEY} [data-testid="stWidgetLabel"] p {{ color: {GREY}; font-size: 0.6875rem; letter-spacing: 0.06em; text-transform: uppercase; }}
 .vl-brand-name {{ display: inline-flex; align-items: center; gap: 0.625rem; }}
 .vl-mark {{ position: relative; display: inline-block; width: 18px; height: 18px; box-sizing: border-box; border: 1.5px solid {ACCENT}; border-radius: 4px; }}
 .vl-mark::after {{ content: ""; position: absolute; left: 3px; top: 7px; width: 10px; height: 1.5px; background: {TEXT}; border-radius: 1px; transform: rotate(-35deg); }}
@@ -319,6 +326,11 @@ CARD_CSS = f"""
     .vl-stats {{ width: 100%; }}
     .vl-kpi-stat {{ flex: 1; padding: 0 1rem; }}
     .vl-kpi-stat:first-child {{ padding-left: 0; border-left: 0; }}
+    /* The search bar: the app's name on its own line, then the ticker box and the name search side by side. */
+    .st-key-{SEARCH_BAR_KEY} [data-testid="stHorizontalBlock"] {{ flex-flow: row wrap; gap: 0.75rem; }}
+    .st-key-{SEARCH_BAR_KEY} [data-testid="stColumn"]:first-child {{ flex: 1 1 100%; min-width: 100%; }}
+    .st-key-{SEARCH_BAR_KEY} [data-testid="stColumn"]:nth-child(2) {{ flex: 1 1 30%; min-width: 30%; }}
+    .st-key-{SEARCH_BAR_KEY} [data-testid="stColumn"]:nth-child(3) {{ flex: 1 1 60%; min-width: 60%; }}
     /* The five multiple prices sit two to a row instead of five cards stacked down the screen. */
     .st-key-{MULTIPLE_PRICES_KEY} [data-testid="stHorizontalBlock"] {{ flex-flow: row wrap; gap: 0.75rem; }}
     .st-key-{MULTIPLE_PRICES_KEY} [data-testid="stColumn"] {{ flex: 1 1 calc(50% - 0.75rem); min-width: calc(50% - 0.75rem); }}
@@ -488,19 +500,18 @@ BRAND_MARK = '<span class="vl-mark" aria-hidden="true"></span>'
 
 
 def topbar_html():
-    """Write the thin bar at the very top of every page: the small mark and the app's name. Fixed text."""
+    """Write the app's name with its small mark, at the left of the search bar at the very top of every page. Fixed text."""
     return f'<div class="vl-topbar"><span class="vl-brand-name">{BRAND_MARK}<span class="vl-brand">Valuation Lab</span></span></div>'
 
 
 def header_html(company_name, ticker, verdict, cards, basis, verdict_help=None, side_cards=()):
-    """Write the whole header: the app's name, the company's name with its ticker and the verdict badge (with its
+    """Write the whole header: the company's name with its ticker and the verdict badge (with its
     tooltip, when `verdict_help` is given), then the headline numbers (`cards`, the HTML that kpi_card_html wrote) with
     the quieter `side_cards` to the right, and a line under them saying what the verdict is based on.
     """
     side = f'<div class="vl-stats">{"".join(side_cards)}</div>' if side_cards else ""
     return (
         '<div class="vl-header">'
-        f"{topbar_html()}"
         '<div class="vl-hero-row"><div class="vl-hero">'
         f'<div class="vl-name"><h1>{html.escape(company_name)}</h1>'
         f'<span class="vl-badge vl-badge-ticker">{html.escape(ticker)}</span>{verdict_badge_html(verdict, verdict_help)}</div>'

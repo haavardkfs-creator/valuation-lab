@@ -11,7 +11,7 @@ This is a learning project, not investment advice.
 
 ## What it does today
 
-The app opens on **Adobe (ADBE)**, and a **Company ticker** box in the sidebar lets you value
+The app opens on **Adobe (ADBE)**, and a **Company ticker** box at the top lets you value
 any other company on Yahoo Finance. Adobe's forecast is hand-chosen and checked against the Excel
 model. For any other company, every figure comes from Yahoo Finance's latest annual statements
 converted to US dollars at today's exchange rate if the company reports or trades in another currency, and the forecast is only a **starting point, not a forecast**: revenue growth fades in equal
@@ -37,7 +37,7 @@ before, on Yahoo alone.
   the history, news and management), DCF, Multiples, Sensitivity, Compare and Explanations (the glossary).
 - An **analyst view** on the Overview tab: Yahoo Finance's consensus rating and price targets (and a bar for them on
   the football field), as a comparison for the model.
-- **Search by company name**: type part of a name in the sidebar and click the company you mean; a ticker that is not found
+- **Search by company name**: type part of a name in the search bar at the top and click the company you mean; a ticker that is not found
   also offers likely matches.
 - An **"answer first" header** at the top: the company's name, a verdict badge (undervalued, fairly valued or
   overvalued, from the DCF against the market price), four headline cards and a 12-month price chart.
@@ -48,7 +48,7 @@ before, on Yahoo alone.
 - A **peer multiples comparison** (EV/Sales, EV/EBITDA, P/E, P/S and forward P/E) sits beside the DCF.
 - **News and management** at the end of the page: the five most recent headlines (as links) and the top
   officers, from Yahoo Finance. It is context only; nothing in the valuation depends on it.
-- An optional **live risk-free rate**: a sidebar tick box swaps Damodaran's typed-in rate for today's 10-year Treasury yield
+- An optional **live risk-free rate**: a tick box under "WACC and rates" swaps Damodaran's typed-in rate for today's 10-year Treasury yield
   from FRED (needs the `FRED_API_KEY`). Checked against the Excel model.
 - A **Compare tab**: type a second ticker and see the two companies side by side, in a table and in a chart of how far
   each way of valuing them is from their own market price. Both get the same sliders and the same typed-in WACC.
