@@ -276,22 +276,37 @@ def test_the_profile_facts_skip_what_yahoo_does_not_have():
     assert app.profile_facts(dict(profile, industry=None, employees=None)) == "Technology · San Jose, CA, United States"
 
 
-def test_the_page_shows_the_about_card_from_yahoos_profile(monkeypatch):
+def test_the_about_line_is_the_name_then_the_facts():
+    profile = {"sector": "Technology", "industry": None, "employees": 30709, "headquarters": None}
+    assert app.profile_label("Adobe Inc.", profile) == "About Adobe Inc. · Technology · 30,709 employees"
+    assert app.profile_label("Adobe Inc.", dict(profile, sector=None, employees=None)) == "About Adobe Inc."
+
+
+def about_boxes(page):
+    """The closed "About" boxes on a page (there is one at most), found by their label."""
+    return [expander for expander in page.expander if expander.label.startswith("About ")]
+
+
+def test_the_page_shows_the_about_box_from_yahoos_profile_as_one_closed_line(monkeypatch):
     page = run_page(monkeypatch, yahoo=fake_statements_ticker(info=ADOBE_PROFILE_INFO))
     assert_footer_and_no_crash(page)
-    shown = texts(page.markdown)
-    assert "**About Adobe Inc\\.**" in shown
-    assert "Technology · Software \\- Infrastructure · 30,709 employees · San Jose, CA, United States" in texts(page.caption)
-    # Two sentences of the three: the founding year is left out.
-    assert any(text.startswith("Adobe Inc\\., together with") and "three segments\\." in text and "1982" not in text
-               for text in shown)
-    assert "From Yahoo Finance's company profile. Company website: https://www.adobe.com" in texts(page.caption)
+    [about] = about_boxes(page)
+    assert about.label == app.plain_text_for_markdown(
+        "About Adobe Inc. · Technology · Software - Infrastructure · 30,709 employees · San Jose, CA, United States"
+    )
+    assert about.proto.expanded is False                     # closed, so it takes one line
+    # Inside: two sentences of the three (the founding year is left out), and where it came from.
+    [summary] = [element.value for element in about.markdown]
+    assert summary.startswith("Adobe Inc\\., together with") and "three segments\\." in summary and "1982" not in summary
+    assert [element.value for element in about.caption] == [
+        "From Yahoo Finance's company profile. Company website: https://www.adobe.com"
+    ]
 
 
-def test_the_about_card_is_left_out_when_yahoo_has_no_profile(monkeypatch):
+def test_the_about_box_is_left_out_when_yahoo_has_no_profile(monkeypatch):
     page = run_page(monkeypatch)                     # the usual fake Yahoo has no sector, industry or description
     assert_footer_and_no_crash(page)
-    assert not [text for text in texts(page.markdown) if text.startswith("**About ")]
+    assert not about_boxes(page)
 
 
 def test_an_empty_ticker_box_means_adobe(monkeypatch):
