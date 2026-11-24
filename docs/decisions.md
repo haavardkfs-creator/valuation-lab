@@ -1150,3 +1150,8 @@ multiple functions the peer multiples use. Sources: Tableau [Salesforce release]
 [Q4 2022 results](https://www.sec.gov/Archives/edgar/data/1013462/000101346223000012/anssex991-pressrelease2022.htm),
 [10-Q Q3 2023](https://www.sec.gov/Archives/edgar/data/1013462/000101346223000055/anss-20230930.htm). Nothing on the
 page changes yet; the Multiples section is the next pull request.
+
+**24 Nov 2026 — No precedent deals bar on the football field.** The plan had a "Precedent deals" bar on the Overview's
+football field. The deals give Adobe $759 to $1,913 a share, three to seven times the market price, so the bar would
+stretch the chart's axis and shrink every other bar to about a quarter of its width. Haavard chose to keep the chart as it
+is; the "What buyers paid" section on the Multiples tab shows the deals and explains the gap.

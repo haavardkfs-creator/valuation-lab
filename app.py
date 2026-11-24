@@ -2588,6 +2588,92 @@ def draw_multiples(multiples, peers, notes, peers_are_suggested, own_label, over
         )
 
 
+def deal_month(iso_date):
+    """Write a deal's announcement date as month and year, for example "Jun 2019"."""
+    return datetime.date.fromisoformat(iso_date).strftime("%b %Y")
+
+
+def precedent_deals_headline(company_name, result, share_price):
+    """The sentence above the deal table: the median multiple buyers paid, and the price per share it would give the
+    company, next to the market price.
+    """
+    return (
+        f"Buyers paid a median of {result['median_ev_revenue']:.1f}x revenue in {len(result['deals'])} software "
+        f"takeovers. At that multiple {company_name} would be worth {dollars(result['price_median'])} a share, "
+        f"against {dollars(share_price)} in the market."
+    )
+
+
+def precedent_deals_table(result):
+    """Make the table of the past takeovers, oldest first: when, who bought whom, whether it closed, the deal's
+    enterprise value, the target's revenue over the last twelve months and the multiple, with the median last.
+    Figma's revenue is marked as a yearly run rate (ARR), because it was private and gave no reported revenue.
+    """
+    deals = result["deals"]
+    return pd.DataFrame(
+        {
+            "Announced": [deal_month(deal["announced"]) for deal in deals] + [""],
+            "Status": [deal["status"] for deal in deals] + [""],
+            "Deal EV": [millions_text(deal["deal_enterprise_value"]) for deal in deals] + [""],
+            "Revenue, last 12 months": [
+                millions_text(deal["ltm_revenue"]) + (" (ARR)" if deal["revenue_is_run_rate"] else "") for deal in deals
+            ] + [""],
+            "EV / revenue": [multiple_or_note(deal["ev_revenue"]) for deal in deals]
+            + [multiple_or_note(result["median_ev_revenue"])],
+        },
+        index=pd.Index([f"{deal['buyer']} → {deal['target']}" for deal in deals] + ["Median"], name="Deal"),
+    )
+
+
+def draw_precedent_deals(company, overview):
+    """Draw the "What buyers paid" section at the bottom of the Multiples tab: what buyers paid per dollar of revenue
+    in past software takeovers, and what that would make the company worth. Only Adobe has a list of deals, so for
+    any other company nothing is drawn.
+    """
+    deals = data.get_precedent_deals(company["ticker"])
+    if deals is None:
+        return
+    result = valuation.run_precedent_deals(
+        deals, company["revenue"], valuation.net_debt(company["debt"], company["cash_and_investments"]),
+        company["shares"], assumptions.MINIMUM_DEALS,
+    )
+    st.subheader("What buyers paid")
+    if result["price_median"] is None:
+        st.caption(f"Fewer than {assumptions.MINIMUM_DEALS} deals have a revenue multiple, so there is no middle to use.")
+        return
+    st.markdown(
+        f"**{dollar_text_for_markdown(precedent_deals_headline(company['company_name'], result, company['share_price']))}**",
+        help=explanations.help_text("precedent_deals"),
+    )
+    low, high = result["price_range"]
+    st.caption(dollar_text_for_markdown(
+        f"The middle half of the deals gives {dollars(low)} to {dollars(high)}. {company['company_name']} itself trades "
+        f"at {multiple_or_note(overview['ev_sales'])} revenue. A takeover price includes extra for control, so this is "
+        "a rough ceiling, not a fair value."
+    ))
+    draw_table(precedent_deals_table(result))
+    with reading_notes("precedent_deals"):
+        st.caption(
+            "Deal EV is the price the buyer announced. Four were announced as enterprise values; Cisco gave Splunk's as "
+            "an equity value (about 28 billion dollars), so Splunk's debt is added and its cash taken off. Revenue is the "
+            "last full year plus the quarters reported so far that year, minus the same quarters a year earlier, from "
+            "each company's own filings. Figma was private and gave only its annual recurring revenue (ARR), a yearly run "
+            "rate of subscriptions, and the deal was called off in December 2023 after regulators objected; a buyer "
+            "was still willing to pay that price, so it counts."
+        )
+        st.caption(
+            "Why so far above the other methods? Part of it is growth: in the filings, revenue so far that year was "
+            "up 45% at Slack, 15% at Tableau and 13% at Splunk, against about 10% for Adobe's last year. Part of it is control: "
+            "Synopsys paid about 29% more than Ansys's share price before the news, and Ansys's revenue was up only 7%. "
+            "Five deals from different years is a small sample, so read the range, not the exact number."
+        )
+        st.caption(
+            "Sources: "
+            + "; ".join(f"[{deal['buyer']} → {deal['target']}]({deal['source']})" for deal in deals)
+            + "."
+        )
+
+
 @st.cache_data(ttl=LIVE_DATA_CACHE_SECONDS, show_spinner=False)
 def load_company(ticker):
     """Fetch a company's figures and remember them for LIVE_DATA_CACHE_SECONDS, so moving a
@@ -3619,6 +3705,7 @@ def draw_page():
             own_label=f"{company['ticker']} (this company)", overview=overview,
             company_name=company["company_name"],
         )
+        draw_precedent_deals(company, overview)
     with sensitivity_tab:
         draw_heatmap(company, dcf_inputs, base_wacc)
         draw_margin_growth_table(company, dcf_inputs, dcf, terminal_growth_rate, wacc_override)
