@@ -43,6 +43,11 @@ STARTING_POINT_YEARS = 5
 # example uses two peers for its P/E.
 MINIMUM_PEERS = 2
 
+# The fewest past takeovers with a multiple needed before the "What buyers paid" section gives a median and a price
+# (see docs/model.md, "Comparable transactions"). With one or two deals the middle is just those deals; three is the
+# smallest group with a real middle. Adobe has five (data.PRECEDENT_DEALS). Chosen 24 Nov 2026.
+MINIMUM_DEALS = 3
+
 # Suggesting peers for another company (see docs/model.md, "Suggesting peers"). The page looks up
 # the first PEER_CANDIDATES_TO_CHECK companies in the company's Yahoo industry, keeps those that
 # are no more than PEER_BIGGEST_SIZE_GAP times bigger or smaller than it (a tenth to ten times

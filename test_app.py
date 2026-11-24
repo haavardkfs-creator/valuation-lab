@@ -3400,7 +3400,7 @@ def test_each_section_is_in_its_own_tab(monkeypatch):
         "Discounted cash flow (DCF)", "What the market price implies", "Scenarios", "What the model assumes",
         "How the WACC is built", "Behind the number",
     ]
-    assert texts(tab_named(page, "Multiples").subheader) == ["Peer multiples"]
+    assert texts(tab_named(page, "Multiples").subheader) == ["Peer multiples", "What buyers paid"]
     assert texts(tab_named(page, "Sensitivity").subheader) == [
         "Sensitivity: price at different WACC and terminal growth", "Sensitivity: price at different margins and growth",
     ]
@@ -4775,3 +4775,48 @@ def test_the_macro_caption_says_the_numbers_become_an_input_only_if_the_box_is_t
     caption = next(c for c in texts(tab_named(page, "Overview").caption) if c.startswith("From FRED"))
     assert "not an input to it, unless you tick" in caption
 
+
+
+# ---------------------------------------------------------------------------
+# What buyers paid: comparable transactions at the bottom of the Multiples tab (Adobe only)
+# ---------------------------------------------------------------------------
+
+def test_the_multiples_tab_ends_with_what_buyers_paid_for_adobe(monkeypatch):
+    page = run_page(monkeypatch)
+    multiples_tab = tab_named(page, "Multiples")
+    assert texts(multiples_tab.subheader) == ["Peer multiples", "What buyers paid"]
+    headline = markdown_starting(multiples_tab, "**Buyers paid a median of 16.2x revenue in 5 software takeovers.")
+    assert headline.help == app.explanations.help_text("precedent_deals")
+
+
+def test_what_buyers_paid_gives_the_deals_sheets_price_from_the_snapshot_figures():
+    adobe = data.snapshot_source("ADBE")
+    result = valuation.run_precedent_deals(
+        data.get_precedent_deals("ADBE"), adobe["revenue"],
+        valuation.net_debt(adobe["debt"], adobe["cash_and_investments"]), adobe["shares"], assumptions.MINIMUM_DEALS,
+    )
+    headline = app.precedent_deals_headline("Adobe Inc.", result, 251.47)
+    assert headline == (
+        "Buyers paid a median of 16.2x revenue in 5 software takeovers. At that multiple Adobe Inc. would be worth "
+        "$933.94 a share, against $251.47 in the market."                          # deals F14
+    )
+
+
+def test_the_deal_table_lists_the_five_deals_oldest_first_with_the_median_last():
+    adobe = data.snapshot_source("ADBE")
+    result = valuation.run_precedent_deals(data.get_precedent_deals("ADBE"), adobe["revenue"], -385, adobe["shares"],
+                                           assumptions.MINIMUM_DEALS)
+    table = app.precedent_deals_table(result)
+    assert list(table.index) == [
+        "Salesforce → Tableau", "Salesforce → Slack", "Adobe → Figma", "Cisco → Splunk", "Synopsys → Ansys", "Median",
+    ]
+    assert list(table["Announced"])[:5] == ["Jun 2019", "Dec 2020", "Sep 2022", "Sep 2023", "Jan 2024"]
+    assert list(table["EV / revenue"]) == ["13.2x", "33.2x", "50.0x", "7.7x", "16.2x", "16.2x"]   # deals L6:L10, C14
+    assert table.loc["Cisco → Splunk", "Deal EV"] == "$29,430m"                                 # deals J9
+    assert table.loc["Adobe → Figma", "Revenue, last 12 months"] == "$400m (ARR)"
+    assert table.loc["Adobe → Figma", "Status"] == "Called off Dec 2023"
+
+
+def test_what_buyers_paid_is_not_shown_for_other_companies(monkeypatch):
+    page = run_page(monkeypatch, ticker="MSFT")
+    assert "What buyers paid" not in texts(page.subheader)

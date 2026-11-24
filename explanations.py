@@ -304,6 +304,13 @@ HELP_TEXTS = {
         "reported free cash flow as a share of revenue. A line that moves a lot says one year is a poor guide to the "
         "next.",
     ),
+    "precedent_deals": (
+        "What buyers paid",
+        "A comparable transaction is a price a buyer actually paid to take over a whole company. Each deal's enterprise "
+        "value (the price for the shares, plus the company's debt, minus its cash) is divided by the company's revenue "
+        "over the twelve months before the deal. The middle (median) of those multiples, times this company's revenue, "
+        "gives a price per share. Buyers pay extra for control, so treat it as a rough ceiling, not a fair value.",
+    ),
     "peer_bars": (
         "Peer bars",
         "One multiple for the company (gold) and for each of its peers (brown), highest at the top. The dashed line is "

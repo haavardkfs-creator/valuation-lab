@@ -451,6 +451,10 @@
   The deals are in `data.PRECEDENT_DEALS` with their filings; `run_precedent_deals` in `valuation.py` does the maths,
   and tests match the sheet's cells. Nothing on the page yet. Next: the "What buyers paid" section on the Multiples tab,
   then the football field (waiting on Haavard's choice: no bar, a full bar, or a cut-off bar).
+- Done: comparable transactions, step 2 of 3 (24 Nov 2026). "What buyers paid" at the bottom of the Multiples tab, for
+  Adobe only: a headline (median 16.2x, $933.94 a share against the market price), the middle-half range, Adobe's own
+  EV/Sales, the five deals in a table with the median, and a "How to read this" box with the method and sources.
+  `MINIMUM_DEALS` (3) is in `assumptions.py`; the ? text is `precedent_deals` in `explanations.py`.
 - Next: check the macro numbers on the live app after the merge; the live FMP check with Yahoo switched
   off; the small items below. CLAUDE.md still needs Haavard's edits (the theme line, and rows for theme.py and test_theme.py).
 - Open:
