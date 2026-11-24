@@ -6,6 +6,7 @@ are drawn, and that a company that cannot be valued gets a plain error instead o
 """
 
 import json
+import re
 from pathlib import Path
 
 import pandas as pd
@@ -98,7 +99,7 @@ def peer_table_of(page):
     not by its position, so moving sections between tabs does not break the tests that read it.
     """
     [table] = [
-        element.value for element in page.dataframe if {"EV/Sales", "Forward P/E", "Flag"} <= set(element.value.columns)
+        element.value for element in page.table if {"EV/Sales", "Forward P/E", "Flag"} <= set(element.value.columns)
     ]
     return table
 
@@ -272,7 +273,11 @@ def test_a_company_with_no_pre_tax_profit_gets_the_reason_but_still_its_overview
     assert "DCF implied price" not in metrics(page)
     for section in ("Discounted cash flow (DCF)", "What the market price implies", "Peer multiples"):
         assert section not in subheaders
-    assert not page.dataframe
+    # No table that needs a DCF or peers: no assumptions, no sensitivity numbers, no peer table.
+    assert not [
+        table for table in page.table
+        if table.value.index.name in ("Year", "WACC", "Average operating margin") or "Flag" in table.value.columns
+    ]
 
 
 def test_a_loss_maker_with_a_negative_operating_margin_shows_its_overview_numbers_as_they_are(monkeypatch):
@@ -395,7 +400,7 @@ def test_a_very_low_wacc_still_draws_the_heatmap_with_the_impossible_cells_left_
     assert not any("This table cannot be drawn" in caption for caption in captions)
     assert any("A blank cell has no answer" in caption for caption in captions)
     # The numbers table under the heatmap has dashes where there is no answer and a price at the base case.
-    wacc_table = next(element.value for element in page.dataframe if element.value.index.name == "WACC")
+    wacc_table = next(element.value for element in page.table if element.value.index.name == "WACC")
     assert wacc_table.iloc[0].isna().all()                                  # the lowest WACC is below every growth rate
     base_row, base_column = assumptions.HEATMAP_WACC_OFFSETS.index(0.0), assumptions.HEATMAP_TERMINAL_GROWTH_RATES.index(
         assumptions.TERMINAL_GROWTH_RATE
@@ -773,8 +778,9 @@ def test_a_company_that_lost_money_says_not_meaningful_instead_of_a_wrong_number
 # ---------------------------------------------------------------------------
 
 def assumptions_on(page):
-    """The 'What the model assumes' table of a page: it is the first table, before the heatmap."""
-    return page.dataframe[0].value
+    """The 'What the model assumes' table of a page: the one with a row for each forecast year and a tax rate column."""
+    [table] = [element.value for element in page.table if element.value.index.name == "Year" and "Tax rate" in element.value.columns]
+    return table
 
 
 def test_the_page_shows_what_the_model_assumes_for_adobe_year_by_year(monkeypatch):
@@ -1464,7 +1470,7 @@ def test_the_implied_section_still_appears_when_the_history_is_missing(monkeypat
 
 def margin_growth_table_of(page):
     """The margin and growth table of a page: the one whose rows are average operating margins."""
-    [table] = [element.value for element in page.dataframe if element.value.index.name == "Average operating margin"]
+    [table] = [element.value for element in page.table if element.value.index.name == "Average operating margin"]
     return table
 
 
@@ -2057,6 +2063,33 @@ def test_the_page_has_a_scenarios_section_with_a_row_for_each_case(monkeypatch):
     assert rows["Bear"]["Operating margin"] == "−5.0 points" and rows["Bear"]["Revenue growth"] == "−2.0 points"
     assert rows["Base"]["Operating margin"] == "+0.0 points" and rows["Base"]["Probability"] == "50%"
     assert rows["Bull"]["Operating margin"] == "+5.0 points" and rows["Bull"]["Revenue growth"] == "+2.0 points"
+
+
+def test_each_scenario_shows_how_far_it_is_from_the_market_price_with_an_arrow_and_a_sign(monkeypatch):
+    rows = scenario_rows(run_page(monkeypatch))
+    for name in ("Bear", "Base", "Bull"):
+        assert re.fullmatch(r"(▲ \+|▼ −)\d+\.\d%", rows[name]["vs market price"]), name
+    assert rows["Base"]["vs market price"].startswith("▲ +") and rows["Bull"]["vs market price"].startswith("▲ +")
+
+
+def test_a_change_is_coloured_sage_when_up_terracotta_when_down_and_not_at_all_when_flat():
+    assert app.change_colour("▲ +21.5%") == f"color: {theme.UP}"
+    assert app.change_colour("▼ −1.3%") == f"color: {theme.DOWN}"
+    assert app.change_colour("0.0%") == ""
+
+
+def test_every_table_on_the_page_is_a_plain_table_with_lines_between_the_rows_only(monkeypatch):
+    page = run_page(monkeypatch)
+    assert app.TABLE_BORDER == "horizontal"
+    assert list(page.dataframe) == []                  # no interactive grids: they cannot take the page's type and lines
+    assert len(page.table) >= 6
+
+
+def test_the_wacc_and_peer_tables_sit_in_named_boxes_so_their_total_row_can_be_marked(monkeypatch):
+    page = run_page(monkeypatch)
+    keys = {theme.WACC_TABLE_KEY, theme.PEER_TABLE_KEY}
+    found = {element.key for element in page.get("flex_container") if getattr(element, "key", None) in keys}
+    assert found == keys
 
 
 def test_the_base_scenario_is_the_dcf_price_on_the_page(monkeypatch):
@@ -3019,7 +3052,7 @@ def test_adobes_page_has_both_heatmaps_with_a_sentence_and_the_numbers_in_a_clos
 
 def test_the_wacc_heatmap_now_spans_three_points_each_way_and_its_base_cell_is_the_dcf_price(monkeypatch):
     page = run_page(monkeypatch)
-    wacc_table = next(element.value for element in page.dataframe if element.value.index.name == "WACC")
+    wacc_table = next(element.value for element in page.table if element.value.index.name == "WACC")
     assert wacc_table.shape == (7, 5)
     base_row = assumptions.HEATMAP_WACC_OFFSETS.index(0.0)
     base_column = assumptions.HEATMAP_TERMINAL_GROWTH_RATES.index(assumptions.TERMINAL_GROWTH_RATE)
@@ -3030,9 +3063,9 @@ def test_the_wacc_heatmap_now_spans_three_points_each_way_and_its_base_cell_is_t
 
 def test_the_sliders_move_both_heatmaps(monkeypatch):
     page = run_page(monkeypatch)
-    before = next(element.value for element in page.dataframe if element.value.index.name == "WACC").iloc[3, 2]
+    before = next(element.value for element in page.table if element.value.index.name == "WACC").iloc[3, 2]
     page.slider[1].set_value(-2.0).run()
-    after = next(element.value for element in page.dataframe if element.value.index.name == "WACC").iloc[3, 2]
+    after = next(element.value for element in page.table if element.value.index.name == "WACC").iloc[3, 2]
     assert after < before and app.dollars(after) == metrics(page)["DCF implied price"]
 
 
@@ -3201,13 +3234,13 @@ def test_the_charts_are_spread_over_the_tabs(monkeypatch):
 
 def test_the_peer_table_is_in_the_multiples_tab(monkeypatch):
     page = run_page(monkeypatch)
-    [table] = tab_named(page, "Multiples").dataframe
+    [table] = [element for element in tab_named(page, "Multiples").table if "Flag" in element.value.columns]
     assert "Flag" in table.value.columns and "Forward P/E" in table.value.columns
 
 
 def test_the_sensitivity_tab_holds_the_two_numbers_tables(monkeypatch):
     page = run_page(monkeypatch)
-    assert [element.value.index.name for element in tab_named(page, "Sensitivity").dataframe] == [
+    assert [element.value.index.name for element in tab_named(page, "Sensitivity").table] == [
         "WACC", "Average operating margin",
     ]
 
@@ -4283,7 +4316,7 @@ def run_compared(monkeypatch, params=None, other_income=None):
 
 
 def compare_table_of(page):
-    [table] = [e.value for e in tab_named(page, "Compare").dataframe]
+    [table] = [e.value for e in tab_named(page, "Compare").table]
     return table
 
 
@@ -4296,20 +4329,20 @@ def test_with_no_second_company_the_tab_asks_for_one_and_shows_no_table(monkeypa
     page = run_linked(monkeypatch, {"ticker": "EXMP"}, yahoo=two_companies())
     assert_footer_and_no_crash(page)
     assert "Type a second ticker to see the two side by side." in texts(tab_named(page, "Compare").caption)
-    assert list(tab_named(page, "Compare").dataframe) == []
+    assert list(tab_named(page, "Compare").table) == []
 
 
 def test_the_same_company_twice_is_not_compared_with_itself(monkeypatch):
     page = run_linked(monkeypatch, {"ticker": "EXMP", "compare": "exmp"}, yahoo=two_companies())
     assert "EXMP is the company already on the page. Type a different one." in texts(tab_named(page, "Compare").caption)
-    assert list(tab_named(page, "Compare").dataframe) == []
+    assert list(tab_named(page, "Compare").table) == []
 
 
 def test_a_second_company_that_cannot_be_loaded_says_so_and_the_page_still_works(monkeypatch):
     page = run_compared(monkeypatch, {"compare": "NOPE"})
     assert_footer_and_no_crash(page)
     assert any(c.startswith("Could not load NOPE.") for c in texts(tab_named(page, "Compare").caption))
-    assert list(tab_named(page, "Compare").dataframe) == []
+    assert list(tab_named(page, "Compare").table) == []
     cards = card_values(header_of(page))
     assert "Example Corp" in header_of(page) and cards["DCF value per share"] != app.NOT_AVAILABLE     # the first company is untouched
 

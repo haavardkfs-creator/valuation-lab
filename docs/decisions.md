@@ -1049,3 +1049,19 @@ the strongest tint is unchanged, so the readability test still holds. (5) On a p
 "4.10% (−4 pts)" go on two lines and are never tilted, and the upside shrinks to 10 px so "+127%" fits in its cell. The
 upside stays visible rather than moving to the hover, because a phone has no hover.
 
+## 2026-11-24 — One calm style for every table (polish B of 7)
+
+Decisions. (1) Every table is drawn the same way, through `draw_table` in app.py: Streamlit's plain table with lines
+between the rows only (`TABLE_BORDER = "horizontal"`), no lines down the columns and no box, the way Stripe and Bloomberg
+lay out data. (2) Numbers sit on the right so their decimals line up; the row names sit on the left in sand; headers are
+small taupe capitals like the section labels. Streamlit writes its own left alignment into every cell, so theme.py's rules
+use `!important`. (3) Colour only where it means something: the scenarios' "vs market price" now reads "▲ +21.5%" in sage
+or "▼ −1.3%" in terracotta (the arrow and sign still say it without colour); the company's own row in the peer table is
+gold, the colour that means "this company" everywhere; the WACC and the peer median sit under a taupe line in the medium
+weight, like a total in a set of accounts. Those two tables sit in named boxes (`theme.WACC_TABLE_KEY`,
+`theme.PEER_TABLE_KEY`) so the CSS can find their first and last rows; their last column is words and stays on the left.
+(4) The four interactive grids (the assumptions, the two sensitivity number tables, the peers and the comparison) became
+plain tables. The grid draws on a canvas, so it can take the page's colours but not its type, lines or alignment. Its one
+extra, sorting by a column, did not work well here, because the figures are text ("26.2x") and sorted as words. Nothing
+was lost: every figure is still on the page.
+

@@ -45,6 +45,10 @@ HEATMAP_LABEL_CHARACTER_WIDTH = 7   # px
 HEATMAP_LABEL_GAP = 16              # px
 HEATMAP_KEY_PREFIX = theme.HEATMAP_KEY_PREFIX   # the boxes round the two heatmaps, so theme.py's phone CSS can find them
 
+# Every table is a plain st.table with lines between the rows only: no lines down the columns and no box round it, the
+# way the best finance products lay out data (polish, 24 Nov 2026). theme.py's CSS does the type and the alignment.
+TABLE_BORDER = "horizontal"
+
 # The six figures that make up a company's peers in a data package.
 PEER_KEYS = ["peer_tickers", "peer_ev_sales", "peer_ev_ebitda", "peer_pe", "peer_ps", "peer_forward_pe"]
 
@@ -945,6 +949,27 @@ def draw_scenario_boxes():
     }
 
 
+def draw_table(table, key=None):
+    """Draw a table of figures in the page's one table style: lines between the rows only, numbers on the right. A
+    `key` (theme.WACC_TABLE_KEY or theme.PEER_TABLE_KEY) puts it in a named box, so theme.py can mark its total row.
+    """
+    if key is None:
+        st.table(table, border=TABLE_BORDER)
+        return
+    with st.container(key=key):
+        st.table(table, border=TABLE_BORDER)
+
+
+def change_colour(text):
+    """The text colour for a change written with its arrow: sage for "▲" (up), terracotta for "▼" (down), nothing
+    for no change. The arrow and the sign still say it without colour."""
+    if text.startswith("▲"):
+        return f"color: {theme.UP}"
+    if text.startswith("▼"):
+        return f"color: {theme.DOWN}"
+    return ""
+
+
 def scenario_table(scenarios, settings):
     """Lay the scenarios out as a table, one row each for bear, base and bull: how far the margin and
     growth move, how likely it is, the price it gives and how far that is from the market price.
@@ -956,7 +981,7 @@ def scenario_table(scenarios, settings):
             "Revenue growth": points_text(settings["growth_shifts"][number]),
             "Probability": f"{settings['probabilities'][number]:.0%}",
             "Price": dollars(scenarios["prices"][number]),
-            "vs market price": percent(scenarios["upsides"][number]),
+            "vs market price": theme.change_text(scenarios["upsides"][number]),
         }
     return pd.DataFrame(rows).T
 
@@ -976,7 +1001,8 @@ def draw_scenarios(company, dcf_inputs, terminal_growth_rate, wacc_override, set
     except ValueError as error:
         st.warning(f"{error} Change the probabilities in the Scenarios box in the sidebar.")
         return
-    st.table(scenario_table(scenarios, settings))
+    table = scenario_table(scenarios, settings)
+    draw_table(table.style.map(change_colour, subset=["vs market price"]))
     weighted_column, gap_column = st.columns(2)
     weighted_column.metric(
         "Probability-weighted price", dollars(scenarios["weighted_price"]),
@@ -1089,7 +1115,7 @@ def draw_assumptions(company, dcf_inputs, year_labels, dcf, terminal_growth_rate
     value is never mistaken for the assumption itself.
     """
     st.subheader("What the model assumes")
-    st.dataframe(assumptions_table(dcf_inputs, year_labels))
+    draw_table(assumptions_table(dcf_inputs, year_labels))
     if is_base_case(company):
         where_from = "Adobe's assumptions are hand-chosen (the Projection sheet in the Excel model)."
     else:
@@ -1256,7 +1282,7 @@ def draw_wacc_build(company, dcf_inputs, source_used, dcf, wacc_is_set_by_user):
     """
     st.subheader("How the WACC is built")
     table, build = wacc_table(company, dcf_inputs, source_used)
-    st.table(table)
+    draw_table(table, key=theme.WACC_TABLE_KEY)
     st.caption(wacc_explanation(build, dcf["wacc"], wacc_is_set_by_user))
 
 
@@ -1511,7 +1537,7 @@ def draw_history(history, error, overview, company_name):
         # Each dollar sign is escaped with a backslash, because Streamlit reads text between two
         # unescaped dollar signs as a maths formula.
         st.warning(cash_flow_warning.replace("$", "\\$"))
-    st.table(history_table(history))
+    draw_table(history_table(history))
     amounts_column, margins_column = st.columns(2)
     amounts_headline = history_amounts_headline(history)
     if amounts_headline:
@@ -1930,10 +1956,7 @@ def draw_sensitivity_numbers(prices_frame, share_price, base_cell):
         return styles
 
     with st.expander("Show the numbers as a table"):
-        st.dataframe(
-            prices_frame.style.apply(style_cells, axis=None).format(dollars, na_rep="–"),
-            width="stretch",
-        )
+        draw_table(prices_frame.style.apply(style_cells, axis=None).format(dollars, na_rep="–"))
 
 
 def draw_heatmap(company, dcf_inputs, base_wacc):
@@ -2418,7 +2441,7 @@ def draw_multiples(multiples, peers, notes, peers_are_suggested, own_label, over
             "two numbers have no middle. Treat it with care, and see the table for which peers are missing."
         )
     draw_peer_charts(multiples, peers, own_label, overview, company_name)
-    st.dataframe(peer_table(peers, own_label, overview, multiples))
+    draw_table(peer_table(peers, own_label, overview, multiples), key=theme.PEER_TABLE_KEY)
     st.caption(
         f"Each multiple needs at least {assumptions.MINIMUM_PEERS} peers with a usable figure; "
         "a peer with no figure (a dash) is left out of that multiple only. A negative operating "
@@ -3248,7 +3271,7 @@ def draw_compare(company, dcf, multiples, growth_shift, margin_shift, terminal_g
             st.caption(f"Could not load {typed}. {error}")
             return
     first = {"company": company, "dcf": dcf, "multiples": multiples, "overview": company_overview(company), "dcf_error": None}
-    st.dataframe(comparison_table(first, second))
+    draw_table(comparison_table(first, second))
     if second["dcf_error"] is not None:
         st.caption(f"No DCF for {typed}: {second['dcf_error']}")
     st.markdown("**How far each way of valuing them is from their own market price**", help=explanations.help_text("compare_chart"))
