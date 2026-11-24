@@ -409,17 +409,18 @@
 - Done (merged, #75 "Less grey text: notes behind How to read this"): polish C of 7. Fifteen sections kept
   their finding in front and moved their notes on method (what the colours mean, where figures come from) into a small
   closed "How to read this" line; no text was removed.
-- Done (in the open pull request "The multiples tab: answer first, then five even cards"): polish D of 7. The middle
+- Done (merged, #76 "The multiples tab: answer first, then five even cards"): polish D of 7. The middle
   price and DCF vs multiples come first, then the five multiple prices in one row of equal cards (two to a row on a
   phone) instead of 3, 2 and 2.
-- Next (polish, Haavard said yes to all on 24 Nov 2026): D the multiples as one table; E search in the top bar, no sidebar; F an "About this
-  project" panel (Haavard approves the text); G tab names as questions.
+- Done (in the open pull request "Search in the top bar, and no sidebar"): polish E of 7. The app's name, the ticker box
+  and the name search sit in one bar at the top; Scenarios, Peers and One-off items are buttons beside "WACC and rates"
+  under the sliders; the share-the-view note moved to the footer. The sidebar is gone.
+- Paused: polish F, the "About this project" panel. Haavard said to wait with it (24 Nov 2026); the draft text is in the
+  build thread.
+- Next (polish, Haavard said yes to all on 24 Nov 2026): G tab names as questions.
 - Next: check the macro numbers on the live app after the merge; the live FMP check with Yahoo switched
   off; the small items below. CLAUDE.md still needs Haavard's edits (the theme line, and rows for theme.py and test_theme.py).
 - Open:
-  - Redesign (23 Nov 2026): the sidebar still holds the ticker box, name
-    search, Scenarios, Peers and One-off items; the canvas put the ticker search in the top bar, which would need a bigger
-    change to the page's layout (Haavard said yes on 24 Nov 2026: polish E).
   - Ideas from Haavard (20 Nov 2026): (1) group the overview by type of multiple: done in Phase 4a; (2) a ? help on every
     multiple and every chart, like the overview has: done in Phase 4b; (3) search
     by company name that lists several matching tickers, like Nordnet's search: done (price and day change in the list would cost

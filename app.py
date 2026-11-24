@@ -254,7 +254,7 @@ def model_wacc(dcf_inputs):
 # The shareable link: the page's address holds the company and the settings, so a link opens the same view
 # ---------------------------------------------------------------------------
 
-# The keys of the sidebar boxes that the link remembers (the ticker box's key is TICKER_BOX_KEY, further down). The peers and
+# The keys of the boxes that the link remembers (the ticker box's key is TICKER_BOX_KEY, further down). The peers and
 # the one-off amount have one box per company, whose key is the name below with the ticker after it.
 GROWTH_KEY = "growth_shift"
 MARGIN_KEY = "margin_shift"
@@ -267,6 +267,8 @@ LINK_LOADED_KEY = "link_loaded"
 COMPARE_KEY = "compare_ticker"          # the box in the Compare tab where the second company is typed
 SOURCE_NOTE_KEY = "source_note"        # the box under the header that says where the figures came from (CSS class st-key-source_note)
 STRIP_KEY = "assumption_strip"          # the bordered strip of sliders under the header (its CSS class is st-key-assumption_strip)
+SEARCH_BAR_KEY = theme.SEARCH_BAR_KEY   # the app's name, the ticker box and the name search, side by side at the top
+TOOLS_KEY = "strip_tools"               # the row of buttons under the sliders: WACC and rates, Scenarios, Peers, One-off items
 LIVE_RF_KEY = "live_risk_free"          # the tick box that swaps in today's 10-year Treasury yield
 
 LINK_TICKER_PATTERN = re.compile(r"[A-Za-z0-9.^=\-]+")
@@ -361,7 +363,7 @@ def link_from_state(state):
 
 def load_link():
     """When a visit begins (and only then, so a reader's later changes are never undone), put the settings held in the page's
-    address into the sidebar boxes. It runs before the boxes are drawn, which is the one moment a box's value may be set.
+    address into the boxes. It runs before the boxes are drawn, which is the one moment a box's value may be set.
     """
     if st.session_state.get(LINK_LOADED_KEY):
         return
@@ -394,11 +396,7 @@ def write_link():
         st.query_params.from_dict(params)
 
 
-def draw_link_note():
-    """Say, at the bottom of the sidebar, how to share the view: the address holds it."""
-    st.sidebar.caption(
-        "To share this view, copy the page's address from your browser: it holds the company and every setting on the page."
-    )
+LINK_NOTE = "To share this view, copy the page's address from your browser: it holds the company and every setting on the page."
 
 
 def draw_sliders():
@@ -406,9 +404,10 @@ def draw_sliders():
     terminal growth rate, the WACC the user chose (None when the box is unticked, meaning the model uses its own) and
     today's risk-free rate when that box is ticked (None otherwise). Three sliders sit side by side; the WACC and the
     risk-free rate are behind a "WACC and rates" button, because they are changed less often. Each starts at the base case.
+    Also returns the row of buttons under the sliders, where the Scenarios, Peers and One-off items buttons go too.
     """
     strip = st.container(border=True, key=STRIP_KEY)
-    growth_column, margin_column, terminal_column, more_column = strip.columns([1, 1, 1, 0.8], gap="large", vertical_alignment="bottom")
+    growth_column, margin_column, terminal_column = strip.columns(3, gap="large", vertical_alignment="bottom")
     growth_points = growth_column.slider(
         "Revenue growth, every year",
         min_value=assumptions.GROWTH_SHIFT_MIN_POINTS,
@@ -439,7 +438,8 @@ def draw_sliders():
         format="percent",
         help="How fast cash flow is assumed to grow forever after year 5. The base case is 2.5%.",
     )
-    rates = more_column.popover("WACC and rates", width="stretch")
+    tools = strip.container(horizontal=True, key=TOOLS_KEY)
+    rates = tools.popover("WACC and rates")
     wacc_override = None
     if rates.checkbox(
         "Set the WACC myself",
@@ -459,6 +459,7 @@ def draw_sliders():
     live_risk_free = draw_live_risk_free(rates)
     return (
         shift_from_points(growth_points), shift_from_points(margin_points), terminal_growth_rate, wacc_override, live_risk_free,
+        tools,
     )
 
 
@@ -916,8 +917,9 @@ def draw_reverse_dcf(company, dcf_inputs, terminal_growth_rate, wacc_override, h
         )
 
 
-def draw_scenario_boxes():
-    """Draw the scenario boxes in a closed box in the sidebar and return what they are set to: for the
+def draw_scenario_boxes(tools):
+    """Draw the scenario boxes behind a "Scenarios" button in `tools` (the row under the sliders) and return what they
+    are set to: for the
     bear, base and bull cases, the shift in every year's operating margin and in every year's revenue
     growth (decimals; the base case is always no shift, so it is the DCF itself) and the probability
     of each (decimals). The boxes start at the defaults in assumptions.py.
@@ -933,10 +935,12 @@ def draw_scenario_boxes():
     def chance_box(label, key, start):
         return st.number_input(label, min_value=0, max_value=100, value=start, step=5, key=key)
 
-    with st.sidebar.expander("Scenarios"):
-        st.caption(
+    with tools.popover("Scenarios"):
+        # Plain text rather than a caption: on an error page the strip is hidden but still drawn after the footer,
+        # and the footer must stay the page's last caption.
+        st.markdown(
             "Each scenario moves every forecast year's operating margin and revenue growth, in percentage "
-            "points, on top of the sliders under the header. The base case is the DCF itself."
+            "points, on top of the sliders. The base case is the DCF itself."
         )
         bear_margin = shift_box("Bear: operating margin (points)", "scenario_bear_margin", assumptions.SCENARIO_BEAR_MARGIN_POINTS, -limit, 0.0)
         bear_growth = shift_box("Bear: revenue growth (points)", "scenario_bear_growth", assumptions.SCENARIO_BEAR_GROWTH_POINTS, -limit, 0.0)
@@ -1000,7 +1004,7 @@ def scenario_table(scenarios, settings):
 
 def draw_scenarios(company, dcf_inputs, terminal_growth_rate, wacc_override, settings):
     """Draw "Scenarios": the price in a bear, base and bull case and the probability-weighted price
-    against today's market price. The cases and weights come from the boxes in the sidebar; the
+    against today's market price. The cases and weights come from the Scenarios button under the sliders; the
     probabilities must add up to 100%, or the section says so instead of showing prices.
     """
     st.subheader("Scenarios")
@@ -1011,7 +1015,7 @@ def draw_scenarios(company, dcf_inputs, terminal_growth_rate, wacc_override, set
             assumptions.SCENARIO_PROBABILITY_TOLERANCE,
         )
     except ValueError as error:
-        st.warning(f"{error} Change the probabilities in the Scenarios box in the sidebar.")
+        st.warning(f"{error} Change the probabilities under Scenarios, beside the sliders.")
         return
     table = scenario_table(scenarios, settings)
     draw_table(table.style.map(change_colour, subset=["vs market price"]))
@@ -1028,7 +1032,7 @@ def draw_scenarios(company, dcf_inputs, terminal_growth_rate, wacc_override, set
         st.caption(
             "Each scenario moves every year's operating margin and revenue growth by the amounts shown, "
             "on top of the sliders; the WACC and terminal growth are the same in all three. The weights are "
-            "your judgment, not a fact: change them in the Scenarios box in the sidebar."
+            "your judgment, not a fact: change them under Scenarios, beside the sliders."
         )
 
 
@@ -1502,7 +1506,7 @@ def free_cash_flow_warning(history, overview, company_name):
         f"is {(check['ratio'] - 1) * 100:.0f}% above what the company reports "
         f"({millions_text(history['free_cash_flow'][-1])}). The model starts from operating profit, so costs "
         "between operating profit and cash (interest, one-off charges) may be missing from it: check them in the "
-        "company's annual report before trusting the price, or adjust operating income in the sidebar."
+        "company's annual report before trusting the price, or adjust operating income under One-off items, beside the sliders."
     )
 
 
@@ -2486,18 +2490,18 @@ def draw_multiples(multiples, peers, notes, peers_are_suggested, own_label, over
     if flag_explanations(peers):
         st.caption(
             "Flagged peers still count in the medians. To leave one out, remove it from the "
-            "Peers box in the sidebar."
+            "Peers box beside the sliders."
         )
     if peers_are_suggested:
         st.caption(
             (
                 "Peers suggested from Financial Modeling Prep's peer list: the ones closest to the company in "
                 "size, within a tenth to ten times. Size is only a rough sign of a similar business, so "
-                "change them in the sidebar if you know better."
+                "change them under Peers, beside the sliders, if you know better."
                 if peers.get("peer_data_source") == "fmp"
                 else "Peers suggested from Yahoo's industry list: those whose operating margin and revenue "
                 "growth are closest to the company's, within a tenth to ten times its size. Similar margins "
-                "and growth are only a rough sign of a similar business, so change them in the sidebar if "
+                "and growth are only a rough sign of a similar business, so change them under Peers, beside the sliders, if "
                 "you know better."
             )
         )
@@ -2626,14 +2630,14 @@ def parse_peer_tickers(text, own_ticker, how_many):
     return tickers[:how_many], len(tickers) > how_many
 
 
-def draw_adjustment_box(company):
-    """Draw the one-off adjustment box in the sidebar and return the amount typed in, in $ millions
+def draw_adjustment_box(company, tools):
+    """Draw the one-off adjustment box behind a "One-off items" button in `tools` (the row under the sliders) and
+    return the amount typed in, in $ millions
     a year (0 when left alone; negative to take out a gain such as a tax credit, positive to add back
     a one-off cost). There is one box per company, so an amount is not carried over.
     """
-    st.sidebar.header("One-off items")
     return float(
-        st.sidebar.number_input(
+        tools.popover("One-off items").number_input(
             "Adjust operating income by ($ millions a year)",
             value=0.0,
             step=100.0,
@@ -2678,8 +2682,9 @@ def adjustment_note(amount):
     )
 
 
-def draw_peer_box(company):
-    """Draw the peer ticker box in the sidebar, filled in with suggestions from Yahoo's
+def draw_peer_box(company, tools):
+    """Draw the peer ticker box behind a "Peers" button in `tools` (the row under the sliders), filled in with
+    suggestions from Yahoo's
     industry list the first time a company is shown (the reader can change them), and fetch
     the multiples of the peers in it.
 
@@ -2694,10 +2699,9 @@ def draw_peer_box(company):
         suggested, suggested_source = suggestion["peer_tickers"], suggestion["peer_source"]
     except ValueError as error:
         suggested = []
-        notes.append(("warning", f"{error} Type peer tickers in the sidebar yourself."))
+        notes.append(("warning", f"{error} Type peer tickers under Peers, beside the sliders."))
 
-    st.sidebar.header("Peers")
-    typed = st.sidebar.text_input(
+    typed = tools.popover("Peers").text_input(
         "Peer tickers",
         value=", ".join(suggested),
         key=PEERS_KEY_START + company["ticker"],      # one box per company, so peers are not carried over
@@ -2720,7 +2724,7 @@ def draw_peer_box(company):
             notes.append((
                 "caption",
                 "No suitable peers were found in Yahoo's industry list for this company. "
-                "Type at least 2 peer tickers in the sidebar to compare with peers.",
+                "Type at least 2 peer tickers under Peers, beside the sliders, to compare with peers.",
             ))
         return None, notes
     try:
@@ -2744,7 +2748,7 @@ def draw_peer_box(company):
     return figures, notes
 
 
-# The keys of the two sidebar boxes: a click on a match writes the chosen ticker into the first and clears the second.
+# The keys of the two search boxes at the top: a click on a match writes the chosen ticker into the first and clears the second.
 TICKER_BOX_KEY = "ticker_box"
 NAME_SEARCH_KEY = "name_search"
 
@@ -2778,7 +2782,7 @@ def find_matches(query):
 
 
 def draw_match_buttons(container, matches, key_prefix):
-    """Draw each match as a button in `container` (the sidebar or the page); clicking one loads that company. The keys
+    """Draw each match as a button in `container` (under the search bar, or in the page); clicking one loads that company. The keys
     start with `key_prefix`, so the same company can be offered in two places at once without clashing.
     """
     for match in matches:
@@ -2788,13 +2792,24 @@ def draw_match_buttons(container, matches, key_prefix):
         )
 
 
-def draw_ticker_box():
-    """Draw the company ticker box at the top of the sidebar and return the ticker typed in,
-    in capitals. An empty box means the default company.
+def draw_search_bar():
+    """Draw the search bar at the top of the page, the app's name, the ticker box and the name search side by side, and return the
+    ticker typed in. Every serious finance site puts its search here, where a reader looks first.
     """
-    st.sidebar.header("Company")
+    bar = st.container(key=SEARCH_BAR_KEY)
+    name_column, ticker_column, search_column = bar.columns([1.2, 1, 2], vertical_alignment="bottom")
+    name_column.html(theme.topbar_html())
+    ticker = draw_ticker_box(ticker_column)
+    draw_name_search(search_column, bar)
+    return ticker
+
+
+def draw_ticker_box(box):
+    """Draw the company ticker box in `box` and return the ticker typed in, in capitals. An empty box means the
+    default company.
+    """
     st.session_state.setdefault(TICKER_BOX_KEY, DEFAULT_TICKER)
-    typed = st.sidebar.text_input(
+    typed = box.text_input(
         "Company ticker",
         key=TICKER_BOX_KEY,
         help="A US stock ticker, for example MSFT. Adobe (ADBE) has hand-chosen assumptions and peers; any other company gets a starting point from its own last reported year and suggested peers.",
@@ -2802,26 +2817,26 @@ def draw_ticker_box():
     return typed.strip().upper() or DEFAULT_TICKER
 
 
-def draw_name_search():
-    """Draw the "Search by company name" box under the ticker box, and, once something is typed, the matching companies
-    as buttons. It is how a reader finds a ticker without knowing it.
+def draw_name_search(box, results):
+    """Draw the "Search by company name" box in `box`, beside the ticker box, and, once something is typed, the
+    matching companies as buttons in `results` (under the search bar). It is how a reader finds a ticker without knowing it.
     """
-    query = st.sidebar.text_input(
+    query = box.text_input(
         "Search by company name", key=NAME_SEARCH_KEY, placeholder="For example Microsoft",
         help="Type part of a company's name and press Enter. Click a match to load it.",
     ).strip()
     if not query:
         return
     if len(query) < assumptions.SEARCH_MIN_CHARACTERS:
-        st.sidebar.caption(f"Type at least {assumptions.SEARCH_MIN_CHARACTERS} characters.")
+        results.caption(f"Type at least {assumptions.SEARCH_MIN_CHARACTERS} characters.")
         return
     matches = find_matches(query)
     if matches is None:
-        st.sidebar.caption("The search is not available right now. Type the ticker instead.")
+        results.caption("The search is not available right now. Type the ticker instead.")
     elif not matches:
-        st.sidebar.caption(f"No company found for {plain_text_for_markdown(query)}.")
+        results.caption(f"No company found for {plain_text_for_markdown(query)}.")
     else:
-        draw_match_buttons(st.sidebar, matches, "match")
+        draw_match_buttons(results, matches, "match")
 
 
 def currency_note(company):
@@ -2896,6 +2911,7 @@ def draw_footer():
     that this is a learning project and not investment advice.
     """
     st.divider()
+    st.caption(LINK_NOTE)
     st.caption(SOURCES_TEXT)
     st.caption(FOOTER_TEXT)
 
@@ -2921,7 +2937,6 @@ def draw_error(ticker, error):
     """Show why a company could not be valued, in plain words, with a short list of things to check, and still show the
     footer.
     """
-    st.html(f'<div class="vl-header vl-header-error">{theme.topbar_html()}</div>')    # the same top bar as every page
     st.error(f"Could not value {ticker}. {error}")
     busy = isinstance(error, data.SourceUnavailable)
     st.html(theme.hints_card_html("What you can do" if busy else "Things to check", error_hints(ticker, error)))
@@ -3173,7 +3188,7 @@ COMPARE_METHODS = [
 
 
 def suggested_peer_figures(company):
-    """Get the multiples of the peers Yahoo suggests for a company, the way the sidebar box would fill itself in,
+    """Get the multiples of the peers Yahoo suggests for a company, the way the Peers box would fill itself in,
     without drawing a box. Returns None when there are no suitable peers or Yahoo could not be reached.
     """
     market_value = round(company["share_price"] * company["shares"])
@@ -3314,7 +3329,8 @@ PAGE_TABS = ["Overview", "DCF", "Multiples", "Sensitivity", "Compare", "Explanat
 
 
 def draw_page():
-    """Draw the whole page: the sidebar (ticker, sliders, peers, one-off items), then the answer-first header and its
+    """Draw the whole page: the search bar at the top, the answer-first header, the strip of sliders with its buttons
+    (WACC and rates, Scenarios, and for companies other than Adobe, Peers and One-off items), then the header's
     notes, then five tabs: Overview (the football field, the overview numbers, the history, news and management), DCF
     (the DCF, what the market implies, scenarios, assumptions, the WACC build, the charts behind the number), Multiples,
     Sensitivity (both heatmaps) and Explanations (the glossary), and the footer. If the company cannot be found, draw
@@ -3322,11 +3338,10 @@ def draw_page():
     only the Overview and Explanations tabs.
     """
     load_link()
-    ticker = draw_ticker_box()
-    draw_name_search()
+    ticker = draw_search_bar()
     header_area = st.container()                       # filled once the numbers are known, so the header sits above the sliders
-    growth_shift, margin_shift, terminal_growth_rate, wacc_override, live_risk_free = draw_sliders()
-    scenario_settings = draw_scenario_boxes()
+    growth_shift, margin_shift, terminal_growth_rate, wacc_override, live_risk_free, tools = draw_sliders()
+    scenario_settings = draw_scenario_boxes(tools)
     adjustment = 0.0
     load_error = None
     with st.spinner(f"Loading {ticker}…"):            # shown while the company, and its suggested peers, are fetched
@@ -3336,10 +3351,10 @@ def draw_page():
                 peers, peer_notes = {key: company[key] for key in PEER_KEYS}, []      # Adobe's own peers
                 peers["peer_operating_margin"] = load_adobe_peer_margins(peers["peer_tickers"])
             else:
-                peers, peer_notes = draw_peer_box(company)
+                peers, peer_notes = draw_peer_box(company, tools)
                 if peers is not None:
                     company = dict(company, **peers)
-                adjustment = draw_adjustment_box(company)
+                adjustment = draw_adjustment_box(company, tools)
                 company = apply_adjustment(company, adjustment)
             company = apply_live_risk_free(company, live_risk_free)
         except ValueError as error:
@@ -3437,5 +3452,4 @@ theme.inject_theme()
 bridge_fmp_key()
 bridge_fred_key()
 draw_page()
-draw_link_note()
 write_link()

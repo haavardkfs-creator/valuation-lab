@@ -71,13 +71,28 @@ def run_page(monkeypatch, ticker=None, yahoo=None):
     monkeypatch.setattr("yfinance.Ticker", yahoo or fake_statements_ticker())
     page = AppTest.from_file(APP_FILE, default_timeout=60).run()
     if ticker is not None:
-        page.sidebar.text_input[0].set_value(ticker).run()
+        page.text_input(key=app.TICKER_BOX_KEY).set_value(ticker).run()
     return page
 
 
 def texts(elements):
     """Return the text of a list of page elements."""
     return [element.value for element in elements]
+
+
+def popover_labels(page):
+    """The labels of the buttons that open a small box (the row under the sliders: WACC and rates, Scenarios, ...)."""
+    return [element.proto.popover.label for element in page.get("popover")]
+
+
+def search_bar_labels(page):
+    """The labels of the two boxes in the search bar at the top: the ticker box and the name search."""
+    return [box.label for box in page.text_input if box.key in (app.TICKER_BOX_KEY, app.NAME_SEARCH_KEY)]
+
+
+def match_buttons(page):
+    """The buttons the name search offers under the search bar, one for each matching company."""
+    return [button for button in page.button if (button.key or "").startswith("match_")]
 
 
 def metrics(page):
@@ -121,7 +136,7 @@ def assert_footer_and_no_crash(page):
 def test_the_page_opens_on_adobe_with_live_figures_and_peer_multiples(monkeypatch):
     page = run_page(monkeypatch)
     assert_footer_and_no_crash(page)
-    assert page.sidebar.text_input[0].value == "ADBE"
+    assert page.text_input(key=app.TICKER_BOX_KEY).value == "ADBE"
     assert "Share price and beta are live from Yahoo Finance." in texts(page.caption)
     assert not page.warning
     assert "Peer multiples" in texts(page.subheader)
@@ -530,7 +545,7 @@ def run_example_page(monkeypatch, ticker="exmp", forward_eps=10.0):
 
 
 def peer_box(page):
-    return page.sidebar.text_input(key="peers_EXMP")
+    return page.text_input(key="peers_EXMP")
 
 
 def example_prices(peer_ev_sales, peer_ev_ebitda, peer_pe):
@@ -673,7 +688,7 @@ def test_when_yahoos_industry_lookup_fails_the_page_warns_and_the_box_starts_emp
 
 def test_adobe_has_no_peer_box_and_keeps_its_four_peers(monkeypatch):
     page = run_page(monkeypatch)
-    assert len(page.sidebar.text_input) == 2                   # only the company ticker and the name search
+    assert not [box for box in page.text_input if box.key.startswith(app.PEERS_KEY_START)]    # no peer box
     assert list(peer_table_of(page).index) == [
         "ADBE (this company)", "ADSK", "INTU", "CRM", "SNPS", "Peer median"
     ]
@@ -683,7 +698,7 @@ def test_adobe_has_no_peer_box_and_keeps_its_four_peers(monkeypatch):
 
 def test_each_company_gets_its_own_peer_box(monkeypatch):
     page = run_example_page(monkeypatch)
-    assert page.sidebar.text_input(key="peers_EXMP").value == "LOSS, AAA, BBB, CCC"
+    assert page.text_input(key="peers_EXMP").value == "LOSS, AAA, BBB, CCC"
 
 
 # The small helpers.
@@ -1731,7 +1746,7 @@ PROFILE_PEERS = {
 
 def test_the_peer_box_is_filled_in_with_the_peers_that_look_most_like_the_company(monkeypatch):
     page = run_profile_page(monkeypatch, PROFILE_PEERS)
-    assert page.sidebar.text_input(key="peers_EXMP").value == "CCC, AAA, BBB"      # not AAA, BBB, CCC, which is by size
+    assert page.text_input(key="peers_EXMP").value == "CCC, AAA, BBB"      # not AAA, BBB, CCC, which is by size
 
 
 def test_the_suggested_peers_caption_says_they_are_chosen_by_margin_and_growth(monkeypatch):
@@ -1755,7 +1770,7 @@ SECTOR_PEERS = {
 
 def test_a_company_with_one_industry_peer_is_topped_up_from_its_sector_with_a_note(monkeypatch):
     page = run_profile_page(monkeypatch, {"AAA": PROFILE_PEERS["AAA"]}, SECTOR_PEERS)
-    assert page.sidebar.text_input(key="peers_EXMP").value == "AAA, SEC1, SEC2"
+    assert page.text_input(key="peers_EXMP").value == "AAA, SEC1, SEC2"
     [note] = [c for c in texts(page.caption) if "wider sector" in c]
     assert note.startswith("This company's industry had too few suitable peers, so some or all of these come from its wider sector.")
     assert "check that they fit" in note
@@ -1764,7 +1779,7 @@ def test_a_company_with_one_industry_peer_is_topped_up_from_its_sector_with_a_no
 
 def test_the_sector_note_goes_away_when_the_reader_changes_the_peers(monkeypatch):
     page = run_profile_page(monkeypatch, {"AAA": PROFILE_PEERS["AAA"]}, SECTOR_PEERS)
-    page.sidebar.text_input(key="peers_EXMP").set_value("AAA, SEC1").run()
+    page.text_input(key="peers_EXMP").set_value("AAA, SEC1").run()
     assert not page.exception
     assert not any("wider sector" in c for c in texts(page.caption))
 
@@ -1772,7 +1787,7 @@ def test_the_sector_note_goes_away_when_the_reader_changes_the_peers(monkeypatch
 def test_a_company_with_no_peers_anywhere_still_gets_the_empty_box_and_its_note(monkeypatch):
     page = run_profile_page(monkeypatch, {}, {})
     assert not page.exception
-    assert page.sidebar.text_input(key="peers_EXMP").value == ""
+    assert page.text_input(key="peers_EXMP").value == ""
     assert any("No suitable peers were found" in c for c in texts(page.caption))
 
 
@@ -1989,7 +2004,7 @@ def test_the_peers_come_from_fmps_peer_list_and_the_page_says_so(monkeypatch):
         {"symbol": "HUGE", "mktCap": 3_000_000_000_000},       # thirty times the size: too big
     ]
     page = run_page_with_yahoo_down(monkeypatch, ticker="exmp", **{"stock-peers": peers})
-    assert page.sidebar.text_input(key="peers_EXMP").value == "AAA, BBB"
+    assert page.text_input(key="peers_EXMP").value == "AAA, BBB"
     assert any("Peers suggested from Financial Modeling Prep's peer list" in text for text in texts(page.caption))
     assert any("peers' figures from Financial Modeling Prep" in text for text in texts(page.caption))
     assert metrics(page)["EV/Sales price"] != "Not available"
@@ -2129,22 +2144,22 @@ def test_the_weighted_price_is_the_probabilities_times_the_prices(monkeypatch):
 
 def test_the_scenario_boxes_start_at_the_defaults_in_assumptions(monkeypatch):
     page = run_page(monkeypatch)
-    assert page.sidebar.number_input(key="scenario_bear_margin").value == assumptions.SCENARIO_BEAR_MARGIN_POINTS
-    assert page.sidebar.number_input(key="scenario_bull_growth").value == assumptions.SCENARIO_BULL_GROWTH_POINTS
-    chances = [page.sidebar.number_input(key=f"scenario_{name}_chance").value for name in ("bear", "base", "bull")]
+    assert page.number_input(key="scenario_bear_margin").value == assumptions.SCENARIO_BEAR_MARGIN_POINTS
+    assert page.number_input(key="scenario_bull_growth").value == assumptions.SCENARIO_BULL_GROWTH_POINTS
+    chances = [page.number_input(key=f"scenario_{name}_chance").value for name in ("bear", "base", "bull")]
     assert chances == assumptions.SCENARIO_PROBABILITIES_PERCENT
 
 
 def test_a_bear_case_cannot_be_set_above_no_change_nor_a_bull_case_below(monkeypatch):
     page = run_page(monkeypatch)
-    assert page.sidebar.number_input(key="scenario_bear_margin").max == 0.0
-    assert page.sidebar.number_input(key="scenario_bull_margin").min == 0.0
+    assert page.number_input(key="scenario_bear_margin").max == 0.0
+    assert page.number_input(key="scenario_bull_margin").min == 0.0
 
 
 def test_changing_the_bear_case_changes_its_price_and_the_weighted_price(monkeypatch):
     page = run_page(monkeypatch)
     before = scenario_rows(page)["Bear"]["Price"], metrics(page)["Probability-weighted price"]
-    page.sidebar.number_input(key="scenario_bear_margin").set_value(-10.0).run()
+    page.number_input(key="scenario_bear_margin").set_value(-10.0).run()
     after = scenario_rows(page)["Bear"]["Price"], metrics(page)["Probability-weighted price"]
     assert dollars_to_number(after[0]) < dollars_to_number(before[0])
     assert dollars_to_number(after[1]) < dollars_to_number(before[1])
@@ -2152,7 +2167,7 @@ def test_changing_the_bear_case_changes_its_price_and_the_weighted_price(monkeyp
 
 def test_probabilities_that_do_not_add_to_100_give_a_plain_warning_and_no_prices(monkeypatch):
     page = run_page(monkeypatch)
-    page.sidebar.number_input(key="scenario_bear_chance").set_value(40).run()      # 40 + 50 + 25 = 115
+    page.number_input(key="scenario_bear_chance").set_value(40).run()      # 40 + 50 + 25 = 115
     assert not page.exception
     assert any("add up to 100%, not 115.0%" in warning for warning in texts(page.warning))
     assert "Probability-weighted price" not in metrics(page)
@@ -2270,7 +2285,7 @@ def test_the_page_warns_when_the_models_cash_flow_is_far_above_the_reported_one(
     assert_footer_and_no_crash(page)
     [warning] = cash_flow_warnings(page)
     assert "Adobe Inc.'s last year" in warning and "$3,000m" in warning
-    assert "adjust operating income in the sidebar" in warning
+    assert "adjust operating income under One-off items, beside the sliders" in warning
 
 
 def test_the_warning_says_how_far_above_it_is(monkeypatch):
@@ -2306,7 +2321,7 @@ def test_the_warning_function_names_both_figures_and_the_gap():
 # ---------------------------------------------------------------------------
 
 def oneoff_box(page):
-    return page.sidebar.number_input(key="oneoff_EXMP")
+    return page.number_input(key="oneoff_EXMP")
 
 
 def run_exmp_with_quarters(monkeypatch, adjustment=None):
@@ -2319,17 +2334,17 @@ def run_exmp_with_quarters(monkeypatch, adjustment=None):
     return page
 
 
-def test_the_adjustment_box_is_in_the_sidebar_for_other_companies_and_starts_at_zero(monkeypatch):
+def test_the_adjustment_box_is_behind_a_one_off_items_button_for_other_companies_and_starts_at_zero(monkeypatch):
     page = run_exmp_with_quarters(monkeypatch)
     box = oneoff_box(page)
     assert box.label == "Adjust operating income by ($ millions a year)" and box.value == 0.0
-    assert "One-off items" in [header.value for header in page.sidebar.header]
+    assert "One-off items" in popover_labels(page)
 
 
 def test_adobe_has_no_adjustment_box(monkeypatch):
     page = run_page(monkeypatch, yahoo=adobe_with_quarters())
-    assert not [box for box in page.sidebar.number_input if box.key.startswith("oneoff_")]
-    assert "One-off items" not in [header.value for header in page.sidebar.header]
+    assert not [box for box in page.number_input if box.key.startswith("oneoff_")]
+    assert "One-off items" not in popover_labels(page)
 
 
 def test_with_no_adjustment_there_is_no_note_and_nothing_changes(monkeypatch):
@@ -2410,7 +2425,7 @@ def test_the_reverse_dcf_and_the_tables_follow_the_adjusted_model(monkeypatch):
 
 def test_each_company_has_its_own_adjustment_box(monkeypatch):
     page = run_exmp_with_quarters(monkeypatch)
-    assert page.sidebar.number_input(key="oneoff_EXMP") is not None
+    assert page.number_input(key="oneoff_EXMP") is not None
 
 
 def test_apply_adjustment_changes_only_ebit_and_leaves_the_original_alone():
@@ -2517,7 +2532,7 @@ def test_the_section_is_at_the_end_of_the_overview_tab_and_the_footer_is_last_on
     subheaders = texts(page.subheader)
     overview_sections = subheaders[subheaders.index("Where the price sits"):subheaders.index("Discounted cash flow (DCF)")]
     assert overview_sections[-2:] == ["News and management", "Macro backdrop"]       # the last two sections of the Overview tab
-    assert page.main.caption[-1].value == app.FOOTER_TEXT          # the main area only: the sidebar has captions too
+    assert page.main.caption[-1].value == app.FOOTER_TEXT
 
 
 def test_only_the_newest_few_headlines_and_officers_are_shown(monkeypatch):
@@ -3196,7 +3211,7 @@ def test_the_peer_charts_come_before_the_peer_table_and_a_company_without_peers_
 
 
 # ---------------------------------------------------------------------------
-# The tabs, the grouped overview, the Explanations tab and the sidebar headings (redesign, Phase 4a)
+# The tabs, the grouped overview, the Explanations tab and where the settings sit (redesign, Phase 4a)
 # ---------------------------------------------------------------------------
 
 def tab_named(page, label):
@@ -3342,12 +3357,15 @@ def test_a_term_that_is_in_no_section_is_added_after_the_sections_under_more_ter
     assert markdown.index("##### Multiples") < more < markdown.index("##### Reading the page")
 
 
-def test_the_sidebar_has_its_headings_in_order(monkeypatch):
+def test_the_page_has_no_sidebar_and_the_settings_sit_behind_buttons_under_the_sliders(monkeypatch):
+    # The sliders moved out of the sidebar on 23 Nov 2026, and the rest on 24 Nov 2026 (polish E): the search to the
+    # top bar, Scenarios, Peers and One-off items to buttons beside "WACC and rates".
     page = run_page(monkeypatch)
-    # The sliders moved out of the sidebar into the strip under the header (redesign, 23 Nov 2026).
-    assert texts(page.sidebar.header) == ["Company"]                                      # Adobe has no peer box
+    assert not page.sidebar.children
+    assert popover_labels(page) == ["WACC and rates", "Scenarios"]                     # Adobe has no peer box
     other = run_example_page(monkeypatch)
-    assert texts(other.sidebar.header) == ["Company", "Peers", "One-off items"]
+    assert not other.sidebar.children
+    assert popover_labels(other) == ["WACC and rates", "Scenarios", "Peers", "One-off items"]
 
 
 # ---------------------------------------------------------------------------
@@ -3698,7 +3716,7 @@ def test_without_a_history_the_section_says_so_and_draws_no_history_charts(monke
 
 
 # ---------------------------------------------------------------------------
-# Searching for a company by name: a sidebar box, and "Did you mean" when a ticker is not found
+# Searching for a company by name: a box in the search bar, and "Did you mean" when a ticker is not found
 # ---------------------------------------------------------------------------
 
 def a_match(ticker, name, exchange="NASDAQ"):
@@ -3731,39 +3749,39 @@ def with_search(monkeypatch, answers):
     return log
 
 
-def test_the_sidebar_has_a_search_by_name_box_right_under_the_ticker_box(monkeypatch):
+def test_the_search_bar_has_a_search_by_name_box_right_beside_the_ticker_box(monkeypatch):
     page = run_page(monkeypatch)
-    assert [box.label for box in page.sidebar.text_input] == ["Company ticker", "Search by company name"]
-    assert page.sidebar.text_input(key="ticker_box").value == "ADBE"
-    assert page.sidebar.text_input(key="name_search").value == ""
-    assert texts(page.sidebar.header) == ["Company"]                                       # no new heading
+    assert [box.label for box in page.text_input][:2] == ["Company ticker", "Search by company name"]      # first on the page
+    assert page.text_input(key="ticker_box").value == "ADBE"
+    assert page.text_input(key="name_search").value == ""
+    assert any(element.key == app.SEARCH_BAR_KEY for element in page.get("flex_container") if getattr(element, "key", None))
 
 
 def test_an_empty_search_box_asks_nobody(monkeypatch):
     log = with_search(monkeypatch, {})
     page = run_page(monkeypatch)
     assert_footer_and_no_crash(page)
-    assert log.asked == [] and not page.sidebar.button
+    assert log.asked == [] and not match_buttons(page)
 
 
 def test_one_letter_asks_nobody_and_says_how_many_are_needed(monkeypatch):
     log = with_search(monkeypatch, {})
     page = run_page(monkeypatch)
-    page.sidebar.text_input(key="name_search").set_value("m").run()
+    page.text_input(key="name_search").set_value("m").run()
     assert log.asked == []
-    assert "Type at least 2 characters." in texts(page.sidebar.caption)
+    assert "Type at least 2 characters." in texts(page.caption)
 
 
 def test_a_name_gives_a_button_for_each_match_with_name_ticker_and_exchange(monkeypatch):
     with_search(monkeypatch, {"micr": MICRO_MATCHES})
     page = run_page(monkeypatch)
-    page.sidebar.text_input(key="name_search").set_value("micr").run()
+    page.text_input(key="name_search").set_value("micr").run()
     assert_footer_and_no_crash(page)
-    assert [button.label for button in page.sidebar.button] == [
+    assert [button.label for button in match_buttons(page)] == [
         "Advanced Micro Devices, Inc\\. · AMD · NASDAQ", "Micron Technology, Inc\\. · MU · NASDAQ",
         "Microsoft Corporation · MSFT · NASDAQ", "ENSURGE MICROPOWER ASA · ENSU\\.OL · Oslo",
     ]
-    assert [button.key for button in page.sidebar.button] == ["match_AMD", "match_MU", "match_MSFT", "match_ENSU.OL"]
+    assert [button.key for button in match_buttons(page)] == ["match_AMD", "match_MU", "match_MSFT", "match_ENSU.OL"]
 
 
 def test_a_match_without_an_exchange_shows_just_the_name_and_the_ticker():
@@ -3778,12 +3796,12 @@ def test_text_from_yahoo_in_a_match_is_made_safe_for_markdown():
 def test_clicking_a_match_puts_its_ticker_in_the_box_loads_that_company_and_clears_the_search(monkeypatch):
     with_search(monkeypatch, {"micr": MICRO_MATCHES})
     page = run_page(monkeypatch, yahoo=other_company())
-    page.sidebar.text_input(key="name_search").set_value("micr").run()
-    page.sidebar.button(key="match_MSFT").click().run()
+    page.text_input(key="name_search").set_value("micr").run()
+    page.button(key="match_MSFT").click().run()
     assert_footer_and_no_crash(page)
-    assert page.sidebar.text_input(key="ticker_box").value == "MSFT"
-    assert page.sidebar.text_input(key="name_search").value == ""
-    assert not page.sidebar.button                                                       # the matches are gone
+    assert page.text_input(key="ticker_box").value == "MSFT"
+    assert page.text_input(key="name_search").value == ""
+    assert not match_buttons(page)                                                       # the matches are gone
     header = header_of(page)
     assert "<h1>Example Corp</h1>" in header and ">MSFT</span>" in header                 # the page now shows MSFT
 
@@ -3791,17 +3809,17 @@ def test_clicking_a_match_puts_its_ticker_in_the_box_loads_that_company_and_clea
 def test_a_name_with_no_match_says_so(monkeypatch):
     with_search(monkeypatch, {"xyzzyq": []})
     page = run_page(monkeypatch)
-    page.sidebar.text_input(key="name_search").set_value("xyzzyq").run()
-    assert "No company found for xyzzyq." in texts(page.sidebar.caption)
-    assert not page.sidebar.button
+    page.text_input(key="name_search").set_value("xyzzyq").run()
+    assert "No company found for xyzzyq." in texts(page.caption)
+    assert not match_buttons(page)
 
 
-def test_when_the_search_cannot_be_made_the_sidebar_says_so_and_the_page_still_works(monkeypatch):
+def test_when_the_search_cannot_be_made_the_search_bar_says_so_and_the_page_still_works(monkeypatch):
     with_search(monkeypatch, {"micr": data.SourceUnavailable("busy")})
     page = run_page(monkeypatch)
-    page.sidebar.text_input(key="name_search").set_value("micr").run()
+    page.text_input(key="name_search").set_value("micr").run()
     assert_footer_and_no_crash(page)
-    assert "The search is not available right now. Type the ticker instead." in texts(page.sidebar.caption)
+    assert "The search is not available right now. Type the ticker instead." in texts(page.caption)
     assert "▲ UNDERVALUED" in header_of(page)
 
 
@@ -3820,7 +3838,7 @@ def test_clicking_did_you_mean_loads_that_company(monkeypatch):
     monkeypatch.setattr("data._start_yahoo_cooldown", lambda: None)
     page = run_page(monkeypatch, ticker="appl", yahoo=nothing)
     page.main.button(key="didyoumean_AAPL").click().run()
-    assert page.sidebar.text_input(key="ticker_box").value == "AAPL"
+    assert page.text_input(key="ticker_box").value == "AAPL"
     assert not page.main.button
 
 
@@ -3847,9 +3865,9 @@ def test_when_the_data_source_is_down_the_error_page_does_not_search(monkeypatch
 def test_a_search_with_html_in_it_cannot_become_page_code(monkeypatch):
     with_search(monkeypatch, {"<b>x</b>": []})
     page = run_page(monkeypatch)
-    page.sidebar.text_input(key="name_search").set_value("<b>x</b>").run()
+    page.text_input(key="name_search").set_value("<b>x</b>").run()
     assert_footer_and_no_crash(page)
-    assert "No company found for \\<b\\>x\\</b\\>." in texts(page.sidebar.caption)         # every angle bracket has its backslash
+    assert "No company found for \\<b\\>x\\</b\\>." in texts(page.caption)         # every angle bracket has its backslash
 
 
 # ---------------------------------------------------------------------------
@@ -4248,7 +4266,7 @@ def test_what_is_written_is_read_back_the_same():
 def test_opening_a_link_sets_the_sliders_the_wacc_and_the_company(monkeypatch):
     page = run_linked(monkeypatch, {"ticker": "exmp", "growth": "1.5", "margin": "-2", "terminal_growth": "3", "wacc": "9.5"})
     assert_footer_and_no_crash(page)
-    assert page.sidebar.text_input(key=app.TICKER_BOX_KEY).value == "EXMP"          # a ticker is always in capitals
+    assert page.text_input(key=app.TICKER_BOX_KEY).value == "EXMP"          # a ticker is always in capitals
     assert "Example Corp" in header_of(page)
     assert page.slider(key=app.GROWTH_KEY).value == 1.5
     assert page.slider(key=app.MARGIN_KEY).value == -2.0
@@ -4261,7 +4279,7 @@ def test_opening_a_link_with_peers_and_a_one_off_amount_fills_those_boxes_for_th
     page = run_linked(monkeypatch, {"ticker": "EXMP", "peers": "AAA, BBB", "oneoff": "-500"})
     assert_footer_and_no_crash(page)
     assert peer_box(page).value == "AAA, BBB"
-    assert page.sidebar.number_input(key=app.ONE_OFF_KEY_START + "EXMP").value == -500.0
+    assert page.number_input(key=app.ONE_OFF_KEY_START + "EXMP").value == -500.0
 
 
 def test_a_linked_view_gives_the_same_price_as_setting_the_boxes_by_hand(monkeypatch):
@@ -4276,7 +4294,7 @@ def test_a_linked_view_gives_the_same_price_as_setting_the_boxes_by_hand(monkeyp
 def test_garbage_in_the_address_starts_the_usual_page(monkeypatch):
     page = run_linked(monkeypatch, {"growth": "abc", "ticker": "<script>", "wacc": "999", "peers": "x;y"})
     assert_footer_and_no_crash(page)
-    assert page.sidebar.text_input(key=app.TICKER_BOX_KEY).value == app.DEFAULT_TICKER
+    assert page.text_input(key=app.TICKER_BOX_KEY).value == app.DEFAULT_TICKER
     assert page.slider(key=app.GROWTH_KEY).value == 0.0
     assert page.checkbox(key=app.WACC_TICK_KEY).value is False
 
@@ -4284,7 +4302,7 @@ def test_garbage_in_the_address_starts_the_usual_page(monkeypatch):
 def test_the_page_with_no_link_leaves_the_address_plain(monkeypatch):
     page = run_page(monkeypatch)
     assert address_of(page) == {}
-    assert "To share this view, copy the page's address" in texts(page.sidebar.caption)[-1]
+    assert app.LINK_NOTE in texts(page.main.caption)                                  # in the footer, above the sources
 
 
 def test_changing_a_box_writes_it_into_the_address_and_changing_it_back_takes_it_out(monkeypatch):
@@ -4509,7 +4527,7 @@ def test_the_wacc_table_says_the_rate_is_the_ten_year_yield_from_fred_with_its_d
     assert where["Equity risk premium"] == "Damodaran, 1 Nov 2026 (typed in by hand)"
 
 
-def test_the_sidebar_says_which_rates_are_swapped_and_warns_about_the_risk_premium(monkeypatch):
+def test_the_rates_box_says_which_rates_are_swapped_and_warns_about_the_risk_premium(monkeypatch):
     page = run_snapshot_with_live_rate(monkeypatch, 4.5)
     [note] = [c for c in texts(page.caption) if c.startswith("Risk-free rate 4.50%")]
     assert "the 10-year yield on 19 Nov 2026, from FRED" in note

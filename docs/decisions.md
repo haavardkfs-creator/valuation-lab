@@ -1088,3 +1088,18 @@ row. (3) Why cards and not a table: each card keeps its own "?" explanation, whi
 table cell cannot hold one), and the peer table further down already shows the company's multiples against the peer
 medians, so a second table would repeat it.
 
+## 2026-11-24 — Search in the top bar, and no sidebar (polish E of 7)
+
+The approved design put the search at the top, and a sidebar is what makes a Streamlit page look like a demo rather
+than a product. Haavard said yes to this bigger change on 24 Nov 2026. Decisions. (1) One bar at the top of every page
+(`draw_search_bar`, `theme.SEARCH_BAR_KEY`): the app's name and mark on the left, the "Company ticker" box and the
+"Search by company name" box beside it, labels as small taupe capitals, one thin line under the row; the matching
+companies appear as buttons under it. The app's name left the header, so it is not shown twice; error pages get it from
+the bar too. On a phone the name sits on its own line and the two boxes share the next. (2) Scenarios, Peers and One-off
+items became buttons beside "WACC and rates", in one row under the sliders (`TOOLS_KEY`); Peers and One-off items appear
+only for companies other than Adobe, as before. Each opens a small box with exactly the inputs it had, with the same keys,
+so links and saved settings still work. (3) The note on sharing the view (the address holds it) moved to the footer,
+above the sources. (4) Every sentence that said "in the sidebar" now says where the box is ("under Peers, beside the
+sliders"), and the README says the same. (5) The tests that looked in the sidebar now look on the page, and new tests
+check that the sidebar is empty and which buttons are there. No valuation maths changed.
+
