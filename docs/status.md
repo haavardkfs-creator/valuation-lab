@@ -406,9 +406,12 @@
   has an arrow, a sign and sage or terracotta; the company's row in the peer table is gold; the WACC and the peer median
   sit under a taupe total line. The four interactive grids (assumptions, sensitivity numbers, peers, compare) are now
   plain tables too.
-- Done (in the open pull request "Less grey text: notes behind How to read this"): polish C of 7. Fifteen sections kept
+- Done (merged, #75 "Less grey text: notes behind How to read this"): polish C of 7. Fifteen sections kept
   their finding in front and moved their notes on method (what the colours mean, where figures come from) into a small
   closed "How to read this" line; no text was removed.
+- Done (in the open pull request "The multiples tab: answer first, then five even cards"): polish D of 7. The middle
+  price and DCF vs multiples come first, then the five multiple prices in one row of equal cards (two to a row on a
+  phone) instead of 3, 2 and 2.
 - Next (polish, Haavard said yes to all on 24 Nov 2026): D the multiples as one table; E search in the top bar, no sidebar; F an "About this
   project" panel (Haavard approves the text); G tab names as questions.
 - Next: check the macro numbers on the live app after the merge; the live FMP check with Yahoo switched

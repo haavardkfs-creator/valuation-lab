@@ -3246,6 +3246,16 @@ def test_the_charts_are_spread_over_the_tabs(monkeypatch):
     assert len(page.get("plotly_chart")) == 11                                      # with the sparkline in the header
 
 
+def test_the_multiples_tab_gives_the_answer_first_then_the_five_prices_in_one_row(monkeypatch):
+    page = run_page(monkeypatch)
+    labels = [metric.label for metric in tab_named(page, "Multiples").metric]
+    assert labels == [
+        "Middle of the five prices", "DCF vs multiples",
+        "EV/Sales price", "EV/EBITDA price", "P/E price", "P/S price", "Forward P/E price",
+    ]
+    assert any(element.key == theme.MULTIPLE_PRICES_KEY for element in page.get("flex_container") if getattr(element, "key", None))
+
+
 def test_the_peer_table_is_in_the_multiples_tab(monkeypatch):
     page = run_page(monkeypatch)
     [table] = [element for element in tab_named(page, "Multiples").table if "Flag" in element.value.columns]

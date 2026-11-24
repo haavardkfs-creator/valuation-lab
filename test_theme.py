@@ -586,5 +586,15 @@ def test_the_how_to_read_this_boxes_are_one_quiet_line_with_no_frame():
     assert f"{notes} summary p {{ font-size: 0.8125rem; color: {theme.GREY}; }}" in theme.CARD_CSS
 
 
+def test_the_five_multiple_prices_are_cards_of_one_height_with_the_prices_on_one_line():
+    row = f".st-key-{theme.MULTIPLE_PRICES_KEY}"
+    assert f"{row} [data-testid=\"stMetricValue\"] {{ margin-top: auto; }}" in theme.CARD_CSS
+    assert f"{row} [data-testid=\"stMetric\"] {{ height: 100%; }}" in theme.CARD_CSS
+
+
+def test_on_a_phone_the_five_multiple_prices_sit_two_to_a_row():
+    assert f'.st-key-{theme.MULTIPLE_PRICES_KEY} [data-testid="stColumn"] {{ flex: 1 1 calc(50% - 0.75rem);' in phone_css()
+
+
 def test_the_glow_never_makes_the_page_scroll_sideways():
     assert ".vl-header { overflow-x: clip; }" in theme.CARD_CSS
