@@ -428,6 +428,11 @@
 - Done (in the open pull request "Source notes no longer overlap"): under the header, the line saying where the figures
   came from was half covered by the "Starting point" note below it (seen on BORR, 24 Nov 2026). Streamlit gives every
   caption a -1rem bottom margin; the source box now sets it to 0.
+- Done: the plain sentence under the price (first-visit upgrade 1 of 3, 24 Nov 2026). Under the headline cards the
+  page says, for example, "If Adobe Inc. grows revenue by 8.10% a year for the next five years, with an average
+  operating margin of 37.65%, the model says one share is worth $305.60, 21.5% above today's market price of $251.47."
+  It rewrites itself as the sliders move. `average_rate` in `valuation.py` does the averaging; `price_story` in `app.py`
+  writes the words. Upgrades 2 (an "About the company" card) and 3 (slider hints and "Try this" presets) come next.
 - Next: check the macro numbers on the live app after the merge; the live FMP check with Yahoo switched
   off; the small items below. CLAUDE.md still needs Haavard's edits (the theme line, and rows for theme.py and test_theme.py).
 - Open:
