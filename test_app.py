@@ -4616,3 +4616,15 @@ def test_the_macro_caption_says_the_numbers_become_an_input_only_if_the_box_is_t
     caption = next(c for c in texts(tab_named(page, "Overview").caption) if c.startswith("From FRED"))
     assert "not an input to it, unless you tick" in caption
 
+
+def test_every_page_has_a_closed_about_this_project_box_above_the_footer(monkeypatch):
+    page = run_page(monkeypatch)
+    about = [box for box in page.expander if box.label == app.ABOUT_LABEL]
+    assert len(about) == 1
+    assert texts(about[0].markdown) == [app.ABOUT_TEXT]
+    assert f"[GitHub]({app.REPO_URL})" in app.ABOUT_TEXT                        # links to the code
+    assert "Not investment advice." in app.ABOUT_TEXT
+    assert page.main.caption[-1].value == app.FOOTER_TEXT                       # the footer line is still last
+    tab_labels = [box.label for tab in page.tabs for box in tab.expander]
+    assert app.ABOUT_LABEL not in tab_labels                                    # it sits below the tabs, not in one
+

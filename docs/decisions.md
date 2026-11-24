@@ -1109,3 +1109,12 @@ questions a valuation answers, in the order an analyst asks them: "Where does th
 do peers say?", "How sure are we?", "How does it compare?" and "What do the terms mean?". The names live in one place,
 `TAB_LABELS` in `app.py`, keyed by the old short names so the code and tests can still say "the DCF tab". Haavard said yes
 to this on 24 Nov 2026. Nothing inside the tabs changed, and no valuation maths changed.
+
+**24 Nov 2026 — An "About this project" box (polish F).** Visitors such as future employers could not tell who built
+the site or how. A closed box labelled "About this project" now sits at the bottom of every page, under the line and
+above the sources and the footer, so it never pushes the valuation down. Its text is Haavard's, approved on 24 Nov 2026
+(he first paused it, then unpaused it the same day): a business student's learning project, the Excel model first, then
+Python with over 1,200 tests matching the spreadsheet, built with Claude as a tutor, a link to the code on GitHub, and
+"Not investment advice". The text and the link live in `ABOUT_TEXT` and `REPO_URL` in `app.py`. A LinkedIn link can be
+added when Haavard sends it. No valuation maths changed.
+

@@ -415,8 +415,9 @@
 - Done (merged, #77 "Search in the top bar, and no sidebar"): polish E of 7. The app's name, the ticker box
   and the name search sit in one bar at the top; Scenarios, Peers and One-off items are buttons beside "WACC and rates"
   under the sliders; the share-the-view note moved to the footer. The sidebar is gone.
-- Paused: polish F, the "About this project" panel. Haavard said to wait with it (24 Nov 2026); the draft text is in the
-  build thread.
+- Done (in the open pull request "An About this project box"): polish F of 7. A closed "About this project" box at the
+  bottom of every page, above the footer, with Haavard's approved text and a link to the GitHub repo. Haavard unpaused
+  it on 24 Nov 2026. No LinkedIn link yet: add one if he sends it.
 - Done (in the open pull request "Tabs that read as questions"): polish G of 7. The six tabs are named as the questions
   they answer, in order: Where does the price sit? What is it worth? What do peers say? How sure are we? How does it
   compare? What do the terms mean? The names live in one place, `TAB_LABELS` in `app.py`. The polish round is done

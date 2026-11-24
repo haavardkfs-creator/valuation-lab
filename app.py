@@ -66,6 +66,20 @@ SOURCES_TEXT = (
     "Adobe's base case from its FY2025 10-K."
 )
 
+# The "About this project" box at the bottom of every page, in Haavard's words (he approved this text on 24 Nov 2026).
+# It tells a visitor, such as a future employer, who built the site, how and why, and links to the code.
+ABOUT_LABEL = "About this project"
+ABOUT_KEY = "about_project"
+REPO_URL = "https://github.com/haavardkfs-creator/valuation-lab"
+ABOUT_TEXT = (
+    "Valuation Lab is my learning project. I'm a business student learning corporate finance, Excel and Python by "
+    "building a real valuation tool. I built the model in Excel first: a five-year DCF and a peer multiples comparison "
+    "for Adobe. I then rebuilt it in Python, with over 1,200 automated tests that check the code gives the same answers "
+    "as the spreadsheet. You can change the assumptions and see the value move, and every number has a plain-language "
+    "explanation. Built with help from Claude as a tutor and pair programmer. "
+    f"Code and Excel model on [GitHub]({REPO_URL}). Not investment advice."
+)
+
 # A few tickers to suggest when a company cannot be found.
 EXAMPLE_TICKERS = ["ADBE", "AAPL", "MSFT", "KO", "NVDA"]
 
@@ -2907,10 +2921,12 @@ def draw_source_note(company, source_used):
 
 
 def draw_footer():
-    """Draw the bottom of every page: a thin line, where the numbers come from, and (last, and discreetly) the note
-    that this is a learning project and not investment advice.
+    """Draw the bottom of every page: a thin line, a closed "About this project" box, how to share the view, where the
+    numbers come from, and (last, and discreetly) the note that this is a learning project and not investment advice.
     """
     st.divider()
+    with st.expander(ABOUT_LABEL, key=ABOUT_KEY):
+        st.markdown(ABOUT_TEXT)
     st.caption(LINK_NOTE)
     st.caption(SOURCES_TEXT)
     st.caption(FOOTER_TEXT)
