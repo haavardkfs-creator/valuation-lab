@@ -155,6 +155,10 @@ MARGIN_SHIFT_MIN = MARGIN_SHIFT_MIN_POINTS / 100
 MARGIN_SHIFT_MAX = MARGIN_SHIFT_MAX_POINTS / 100
 MARGIN_SHIFT_STEP = MARGIN_SHIFT_STEP_POINTS / 100
 
+# The step behind the hint under each slider ("+1 pt = about +$X a share"): one percentage point, the unit the sliders
+# themselves move in. Chosen by Claude for first-visit upgrade 3 (24 Nov 2026).
+SLIDER_HINT_POINT = 0.01
+
 # Terminal growth slider. The top is capped at 4% because the Gordon growth formula needs
 # terminal growth to stay well below the WACC (10.93%), and long-run growth above the
 # economy's own growth is not realistic. Chosen for Phase 5.

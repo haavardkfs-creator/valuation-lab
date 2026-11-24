@@ -438,6 +438,11 @@
   Yahoo's profile. `fetch_yahoo_profile` and `get_company_profile` in `data.py` fetch it; `draw_company_profile` in
   `app.py` draws it, and the page remembers it for six hours. When Yahoo cannot give it, the card is left out. Not the
   "About this project" panel Haavard turned down.
+- Done: slider hints and "Try this" buttons (first-visit upgrade 3 of 3, 24 Nov 2026). Under each slider a short
+  hint says what it means and how many dollars one more percentage point moves the price (Adobe's base case: margin
+  +1 pt ≈ +$7.25 a share). `price_change_per_point` in `valuation.py` works it out; `SLIDER_HINT_POINT` is in
+  `assumptions.py`. Under the buttons, "Bear case", "Bull case" and "Back to base" move the sliders; the bear and bull
+  shifts are the Scenarios box's, so they give the scenarios sheet's $248.29 and $370.49.
 - Next: check the macro numbers on the live app after the merge; the live FMP check with Yahoo switched
   off; the small items below. CLAUDE.md still needs Haavard's edits (the theme line, and rows for theme.py and test_theme.py).
 - Open:
