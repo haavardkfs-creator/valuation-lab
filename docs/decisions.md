@@ -1109,3 +1109,16 @@ questions a valuation answers, in the order an analyst asks them: "Where does th
 do peers say?", "How sure are we?", "How does it compare?" and "What do the terms mean?". The names live in one place,
 `TAB_LABELS` in `app.py`, keyed by the old short names so the code and tests can still say "the DCF tab". Haavard said yes
 to this on 24 Nov 2026. Nothing inside the tabs changed, and no valuation maths changed.
+
+**24 Nov 2026 — Ask Yahoo less often.** On the live app Yahoo was turning the server away: the name search said it was
+not available, and BORR fell back to Financial Modeling Prep, whose free plan does not cover it. Streamlit Cloud runs
+many apps from shared servers, and Yahoo limits how often one server may ask. Haavard was offered three fixes (save
+answers longer, free; a paid FMP plan; both) and chose the free one. Decisions. (1) The name search, the analysts' view,
+the one-year price chart and the headlines and officers are remembered for `SLOW_DATA_CACHE_SECONDS` (6 hours) instead
+of `LIVE_DATA_CACHE_SECONDS` (15 minutes): company names never change, analysts move their views every few weeks, a
+year of daily closes hardly changes within a day, and five headlines a few hours old are fine. (2) The company itself
+(its share price) and the peers' multiples keep 15 minutes, because they move with the market and feed the valuation.
+(3) After Yahoo says it is busy, the page now leaves it alone for 15 minutes (`YAHOO_COOLDOWN_SECONDS`) instead of 5,
+because asking again too soon tends to make the block last longer. This lowers how often Yahoo is asked but cannot
+stop a block. A paid FMP plan remains the step after this one. No valuation maths changed.
+

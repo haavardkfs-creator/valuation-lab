@@ -77,8 +77,9 @@ LIVE_DATA_CACHE_SECONDS = 15 * 60
 # How long the page remembers what changes only when a company reports, or hardly ever: the history, the
 # last twelve months, and the suggested peers (which cost the most requests: up to 50 lookups for one
 # company). Remembering them for hours instead of minutes means far fewer requests to Yahoo, which
-# sometimes limits the app's shared server. Chosen with Haavard on 20 Nov 2026. The share price and the
-# peers' multiples, which move with the market, keep the shorter time above.
+# sometimes limits the app's shared server. Chosen with Haavard on 20 Nov 2026. Since 24 Nov 2026 (Haavard chose
+# "save answers longer") the name search, the analysts' view, the one-year price chart and the news use it too.
+# The share price and the peers' multiples, which move with the market, keep the shorter time above.
 SLOW_DATA_CACHE_SECONDS = 6 * 60 * 60
 
 
@@ -2558,17 +2559,17 @@ def load_adobe_peer_margins(tickers):
         return [None] * len(tickers)
 
 
-@st.cache_data(ttl=LIVE_DATA_CACHE_SECONDS, show_spinner=False)
+@st.cache_data(ttl=SLOW_DATA_CACHE_SECONDS, show_spinner=False)
 def load_analyst_view(ticker, usd_per_unit):
     """Fetch the analysts' consensus rating and price targets (in US dollars) and remember them for
-    LIVE_DATA_CACHE_SECONDS. Stops with a plain error if Yahoo is busy or could not be asked.
+    SLOW_DATA_CACHE_SECONDS (analysts change their views every few weeks, not every few minutes). Stops with a plain error if Yahoo is busy or could not be asked.
     """
     return data.get_analyst_view(ticker, usd_per_unit)
 
 
-@st.cache_data(ttl=LIVE_DATA_CACHE_SECONDS, show_spinner=False)
+@st.cache_data(ttl=SLOW_DATA_CACHE_SECONDS, show_spinner=False)
 def load_company_matches(query):
-    """Search Yahoo Finance for the companies matching a name and remember the answer for LIVE_DATA_CACHE_SECONDS. Stops
+    """Search Yahoo Finance for the companies matching a name and remember the answer for SLOW_DATA_CACHE_SECONDS (company names do not change). Stops
     with a plain error if Yahoo is busy or cannot be reached.
     """
     return data.search_companies(
@@ -2576,18 +2577,18 @@ def load_company_matches(query):
     )
 
 
-@st.cache_data(ttl=LIVE_DATA_CACHE_SECONDS, show_spinner=False)
+@st.cache_data(ttl=SLOW_DATA_CACHE_SECONDS, show_spinner=False)
 def load_price_history(ticker, usd_per_unit):
     """Fetch a share's closing prices over the last year (in US dollars) and remember them for
-    LIVE_DATA_CACHE_SECONDS. Stops with a plain error if Yahoo is busy or has none.
+    SLOW_DATA_CACHE_SECONDS (a year of daily closes hardly changes within a day; the price itself stays fresh). Stops with a plain error if Yahoo is busy or has none.
     """
     return data.get_price_history(ticker, usd_per_unit)
 
 
-@st.cache_data(ttl=LIVE_DATA_CACHE_SECONDS, show_spinner=False)
+@st.cache_data(ttl=SLOW_DATA_CACHE_SECONDS, show_spinner=False)
 def load_company_context(ticker):
-    """Fetch a company's recent headlines and top officers and remember them for LIVE_DATA_CACHE_SECONDS
-    (news changes through the day). Stops with a plain error if Yahoo is busy or gave neither.
+    """Fetch a company's recent headlines and top officers and remember them for SLOW_DATA_CACHE_SECONDS
+    (a few hours late is fine for five headlines, and it saves requests). Stops with a plain error if Yahoo is busy or gave neither.
     """
     return data.get_company_context(ticker)
 

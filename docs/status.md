@@ -415,12 +415,16 @@
 - Done (merged, #77 "Search in the top bar, and no sidebar"): polish E of 7. The app's name, the ticker box
   and the name search sit in one bar at the top; Scenarios, Peers and One-off items are buttons beside "WACC and rates"
   under the sliders; the share-the-view note moved to the footer. The sidebar is gone.
-- Paused: polish F, the "About this project" panel. Haavard said to wait with it (24 Nov 2026); the draft text is in the
-  build thread.
-- Done (in the open pull request "Tabs that read as questions"): polish G of 7. The six tabs are named as the questions
+- Dropped: polish F, the "About this project" box. Haavard decided against it on 24 Nov 2026; its pull request (#79)
+  was closed without merging.
+- Done (merged, #78 "Tabs that read as questions"): polish G of 7. The six tabs are named as the questions
   they answer, in order: Where does the price sit? What is it worth? What do peers say? How sure are we? How does it
-  compare? What do the terms mean? The names live in one place, `TAB_LABELS` in `app.py`. The polish round is done
-  apart from F.
+  compare? What do the terms mean? The names live in one place, `TAB_LABELS` in `app.py`. The polish round is done.
+- Done (in the open pull request "Ask Yahoo less often"): Yahoo was limiting the live app (24 Nov 2026: the name
+  search failed and BORR fell back to FMP, whose free plan does not cover it). Haavard chose the free fix: the name
+  search, the analysts' view, the one-year price chart and the news are now remembered for 6 hours instead of 15
+  minutes, and after Yahoo says no the page leaves it alone for 15 minutes instead of 5. If blocks keep happening, the
+  next step is a paid FMP plan (about $20-30 a month, key in Streamlit secrets), which Haavard has not chosen.
 - Next: check the macro numbers on the live app after the merge; the live FMP check with Yahoo switched
   off; the small items below. CLAUDE.md still needs Haavard's edits (the theme line, and rows for theme.py and test_theme.py).
 - Open:
