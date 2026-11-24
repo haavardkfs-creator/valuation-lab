@@ -1103,3 +1103,9 @@ above the sources. (4) Every sentence that said "in the sidebar" now says where 
 sliders"), and the README says the same. (5) The tests that looked in the sidebar now look on the page, and new tests
 check that the sidebar is empty and which buttons are there. No valuation maths changed.
 
+**24 Nov 2026 — Tabs as questions (polish G).** The six tabs had one-word names (Overview, DCF, Multiples, Sensitivity,
+Compare, Explanations), which tell a finance reader where things are but not why to open them. They now read as the
+questions a valuation answers, in the order an analyst asks them: "Where does the price sit?", "What is it worth?", "What
+do peers say?", "How sure are we?", "How does it compare?" and "What do the terms mean?". The names live in one place,
+`TAB_LABELS` in `app.py`, keyed by the old short names so the code and tests can still say "the DCF tab". Haavard said yes
+to this on 24 Nov 2026. Nothing inside the tabs changed, and no valuation maths changed.

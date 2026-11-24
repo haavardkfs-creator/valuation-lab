@@ -3215,16 +3215,21 @@ def test_the_peer_charts_come_before_the_peer_table_and_a_company_without_peers_
 # ---------------------------------------------------------------------------
 
 def tab_named(page, label):
-    """One tab of the page, found by its label."""
-    [tab] = [tab for tab in page.tabs if tab.label == label]
+    """One tab of the page, found by its short name ("Overview", "DCF", ...), which app.TAB_LABELS turns into the question
+    the tab shows."""
+    [tab] = [tab for tab in page.tabs if tab.label == app.TAB_LABELS[label]]
     return tab
 
 
 def test_the_page_has_six_tabs_in_this_order(monkeypatch):
     page = run_page(monkeypatch)
     assert_footer_and_no_crash(page)
-    assert [tab.label for tab in page.tabs] == ["Overview", "DCF", "Multiples", "Sensitivity", "Compare", "Explanations"]
+    assert [tab.label for tab in page.tabs] == [
+        "Where does the price sit?", "What is it worth?", "What do peers say?", "How sure are we?",
+        "How does it compare?", "What do the terms mean?",
+    ]
     assert app.PAGE_TABS == [tab.label for tab in page.tabs]
+    assert list(app.TAB_LABELS) == ["Overview", "DCF", "Multiples", "Sensitivity", "Compare", "Explanations"]
 
 
 def test_each_section_is_in_its_own_tab(monkeypatch):
@@ -3288,7 +3293,7 @@ def test_a_company_whose_dcf_cannot_be_built_gets_only_the_overview_and_the_expl
     loss = dict(ADOBE_YAHOO_INCOME, **{"Pretax Income": (-100e6, 50e6)})
     page = run_page(monkeypatch, ticker="loss", yahoo=fake_statements_ticker(income=loss))
     assert_footer_and_no_crash(page)
-    assert [tab.label for tab in page.tabs] == ["Overview", "Explanations"]
+    assert [tab.label for tab in page.tabs] == ["Where does the price sit?", "What do the terms mean?"]
     assert "Could not value LOSS." in texts(tab_named(page, "Overview").error)[0]
     assert texts(tab_named(page, "Overview").subheader) == [
         "Analyst view", "Overview", "History", "News and management", "Macro backdrop",
@@ -4364,7 +4369,7 @@ def compare_table_of(page):
 
 def test_the_compare_tab_sits_before_the_explanations_tab(monkeypatch):
     page = run_compared(monkeypatch)
-    assert [tab.label for tab in page.tabs] == ["Overview", "DCF", "Multiples", "Sensitivity", "Compare", "Explanations"]
+    assert [tab.label for tab in page.tabs] == app.PAGE_TABS
 
 
 def test_with_no_second_company_the_tab_asks_for_one_and_shows_no_table(monkeypatch):

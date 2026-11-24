@@ -412,12 +412,15 @@
 - Done (merged, #76 "The multiples tab: answer first, then five even cards"): polish D of 7. The middle
   price and DCF vs multiples come first, then the five multiple prices in one row of equal cards (two to a row on a
   phone) instead of 3, 2 and 2.
-- Done (in the open pull request "Search in the top bar, and no sidebar"): polish E of 7. The app's name, the ticker box
+- Done (merged, #77 "Search in the top bar, and no sidebar"): polish E of 7. The app's name, the ticker box
   and the name search sit in one bar at the top; Scenarios, Peers and One-off items are buttons beside "WACC and rates"
   under the sliders; the share-the-view note moved to the footer. The sidebar is gone.
 - Paused: polish F, the "About this project" panel. Haavard said to wait with it (24 Nov 2026); the draft text is in the
   build thread.
-- Next (polish, Haavard said yes to all on 24 Nov 2026): G tab names as questions.
+- Done (in the open pull request "Tabs that read as questions"): polish G of 7. The six tabs are named as the questions
+  they answer, in order: Where does the price sit? What is it worth? What do peers say? How sure are we? How does it
+  compare? What do the terms mean? The names live in one place, `TAB_LABELS` in `app.py`. The polish round is done
+  apart from F.
 - Next: check the macro numbers on the live app after the merge; the live FMP check with Yahoo switched
   off; the small items below. CLAUDE.md still needs Haavard's edits (the theme line, and rows for theme.py and test_theme.py).
 - Open:
