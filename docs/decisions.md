@@ -1077,3 +1077,14 @@ is drawn quieter than the other closed boxes: no frame, a 13 px taupe label that
 (`theme.READING_NOTES_KEY_PREFIX`). (4) Kept in front on purpose: the source note, the footer, warnings and cautions,
 "not available" messages, and the line that says the peers were suggested, because those are about trust, not method.
 
+## 2026-11-24 — The multiples tab: answer first, then five even cards (polish D of 7)
+
+The multiples tab showed its seven cards as 3, then 2, then 2, which looked unfinished. Claude had suggested turning the
+five multiple prices into one table, but chose cards in the end. Decisions. (1) The answer comes first: "Middle of the five
+prices" and "DCF vs multiples" in one row of two. (2) Then the five prices in one even row of five cards, in a named box
+(`theme.MULTIPLE_PRICES_KEY`): slimmer padding, slightly tighter label spacing and a 24 px value, every card as tall as the
+tallest, and the prices along one line at the bottom even where a label runs to two lines. On a phone they sit two to a
+row. (3) Why cards and not a table: each card keeps its own "?" explanation, which was Haavard's idea from 20 Nov 2026 (a
+table cell cannot hold one), and the peer table further down already shows the company's multiples against the peer
+medians, so a second table would repeat it.
+

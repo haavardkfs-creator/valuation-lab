@@ -70,6 +70,9 @@ HEATMAP_KEY_PREFIX = "heatmap_"
 # The small closed "How to read this" boxes under sections (app.py's reading_notes) are keyed with this, so they can be
 # drawn quieter than the other closed boxes: no frame, a small taupe label.
 READING_NOTES_KEY_PREFIX = "reading_notes_"
+# The box round the row of five multiple prices (app.py's draw_multiples): five cards side by side need a little less
+# padding and letter spacing, so "Forward P/E price" fits on one line.
+MULTIPLE_PRICES_KEY = "multiple_prices"
 WACC_TABLE_KEY = "table_wacc"
 PEER_TABLE_KEY = "table_peers"
 
@@ -110,6 +113,16 @@ CARD_CSS = f"""
 /* A long label wraps onto a second line instead of being cut off with dots ("Net debt ÷ EBITDA" in a narrow card). */
 [data-testid="stMetricLabel"], [data-testid="stMetricLabel"] * {{ white-space: normal !important; overflow: visible !important; text-overflow: clip !important; }}
 [data-testid="stMetricValue"] {{ letter-spacing: -0.01em; }}
+/* The row of five multiple prices: slimmer cards of one height, the labels a touch tighter, the values one step smaller. */
+.st-key-{MULTIPLE_PRICES_KEY} [data-testid="stMetric"] {{ padding: 1rem; display: flex; flex-direction: column; }}
+.st-key-{MULTIPLE_PRICES_KEY} [data-testid="stMetric"] > div {{ flex: 1; display: flex; flex-direction: column; }}
+.st-key-{MULTIPLE_PRICES_KEY} [data-testid="stMetricValue"] {{ margin-top: auto; }}
+/* A label that runs to two lines makes every card in the row as tall, with the prices along one line at the bottom. */
+.st-key-{MULTIPLE_PRICES_KEY} [data-testid="stColumn"] [data-testid="stVerticalBlock"],
+.st-key-{MULTIPLE_PRICES_KEY} [data-testid="stColumn"] [data-testid="stElementContainer"],
+.st-key-{MULTIPLE_PRICES_KEY} [data-testid="stMetric"] {{ height: 100%; }}
+.st-key-{MULTIPLE_PRICES_KEY} [data-testid="stMetricLabel"] {{ letter-spacing: 0.03em; }}
+.st-key-{MULTIPLE_PRICES_KEY} [data-testid="stMetricValue"] {{ font-size: 1.5rem; }}
 
 /* Bordered boxes, closed boxes and tables: the card corner and the same thin line. */
 [data-testid="stExpander"] details, [data-testid="stExpander"] {{ border-radius: {CARD_RADIUS}; border-color: {BORDER}; }}
@@ -306,6 +319,9 @@ CARD_CSS = f"""
     .vl-stats {{ width: 100%; }}
     .vl-kpi-stat {{ flex: 1; padding: 0 1rem; }}
     .vl-kpi-stat:first-child {{ padding-left: 0; border-left: 0; }}
+    /* The five multiple prices sit two to a row instead of five cards stacked down the screen. */
+    .st-key-{MULTIPLE_PRICES_KEY} [data-testid="stHorizontalBlock"] {{ flex-flow: row wrap; gap: 0.75rem; }}
+    .st-key-{MULTIPLE_PRICES_KEY} [data-testid="stColumn"] {{ flex: 1 1 calc(50% - 0.75rem); min-width: calc(50% - 0.75rem); }}
     /* The upside under each heatmap price gets smaller, so "+127%" still fits inside its cell. */
     [class*="st-key-{HEATMAP_KEY_PREFIX}"] .heatmap-label tspan.line + tspan.line tspan {{ font-size: 10px !important; }}
 }}

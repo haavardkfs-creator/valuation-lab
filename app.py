@@ -2435,20 +2435,8 @@ def draw_multiples(multiples, peers, notes, peers_are_suggested, own_label, over
     margin_warning = margin_gap_warning(company_name, overview["operating_margin"], peers)
     if margin_warning:
         st.warning(margin_warning)
-    sales_column, ebitda_column, pe_column = st.columns(3)
-    sales_column.metric(
-        "EV/Sales price", price_or_note(multiples["price_ev_sales"]), help=explanations.help_text("ev_sales_price")
-    )
-    ebitda_column.metric(
-        "EV/EBITDA price", price_or_note(multiples["price_ev_ebitda"]), help=explanations.help_text("ev_ebitda_price")
-    )
-    pe_column.metric("P/E price", price_or_note(multiples["price_pe"]), help=explanations.help_text("pe_price"))
-    ps_column, forward_pe_column, _spare_column = st.columns(3)
-    ps_column.metric("P/S price", price_or_note(multiples["price_ps"]), help=explanations.help_text("ps_price"))
-    forward_pe_column.metric(
-        "Forward P/E price", forward_price_text(multiples["price_forward_pe"], overview["forward_pe"]),
-        help=explanations.help_text("forward_pe_price"),
-    )
+    # The answer first: the middle of the five prices and how far the DCF is from it, then the five prices behind it
+    # in one even row (on a phone, Streamlit stacks them).
     median_column, gap_column = st.columns(2)
     median_column.metric(
         middle_price_label(multiples), price_or_note(multiples["median_price"]), help=explanations.help_text("middle_price")
@@ -2456,6 +2444,20 @@ def draw_multiples(multiples, peers, notes, peers_are_suggested, own_label, over
     gap = multiples["dcf_vs_multiples"]
     gap_column.metric(
         "DCF vs multiples", "Not available" if gap is None else percent(gap), help=explanations.help_text("dcf_vs_multiples")
+    )
+    with st.container(key=theme.MULTIPLE_PRICES_KEY):
+        sales_column, ebitda_column, pe_column, ps_column, forward_pe_column = st.columns(5)
+    sales_column.metric(
+        "EV/Sales price", price_or_note(multiples["price_ev_sales"]), help=explanations.help_text("ev_sales_price")
+    )
+    ebitda_column.metric(
+        "EV/EBITDA price", price_or_note(multiples["price_ev_ebitda"]), help=explanations.help_text("ev_ebitda_price")
+    )
+    pe_column.metric("P/E price", price_or_note(multiples["price_pe"]), help=explanations.help_text("pe_price"))
+    ps_column.metric("P/S price", price_or_note(multiples["price_ps"]), help=explanations.help_text("ps_price"))
+    forward_pe_column.metric(
+        "Forward P/E price", forward_price_text(multiples["price_forward_pe"], overview["forward_pe"]),
+        help=explanations.help_text("forward_pe_price"),
     )
     if middle_price_label(multiples) == "Average of two prices":
         st.warning(
