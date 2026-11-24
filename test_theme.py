@@ -563,6 +563,11 @@ def test_notes_are_calm_cards_and_the_source_note_targets_the_box_the_app_draws(
     assert f'[data-testid="stAlertContentWarning"] p::before {{ background: {theme.ACCENT}; }}' in theme.CARD_CSS
 
 
+def test_a_source_line_is_not_covered_by_the_note_under_it():
+    # Streamlit gives every caption a -1rem bottom margin, which in the source box slid the next note over the line.
+    assert '.st-key-source_note [data-testid="stCaptionContainer"] { color: ' + theme.SAND + '; margin-bottom: 0; }' in theme.CARD_CSS
+
+
 
 # ---------------------------------------------------------------------------
 # The phone layout (redesign step 5, pull request 6)

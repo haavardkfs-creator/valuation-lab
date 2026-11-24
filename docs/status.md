@@ -425,6 +425,9 @@
   search, the analysts' view, the one-year price chart and the news are now remembered for 6 hours instead of 15
   minutes, and after Yahoo says no the page leaves it alone for 15 minutes instead of 5. If blocks keep happening, the
   next step is a paid FMP plan (about $20-30 a month, key in Streamlit secrets), which Haavard has not chosen.
+- Done (in the open pull request "Source notes no longer overlap"): under the header, the line saying where the figures
+  came from was half covered by the "Starting point" note below it (seen on BORR, 24 Nov 2026). Streamlit gives every
+  caption a -1rem bottom margin; the source box now sets it to 0.
 - Next: check the macro numbers on the live app after the merge; the live FMP check with Yahoo switched
   off; the small items below. CLAUDE.md still needs Haavard's edits (the theme line, and rows for theme.py and test_theme.py).
 - Open:
