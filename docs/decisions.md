@@ -1155,3 +1155,17 @@ page changes yet; the Multiples section is the next pull request.
 football field. The deals give Adobe $759 to $1,913 a share, three to seven times the market price, so the bar would
 stretch the chart's axis and shrink every other bar to about a quarter of its width. Haavard chose to keep the chart as it
 is; the "What buyers paid" section on the Multiples tab shows the deals and explains the gap.
+
+**25 Nov 2026 — A GitHub job keeps the live app awake.** Streamlit Community Cloud puts an app to sleep after 12 hours
+with no visitors, and the next visitor has to click "Yes, get this app back up!" and wait
+([Streamlit docs, "App hibernation"](https://docs.streamlit.io/deploy/streamlit-community-cloud/manage-your-app)).
+Haavard chose to stay on the free Streamlit hosting (plan of 25 Nov 2026), so a new file,
+`.github/workflows/keep-awake.yml`, visits the app every 6 hours in a hidden browser and clicks the wake-up button if
+it sees one. Why a browser and not a simple web request: the docs only say "simply visit your app", and the wake-up
+button and the app itself are drawn by the page, which a plain request never runs. The browser tool, Playwright
+(pinned to 1.65.2), is installed only inside the GitHub job, so it is not in `requirements.txt` and the app never loads
+it. The job passes only when it finds the app's footer line, so a green run means the app really answered. It also runs
+once on any pull request that changes the file, to test it before merging. Limit: GitHub switches off timed jobs in a
+public repository after 60 days with no commits
+([GitHub docs](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/disable-and-enable-workflows));
+if that happens, the Actions tab has a button to switch it back on.

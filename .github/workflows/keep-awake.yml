@@ -1,0 +1,76 @@
+name: Keep the app awake
+
+# Streamlit Community Cloud puts an app to sleep after 12 hours with no visitors
+# (https://docs.streamlit.io/deploy/streamlit-community-cloud/manage-your-app, "App hibernation").
+# This job visits the live app every 6 hours in a hidden browser, like a real visitor, and clicks
+# "Yes, get this app back up!" if the app has fallen asleep anyway.
+
+on:
+  schedule:
+    # Times are in UTC: 00:17, 06:17, 12:17 and 18:17 UTC, which is 6:17 PM, 12:17 AM, 6:17 AM and
+    # 12:17 PM Chicago time in winter (an hour later in summer). Every 6 hours keeps the app well
+    # inside the 12-hour limit even if one run fails. Minute 17, because GitHub is busiest on the hour.
+    - cron: "17 */6 * * *"
+  # Lets Haavard run it by hand from the Actions tab.
+  workflow_dispatch:
+  # Runs once on a pull request that changes this file, to prove it reaches the app before merging.
+  pull_request:
+    paths:
+      - ".github/workflows/keep-awake.yml"
+
+jobs:
+  visit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      APP_URL: https://valuation-l3b.streamlit.app
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # Playwright drives a real browser. It is only used here, inside GitHub, so it is not in
+      # requirements.txt and the app never loads it. Pinned to the newest version on 25 Nov 2026.
+      - name: Install a browser
+        run: |
+          pip install playwright==1.65.2
+          python -m playwright install --with-deps chromium
+
+      - name: Visit the app
+        shell: python
+        run: |
+          import os
+          from playwright.sync_api import sync_playwright
+
+          url = os.environ["APP_URL"]
+          with sync_playwright() as p:
+              browser = p.chromium.launch()
+              page = browser.new_page()
+              page.goto(url, timeout=60_000)
+              # The sleeping page draws its wake-up button a few seconds after loading.
+              page.wait_for_timeout(10_000)
+              button = page.get_by_role("button", name="Yes, get this app back up")
+              if button.count() > 0:
+                  print("The app was asleep. Clicking the wake-up button.")
+                  button.first.click()
+                  page.wait_for_timeout(60_000)
+              else:
+                  print("The app was awake.")
+              # The app runs inside a frame on the page. Finding its footer line proves the app itself
+              # answered, not just Streamlit's outer page. Checks every 5 seconds for up to 2 minutes.
+              footer = "a learning project, not investment advice"
+              found = False
+              for _ in range(24):
+                  for frame in page.frames:
+                      try:
+                          if footer in frame.inner_text("body"):
+                              found = True
+                      except Exception:
+                          pass  # a frame can still be loading; try again next round
+                  if found:
+                      break
+                  page.wait_for_timeout(5_000)
+              browser.close()
+              if not found:
+                  raise SystemExit("The app's footer never appeared, so the visit may not have reached the app.")
+              print("The app answered: its footer is on the page.")

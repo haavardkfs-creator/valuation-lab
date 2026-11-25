@@ -458,6 +458,12 @@
   The football field stays as it is: Haavard chose no "Precedent deals" bar (24 Nov 2026), because a $759 to $1,913
   range would squash the other bars. This finishes comparable transactions. Optional for Haavard: glossary entries for
   "precedent transaction" and "control premium".
+- Done: the keep-awake job (accuracy and hosting upgrade 1 of 5, 25 Nov 2026). `.github/workflows/keep-awake.yml`
+  opens the live app in a hidden browser every 6 hours (00:17, 06:17, 12:17, 18:17 UTC) and clicks the wake-up button
+  if the app is asleep, so a visitor never meets the "Zzzz" page. It can also be run by hand from the Actions tab.
+  Why and its 60-day limit: `docs/decisions.md`, 25 Nov 2026. Next upgrades, in order: the 10-year Treasury yield as the
+  risk-free rate, SEC company figures for US companies (Yahoo as fallback), mid-year discounting (Haavard's Excel sheet
+  first), and "Download as Excel".
 - Next: check the macro numbers on the live app after the merge; the live FMP check with Yahoo switched
   off; the small items below. CLAUDE.md still needs Haavard's edits (the theme line, and rows for theme.py and test_theme.py).
 - Open:
